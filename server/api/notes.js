@@ -12,6 +12,7 @@ import {
   appendMessage, buildPromptForNote,
 } from '../runner/notes.js';
 import { getProvider, defaultProvider, listProviders } from '../runner/providers.js';
+import { buildSceneScript } from '../runner/scene.js';
 import { PERSONAS_BY_ID } from '../mapping/personas.js';
 import { pushEvent, startTask, finishTask } from '../state.js';
 
@@ -141,11 +142,20 @@ export async function dispatchRoute(req, res) {
       status: result.ok ? 'ok' : 'err',
       dedupeKey: `dispatch-end:${taskId}`,
     });
+    const scene = buildSceneScript({
+      persona,
+      note: await getNote(note.id),
+      userMessage: message,
+      providerName,
+      rawOutput: result.output,
+      ok: result.ok,
+    });
     res.json({
       ok: result.ok,
       provider: providerName,
       output: result.output,
       exitCode: result.exitCode,
+      scene,
     });
   } catch (e) {
     finishTask({ tool_use_id: taskId, status: 'failed' });
@@ -157,6 +167,14 @@ export async function dispatchRoute(req, res) {
       ok: false,
     });
     await updateNote(note.id, { status: 'queued' });
-    res.status(500).json({ ok: false, error: String(e) });
+    const scene = buildSceneScript({
+      persona,
+      note: await getNote(note.id),
+      userMessage: message,
+      providerName,
+      rawOutput: `Dispatch error: ${e.message}`,
+      ok: false,
+    });
+    res.status(500).json({ ok: false, error: String(e), scene });
   }
 }

@@ -365,33 +365,22 @@ const AdventurePage = ({ onOpenAgent }) => {
     }));
   }, [(window.TASKS || []).length, (window.TASKS || [])[0]?.id]);
 
-  // Quick strike — dispatch an attack against the current boss
+  // Quick strike — open the JRPG-style scene to dispatch this quest
   const [quickBusy, setQuickBusy] = React.useState(false);
-  async function quickStrike() {
+  function quickStrike() {
     if (quickBusy) return;
     setQuickBusy(true);
-    try {
-      const def = window.PROVIDERS?.default || 'echo';
-      const targetAgent = weakness.weak[0] || 'orchestra';
-      const note = await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: bossDisplayName,
-          body: bossText,
-          tag: 'task',
-          agentId: targetAgent,
-        }),
-      }).then(r => r.json());
-      await fetch(`/api/notes/${note.id}/dispatch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: def, agentId: targetAgent, message: bossText }),
-      });
-      window.refreshNotes && window.refreshNotes();
-    } finally {
-      setQuickBusy(false);
-    }
+    const def = window.PROVIDERS?.default || 'echo';
+    const targetAgent = weakness.weak[0] || 'orchestra';
+    window.openScene({
+      title: bossDisplayName,
+      body: bossText,
+      message: bossText,
+      tag: 'task',
+      agentId: targetAgent,
+      provider: def,
+    });
+    setQuickBusy(false);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────

@@ -273,25 +273,19 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' });
   }, [note.messages?.length]);
 
-  async function dispatch(autoMessage) {
+  function dispatch(autoMessage) {
     if (busy) return;
     setBusy(true);
-    try {
-      const body = {
-        provider,
-        agentId: note.agentId || 'orchestra',
-        message: autoMessage !== undefined ? autoMessage : draft.trim(),
-      };
-      await fetch(`/api/notes/${note.id}/dispatch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      setDraft('');
-    } finally {
-      setBusy(false);
-      onChange?.();
-    }
+    const message = autoMessage !== undefined ? autoMessage : draft.trim();
+    window.openScene({
+      noteId: note.id,
+      agentId: note.agentId || 'orchestra',
+      provider,
+      message,
+    });
+    setDraft('');
+    setBusy(false);
+    onChange?.();
   }
 
   async function saveEdit() {

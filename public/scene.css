@@ -1,0 +1,543 @@
+/* ===== Scene Mode — JRPG dialogue overlay ===== */
+
+.scene-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(7, 4, 26, 0.96);
+  display: flex; align-items: stretch; justify-content: stretch;
+  animation: scene-fade-in 320ms ease-out;
+  cursor: pointer;
+}
+
+@keyframes scene-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.scene-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 600px at 30% 20%, rgba(157,92,255,0.2), transparent 60%),
+    radial-gradient(900px 500px at 70% 80%, rgba(34,211,238,0.16), transparent 65%),
+    radial-gradient(800px 600px at 50% 50%, rgba(251,191,36,0.06), transparent 70%),
+    linear-gradient(180deg, #0c062a 0%, #0a0420 60%, #07041a 100%);
+}
+
+/* Parallax background layers */
+.scene-bg-far,
+.scene-bg-mid,
+.scene-bg-near {
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+.scene-bg-far {
+  background-image:
+    radial-gradient(2px 2px at 12% 18%, rgba(255,255,255,0.7), transparent 50%),
+    radial-gradient(1px 1px at 28% 33%, rgba(157,92,255,0.6), transparent 50%),
+    radial-gradient(1.5px 1.5px at 44% 22%, rgba(255,255,255,0.5), transparent 50%),
+    radial-gradient(1px 1px at 62% 30%, rgba(34,211,238,0.6), transparent 50%),
+    radial-gradient(2px 2px at 78% 18%, rgba(251,191,36,0.5), transparent 50%),
+    radial-gradient(1px 1px at 86% 42%, rgba(255,255,255,0.5), transparent 50%);
+  animation: scene-stars 22s linear infinite;
+  opacity: 0.85;
+}
+.scene-bg-mid {
+  background:
+    radial-gradient(ellipse at 20% 90%, rgba(157,92,255,0.18), transparent 55%),
+    radial-gradient(ellipse at 85% 95%, rgba(34,211,238,0.12), transparent 60%);
+  animation: scene-mid-drift 20s ease-in-out infinite alternate;
+}
+.scene-bg-near {
+  background:
+    linear-gradient(180deg, transparent 60%, rgba(7,4,26,0.7) 100%),
+    repeating-linear-gradient(90deg,
+      transparent 0 80px,
+      rgba(157,92,255,0.04) 80px 81px);
+  opacity: 0.6;
+}
+
+@keyframes scene-stars {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-80px); }
+}
+@keyframes scene-mid-drift {
+  from { transform: translate(-12px, 6px); }
+  to   { transform: translate(14px, -6px); }
+}
+
+/* mood overlays — colour wash on stage */
+.scene-stage.mood-busy::after,
+.scene-stage.mood-win::after,
+.scene-stage.mood-fail::after {
+  content: ''; position: absolute; inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  animation: scene-mood-flash 600ms ease-out 1;
+}
+.scene-stage.mood-busy::after { background: radial-gradient(circle at 50% 60%, rgba(34,211,238,0.18), transparent 60%); }
+.scene-stage.mood-win::after  { background: radial-gradient(circle at 50% 60%, rgba(251,191,36,0.32), transparent 60%); }
+.scene-stage.mood-fail::after { background: radial-gradient(circle at 50% 60%, rgba(248,113,113,0.20), transparent 60%); }
+
+@keyframes scene-mood-flash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
+
+/* ─── Mission card (top) ─────────────────────────────────────── */
+.scene-mission-card {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 720px;
+  width: calc(100% - 40px);
+  padding: 14px 22px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(20,16,42,0.92), rgba(28,21,56,0.92));
+  border: 1px solid rgba(157,92,255,0.45);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.5) inset,
+    0 18px 50px -16px rgba(0,0,0,0.7),
+    0 0 24px -4px rgba(157,92,255,0.4);
+  z-index: 5;
+  animation: scene-card-drop 480ms cubic-bezier(.2,.8,.2,1);
+}
+@keyframes scene-card-drop {
+  from { opacity: 0; transform: translate(-50%, -28px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.scene-mission-tier {
+  font-family: var(--font-mono);
+  letter-spacing: 0.22em;
+  font-size: 10px;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.scene-mission-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+  line-height: 1.2;
+}
+.scene-mission-body {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.45;
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre-wrap;
+}
+.scene-mission-meta {
+  display: flex; gap: 8px; align-items: center;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.06em;
+}
+.scene-mission-meta b { color: var(--text); font-weight: 600; }
+.dot-sep {
+  width: 3px; height: 3px;
+  background: var(--text-4);
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* close button */
+.scene-close {
+  position: absolute;
+  top: 22px; right: 22px;
+  z-index: 6;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 120ms;
+}
+.scene-close:hover {
+  background: var(--panel-2);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+
+/* ─── Actors layer — player left, agent right ───────────────── */
+.scene-actors {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: end;
+  padding: 0 8% 220px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.scene-actor {
+  position: relative;
+  display: flex; flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: transform 320ms cubic-bezier(.2,.8,.2,1), filter 320ms;
+  filter: brightness(0.65) saturate(0.7);
+  animation: scene-actor-enter 520ms cubic-bezier(.2,.8,.2,1);
+}
+.scene-actor.is-speaking { filter: brightness(1.05) saturate(1.05); }
+
+.scene-player {
+  align-self: end;
+  transform: translate(-10%, 10px);
+}
+.scene-player.is-speaking { transform: translate(-6%, 0) scale(1.04); }
+
+.scene-agent {
+  align-self: end;
+  justify-self: end;
+  transform: translate(10%, 10px) scaleX(-1);
+}
+.scene-agent > * { transform: scaleX(-1); }
+.scene-agent.is-speaking { transform: translate(6%, 0) scale(1.04) scaleX(-1); }
+.scene-agent.is-busy {
+  animation: scene-actor-enter 520ms cubic-bezier(.2,.8,.2,1), scene-busy-pulse 1.4s ease-in-out infinite alternate;
+}
+.scene-agent.is-victory {
+  animation: scene-actor-enter 520ms cubic-bezier(.2,.8,.2,1), scene-victory-bob 0.8s ease-in-out infinite alternate;
+}
+.scene-agent.is-defeated {
+  filter: brightness(0.45) grayscale(0.6) hue-rotate(-30deg);
+}
+
+@keyframes scene-actor-enter {
+  from { opacity: 0; transform: translate(0, 60px); }
+  to   { opacity: 1; }
+}
+@keyframes scene-busy-pulse {
+  from { box-shadow: 0 0 22px rgba(34,211,238,0.4); }
+  to   { box-shadow: 0 0 50px rgba(34,211,238,0.85); }
+}
+@keyframes scene-victory-bob {
+  from { transform: translate(6%, 0) scale(1.04) scaleX(-1); }
+  to   { transform: translate(6%, -10px) scale(1.06) scaleX(-1); }
+}
+
+.scene-actor-portrait {
+  width: 240px;
+  height: 320px;
+  border-radius: 26px;
+  overflow: hidden;
+  position: relative;
+  border: 2px solid rgba(255,255,255,0.18);
+  box-shadow:
+    0 0 0 4px rgba(0,0,0,0.4),
+    0 30px 80px -20px rgba(0,0,0,0.85),
+    0 0 70px -10px rgba(157,92,255,0.4);
+  background: var(--bg-2);
+}
+.scene-actor-portrait img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center top;
+  display: block;
+}
+.scene-actor-initials {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 88px;
+  color: rgba(255,255,255,0.85);
+  text-shadow: 0 4px 14px rgba(0,0,0,0.6);
+}
+.scene-player-portrait {
+  background: linear-gradient(160deg, #f472b6, #9d5cff 50%, #22d3ee);
+  display: flex; align-items: center; justify-content: center;
+}
+.scene-player-avatar {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 110px;
+  color: #fff;
+  text-shadow: 0 6px 20px rgba(0,0,0,0.7);
+}
+
+/* Summoning ring during loading */
+.scene-summon-ring {
+  position: absolute;
+  inset: -10px;
+  border-radius: inherit;
+  border: 2px dashed rgba(251,191,36,0.7);
+  animation: scene-summon-spin 4s linear infinite;
+  pointer-events: none;
+}
+@keyframes scene-summon-spin {
+  to { transform: rotate(360deg); }
+}
+
+.scene-actor-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+  display: flex; align-items: baseline; gap: 8px;
+  white-space: nowrap;
+}
+.scene-actor-name .sigil { font-size: 18px; }
+.scene-actor-name .role {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.scene-agent.is-speaking .scene-actor-portrait,
+.scene-player.is-speaking .scene-actor-portrait {
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 4px rgba(0,0,0,0.4),
+    0 30px 80px -20px rgba(0,0,0,0.85),
+    0 0 60px -2px rgba(251,191,36,0.55);
+}
+
+
+/* ─── Dialogue box (bottom) ─────────────────────────────────── */
+.scene-dialogue {
+  position: absolute;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  width: min(960px, calc(100% - 48px));
+  padding: 22px 28px 16px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(20,16,42,0.94), rgba(12,8,30,0.96));
+  border: 2px solid rgba(157,92,255,0.55);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.4) inset,
+    0 24px 60px -16px rgba(0,0,0,0.85),
+    0 0 60px -10px rgba(157,92,255,0.45);
+  z-index: 4;
+  cursor: pointer;
+  animation: scene-dialogue-rise 460ms cubic-bezier(.2,.8,.2,1);
+}
+@keyframes scene-dialogue-rise {
+  from { opacity: 0; transform: translate(-50%, 28px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* glowing edge animation */
+.scene-dialogue::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(120deg,
+    rgba(251,191,36,0.5),
+    rgba(157,92,255,0.4),
+    rgba(34,211,238,0.4),
+    rgba(251,191,36,0.5));
+  background-size: 300% 100%;
+  animation: scene-dialogue-shimmer 6s linear infinite;
+  opacity: 0.4;
+  z-index: -1;
+  filter: blur(6px);
+}
+@keyframes scene-dialogue-shimmer {
+  to { background-position: 300% 0; }
+}
+
+.scene-dialogue.speaker-player { border-color: rgba(34,211,238,0.55); }
+.scene-dialogue.speaker-agent  { border-color: rgba(251,191,36,0.55); }
+.scene-dialogue.speaker-system {
+  border-color: rgba(148,163,184,0.45);
+  background: linear-gradient(180deg, rgba(7,4,26,0.92), rgba(5,2,18,0.96));
+}
+
+.scene-dialogue.mood-win  { border-color: rgba(52,211,153,0.7); }
+.scene-dialogue.mood-fail { border-color: rgba(248,113,113,0.7); }
+
+.scene-dialogue-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.scene-dialogue.speaker-player .scene-dialogue-name { color: var(--cyan); }
+.scene-dialogue.speaker-system .scene-dialogue-name { color: var(--text-3); font-style: italic; }
+
+.scene-dialogue-text {
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.55;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  min-height: 72px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.scene-dialogue.speaker-system .scene-dialogue-text {
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.scene-cursor {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--gold);
+  animation: scene-cursor-blink 0.6s steps(2, start) infinite;
+}
+@keyframes scene-cursor-blink {
+  to { opacity: 0; }
+}
+
+.scene-dialogue-foot {
+  display: flex; align-items: center;
+  margin-top: 10px;
+  gap: 12px;
+}
+.scene-dialogue-progress {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-right: auto;
+}
+.scene-actions {
+  display: flex; gap: 8px;
+  cursor: default;
+}
+
+.scene-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 120ms;
+}
+.scene-btn:hover { border-color: var(--border-2); background: var(--bg-3); }
+.scene-btn.primary {
+  background: linear-gradient(135deg, var(--gold), #f59e0b);
+  border-color: transparent;
+  color: #3a1f00;
+  font-weight: 700;
+  box-shadow: 0 6px 18px -6px rgba(251,191,36,0.55);
+}
+.scene-btn.primary:hover { filter: brightness(1.1); }
+.scene-btn.ghost { background: transparent; }
+
+
+/* ─── Loading strip ─────────────────────────────────────────── */
+.scene-loading-strip {
+  position: absolute;
+  bottom: 200px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--gold);
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(251,191,36,0.1);
+  border: 1px solid rgba(251,191,36,0.4);
+  z-index: 5;
+}
+.scene-loading-strip span::after {
+  content: '…';
+  display: inline-block;
+  animation: scene-dots 1.2s steps(4, end) infinite;
+  width: 1.5em;
+  text-align: left;
+}
+@keyframes scene-dots {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '…'; }
+}
+
+
+/* ─── Victory banner ────────────────────────────────────────── */
+.scene-victory {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 86px;
+  letter-spacing: 0.06em;
+  background: linear-gradient(135deg, #fbbf24 0%, #fde047 50%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 24px rgba(251,191,36,0.8));
+  pointer-events: none;
+  z-index: 7;
+  animation: scene-victory-pop 600ms cubic-bezier(.2,1.4,.5,1);
+}
+@keyframes scene-victory-pop {
+  0%   { transform: translate(-50%,-50%) scale(0.5); opacity: 0; }
+  60%  { transform: translate(-50%,-50%) scale(1.08); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+}
+
+
+/* ─── Reduced motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .scene-overlay,
+  .scene-stage,
+  .scene-actor,
+  .scene-dialogue,
+  .scene-mission-card,
+  .scene-bg-far,
+  .scene-bg-mid,
+  .scene-victory {
+    animation: none !important;
+    transition: none !important;
+  }
+  .scene-bg-far,
+  .scene-bg-mid {
+    transform: none;
+  }
+}
+
+/* ─── Responsive — stack actors vertically below 760px ─────── */
+@media (max-width: 760px) {
+  .scene-actor-portrait { width: 160px; height: 220px; }
+  .scene-actors { padding: 0 4% 240px; }
+  .scene-mission-card { top: 12px; padding: 10px 14px; }
+  .scene-mission-title { font-size: 16px; }
+  .scene-dialogue-text { font-size: 15px; }
+}

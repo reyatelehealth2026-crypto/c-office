@@ -304,41 +304,22 @@ const CommandBar = ({ onOpenAgent }) => {
 
   React.useEffect(() => { if (def && !provider) setProvider(def); }, [def]);
 
-  async function dispatch() {
+  function dispatch() {
     if (!text.trim() || busy) return;
     setBusy(true);
-    setLastResult(null);
-    try {
-      const note = await fetch('/api/notes', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          title: text.slice(0, 60),
-          body: text,
-          tag: 'task',
-          agentId,
-        }),
-      }).then(r => r.json());
-
-      const r = await fetch(`/api/notes/${note.id}/dispatch`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ provider, agentId, message: text }),
-      }).then(r => r.json());
-
-      setLastResult({
-        ok: r.ok,
-        provider,
-        noteId: note.id,
-        output: (r.output || '').slice(0, 280),
-      });
-      setText('');
-      window.refreshNotes && window.refreshNotes();
-    } catch (e) {
-      setLastResult({ ok: false, output: 'Error: ' + e.message });
-    } finally {
-      setBusy(false);
-    }
+    setLastResult({ ok: true, provider, output: 'Scene launched — see the dialogue overlay.' });
+    // openScene will create the note + dispatch + render JRPG-style scene.
+    // It runs async; we don't await so the UI feels instant.
+    window.openScene({
+      message: text,
+      agentId,
+      provider,
+      title: text.slice(0, 60),
+      body: text,
+      tag: 'task',
+    });
+    setText('');
+    setBusy(false);
   }
 
   const agent = agents.find(a => a.id === agentId);
