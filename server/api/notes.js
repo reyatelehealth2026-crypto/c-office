@@ -66,48 +66,53 @@ export async function providersRoute(_req, res) {
 // Streamed dispatch — runs the selected provider, pushes incremental output
 // into the global event bus AND appends a final agent message to the note.
 export async function dispatchRoute(req, res) {
-  const note = await getNote(req.params.id);
-  if (!note) return res.status(404).json({ error: 'note not found' });
-
-  const { provider: providerName = defaultProvider(),
-          message = '',
-          agentId } = req.body || {};
-
-  const personaId = agentId || note.agentId || 'orchestra';
-  const persona   = PERSONAS_BY_ID.get(personaId);
-  const provider  = getProvider(providerName);
-  if (!provider) return res.status(400).json({ error: 'unknown provider: ' + providerName });
-
-  // Persist the user message (if provided) before dispatch — keeps the chat log honest.
-  if (message && message.trim()) {
-    await appendMessage(note.id, { role: 'user', content: message.trim() });
-  }
-
-  // Mark note as "running" while the CLI is in flight.
-  await updateNote(note.id, { status: 'running', agentId: personaId });
-
-  // Spawn a synthetic Task entry so the agent shows as busy on the dashboard.
-  const taskId = `note:${note.id}:${Date.now().toString(36)}`;
-  startTask({
-    tool_use_id: taskId,
-    sessionId:   `dispatch:${personaId}`,
-    subagent_type: persona?.role || personaId,
-    description: `Dispatch — ${note.title}`,
-  });
-  // Push a "prompt" event so Adventure mode sees a new boss
-  pushEvent({
-    sessionId: `dispatch:${personaId}`,
-    personaId,
-    verb: 'prompt',
-    text: (message || note.title).slice(0, 140),
-    status: 'ok',
-    dedupeKey: `dispatch-prompt:${taskId}`,
-  });
-
-  const prompt = buildPromptForNote(note, message, persona);
-
-  let collected = '';
+  let note = null;
+  let taskId = null;
+  let personaId = null;
+  let providerName = null;
   try {
+    note = await getNote(req.params.id);
+    if (!note) return res.status(404).json({ error: 'note not found' });
+
+    const { provider: requestedProvider = defaultProvider(),
+            message = '',
+            agentId } = req.body || {};
+
+    providerName = requestedProvider;
+    personaId = agentId || note.agentId || 'orchestra';
+    const persona   = PERSONAS_BY_ID.get(personaId);
+    const provider  = getProvider(providerName);
+    if (!provider) return res.status(400).json({ error: 'unknown provider: ' + providerName });
+
+    // Persist the user message (if provided) before dispatch — keeps the chat log honest.
+    if (message && message.trim()) {
+      await appendMessage(note.id, { role: 'user', content: message.trim() });
+    }
+
+    // Mark note as "running" while the CLI is in flight.
+    await updateNote(note.id, { status: 'running', agentId: personaId });
+
+    // Spawn a synthetic Task entry so the agent shows as busy on the dashboard.
+    taskId = `note:${note.id}:${Date.now().toString(36)}`;
+    startTask({
+      tool_use_id: taskId,
+      sessionId:   `dispatch:${personaId}`,
+      subagent_type: personaId,
+      description: `Dispatch — ${note.title}`,
+    });
+    // Push a "prompt" event so Adventure mode sees a new boss
+    pushEvent({
+      sessionId: `dispatch:${personaId}`,
+      personaId,
+      verb: 'prompt',
+      text: (message || note.title).slice(0, 140),
+      status: 'ok',
+      dedupeKey: `dispatch-prompt:${taskId}`,
+    });
+
+    const prompt = buildPromptForNote(note, message, persona);
+
+    let collected = '';
     const result = await provider.run(
       { prompt, agentName: persona?.name },
       (chunk) => {
@@ -158,23 +163,18 @@ export async function dispatchRoute(req, res) {
       scene,
     });
   } catch (e) {
-    finishTask({ tool_use_id: taskId, status: 'failed' });
-    await appendMessage(note.id, {
-      role: 'agent',
-      agentId: personaId,
-      provider: providerName,
-      content: `Dispatch error: ${e.message}`,
-      ok: false,
-    });
-    await updateNote(note.id, { status: 'queued' });
-    const scene = buildSceneScript({
-      persona,
-      note: await getNote(note.id),
-      userMessage: message,
-      providerName,
-      rawOutput: `Dispatch error: ${e.message}`,
-      ok: false,
-    });
-    res.status(500).json({ ok: false, error: String(e), scene });
+    console.error('[c-office:notes] dispatch failed:', e);
+    if (taskId) finishTask({ tool_use_id: taskId, status: 'failed' });
+    if (note?.id) {
+      await appendMessage(note.id, {
+        role: 'agent',
+        agentId: personaId || note.agentId || 'orchestra',
+        provider: providerName || defaultProvider(),
+        content: e.message || String(e),
+        ok: false,
+      }).catch(() => {});
+      await updateNote(note.id, { status: 'queued' }).catch(() => {});
+    }
+    res.status(500).json({ ok: false, error: e.message || String(e) });
   }
 }

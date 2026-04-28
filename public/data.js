@@ -12,6 +12,8 @@
   window.AUTH_STATUS    = null;
   window.STATE_EDGES    = [];
   window.STATE_SESSIONS = [];
+  window.INVENTORY      = { gold: 0, ownedAgents: ['orchestra'], skills: {}, items: {} };
+  window.SHOP_CATALOG   = { skills: [], items: [], agents: [] };
   window.STATS = { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0 };
   window.NOTES          = [];
   window.PROVIDERS      = { providers: [], default: 'echo' };
@@ -38,6 +40,36 @@
   function applyPersonaStatus(map) {
     if (!map) return;
     window.AGENTS = window.AGENTS.map(a => ({ ...a, status: map[a.id] || 'idle' }));
+    stateVersion++;
+    fire();
+  }
+
+  function applyPersonaLevels(map) {
+    if (!map) return;
+    window.AGENTS = window.AGENTS.map(a => ({ ...a, level: map[a.id] || 1 }));
+    stateVersion++;
+    fire();
+  }
+
+  function applyInventory(inv) {
+    if (!inv || typeof inv !== 'object') return;
+    window.INVENTORY = {
+      gold: Number.isFinite(inv.gold) ? inv.gold : 0,
+      ownedAgents: Array.isArray(inv.ownedAgents) ? inv.ownedAgents : ['orchestra'],
+      skills: inv.skills && typeof inv.skills === 'object' ? inv.skills : {},
+      items: inv.items && typeof inv.items === 'object' ? inv.items : {},
+    };
+    stateVersion++;
+    fire();
+  }
+
+  function applyShopCatalog(catalog) {
+    if (!catalog || typeof catalog !== 'object') return;
+    window.SHOP_CATALOG = {
+      skills: Array.isArray(catalog.skills) ? catalog.skills : [],
+      items: Array.isArray(catalog.items) ? catalog.items : [],
+      agents: Array.isArray(catalog.agents) ? catalog.agents : [],
+    };
     stateVersion++;
     fire();
   }
@@ -69,6 +101,16 @@
   }
   window.refreshProviders = refreshProviders;
 
+  async function refreshShop() {
+    try {
+      const r = await fetch('/api/shop');
+      const j = await r.json();
+      applyShopCatalog(j.catalog || { skills: [], items: [], agents: [] });
+      applyInventory(j.inventory || { gold: 0, ownedAgents: ['orchestra'], skills: {}, items: {} });
+    } catch (e) { /* ignore */ }
+  }
+  window.refreshShop = refreshShop;
+
   async function fetchMemory() {
     try {
       const r = await fetch('/api/memory');
@@ -92,11 +134,13 @@
     fetchMemory();
     refreshNotes();
     refreshProviders();
+    refreshShop();
     if (es) try { es.close(); } catch {}
     es = new EventSource('/api/stream');
     es.addEventListener('event',          e => pushEvent(JSON.parse(e.data)));
     es.addEventListener('stats',          e => { window.STATS = { ...window.STATS, ...JSON.parse(e.data) }; stateVersion++; fire(); });
     es.addEventListener('persona.status', e => applyPersonaStatus(JSON.parse(e.data)));
+    es.addEventListener('persona.levels', e => applyPersonaLevels(JSON.parse(e.data)));
     window.COfficeApplyDispatch = function applyDispatch(dispatch) {
       window.DISPATCHES = [dispatch, ...window.DISPATCHES.filter(d => d.id !== dispatch.id)]
         .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
@@ -112,6 +156,7 @@
       fire();
     });
     es.addEventListener('auth.status',    e => { window.AUTH_STATUS = JSON.parse(e.data); stateVersion++; fire(); });
+    es.addEventListener('inventory',      e => applyInventory(JSON.parse(e.data)));
     es.addEventListener('task',           () => {
       fetch('/api/state').then(r => r.json()).then(applySnapshot).catch(()=>{});
     });
@@ -130,6 +175,12 @@
       () => stateVersion,
     );
   };
+
+  Object.assign(window, {
+    fetchCOfficeShop: refreshShop,
+    fetchCOfficeNotes: refreshNotes,
+    fetchCOfficeProviders: refreshProviders,
+  });
 
   bootstrap();
 })();

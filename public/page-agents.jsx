@@ -1,13 +1,14 @@
 /* ====== SIDEBAR / SHELL ====== */
 const NAV = [
-  { id: 'dashboard', label: 'Dashboard', icon: '▤', group: 'Overview' },
-  { id: 'agents', label: 'Agents', icon: '◆', group: 'Overview' },
-  { id: 'notes', label: 'Notes', icon: '✎', group: 'Overview' },
-  { id: 'tasks', label: 'Mission Log', icon: '▷', group: 'Operations' },
-  { id: 'skills', label: 'Skills', icon: '✦', group: 'Operations' },
-  { id: 'memory', label: 'Memory Graph', icon: '◎', group: 'Operations' },
-  { id: 'adventure', label: 'Adventure', icon: '⚔', group: 'Operations' },
-  { id: 'settings', label: 'Settings', icon: '⚙', group: 'System' },
+  { id: 'dashboard', label: 'ภาพรวม', icon: '▤', group: 'ศูนย์ควบคุม' },
+  { id: 'notes', label: 'สั่งงาน', icon: '✎', group: 'ศูนย์ควบคุม' },
+  { id: 'shop', label: 'ร้านค้าเอเจนท์', icon: '$', group: 'ศูนย์ควบคุม' },
+  { id: 'agents', label: 'เอเจนท์', icon: '◆', group: 'ศูนย์ควบคุม' },
+  { id: 'tasks', label: 'บันทึกภารกิจ', icon: '▷', group: 'ปฏิบัติการ' },
+  { id: 'skills', label: 'สกิล', icon: '✦', group: 'ปฏิบัติการ' },
+  { id: 'memory', label: 'ความจำ', icon: '◎', group: 'ปฏิบัติการ' },
+  { id: 'adventure', label: 'ผจญภัย', icon: '⚔', group: 'ปฏิบัติการ' },
+  { id: 'settings', label: 'ตั้งค่า', icon: '⚙', group: 'ระบบ' },
 ];
 
 const Sidebar = ({ page, setPage }) => {
@@ -18,7 +19,7 @@ const Sidebar = ({ page, setPage }) => {
         <div className="brand-mark"/>
         <div>
           <div className="brand-name">C-OFFICE</div>
-          <div className="brand-sub">Agent Orchestration</div>
+          <div className="brand-sub">ศูนย์เอเจนท์</div>
         </div>
       </div>
       {groups.map(g => (
@@ -34,6 +35,7 @@ const Sidebar = ({ page, setPage }) => {
               {n.id === 'notes' && (window.NOTES?.length || 0) > 0 && (
                 <span className="badge cyan" style={{marginLeft:'auto', fontSize:9}}>{window.NOTES.length}</span>
               )}
+              {n.id === 'shop' && <span className="badge gold" style={{marginLeft:'auto', fontSize:9}}>ใหม่</span>}
               {n.id === 'tasks' && TASKS.filter(t=>t.status==='running').length > 0 && (
                 <span className="badge gold" style={{marginLeft:'auto', fontSize:9}}>{TASKS.filter(t=>t.status==='running').length}</span>
               )}
@@ -44,7 +46,7 @@ const Sidebar = ({ page, setPage }) => {
       <div className="sidebar-foot">
         <div className="pilot-avatar">P</div>
         <div className="pilot-meta">
-          <b>Pilot</b><br/><span>Commander</span>
+          <b>ผู้ควบคุม</b><br/><span>Commander</span>
         </div>
       </div>
     </aside>
@@ -52,7 +54,7 @@ const Sidebar = ({ page, setPage }) => {
 };
 
 /* ====== AGENTS ROSTER PAGE ====== */
-const AgentsPage = ({ onOpenAgent }) => {
+const AgentsPage = ({ onOpenAgent, setPage }) => {
   const [filter, setFilter] = React.useState('ALL');
   const filtered = filter === 'ALL' ? AGENTS : AGENTS.filter(a => a.rarity === filter);
   const rarities = ['ALL', 'SSR', 'SR', 'R'];
@@ -65,12 +67,12 @@ const AgentsPage = ({ onOpenAgent }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1><span className="accent">Agent</span> Roster</h1>
-          <div className="sub">{AGENTS.length} agents · summon a new unit to expand your crew</div>
+          <h1>คลัง <span className="accent">เอเจนท์</span></h1>
+          <div className="sub">{AGENTS.length} agents · ดูทีมที่พร้อมใช้งานและสถานะล่าสุด</div>
         </div>
         <div className="topbar-actions">
           <span className="chip"><span className="dot"/> {AGENTS.filter(a=>a.status!=='offline').length} online</span>
-          <button className="btn gold">＋ Summon</button>
+          <button className="btn gold" onClick={() => setPage && setPage('shop')}>ไปที่ร้านค้า</button>
         </div>
       </div>
 
@@ -106,7 +108,7 @@ const AgentsPage = ({ onOpenAgent }) => {
         </div>
       )}
 
-      <div className="mono-s" style={{marginBottom: 10, letterSpacing:'0.2em'}}>CREW · {crew.length}</div>
+      <div className="mono-s" style={{marginBottom: 10, letterSpacing:'0.2em'}}>ทีมเอเจนท์ · {crew.length}</div>
       <div className="card-grid">
         {crew.map(a => (
           <GachaCard key={a.id} agent={a} onClick={() => onOpenAgent(a.id)}/>

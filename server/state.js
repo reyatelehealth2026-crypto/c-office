@@ -19,7 +19,7 @@ export const state = {
   dispatches: new Map(),             // dashboard-created mission notes / CLI dispatch drafts
   fileOffsets: new Map(),            // jsonlPath → byte offset
   personaStatus: new Map(PERSONAS.map(p => [p.id, 'idle'])),
-  personaLevels: new Map(PERSONAS.map(p => [p.id, p.level])),  // dynamic; reset to 1 on clearState; +1 per Task done
+  personaLevels: new Map(PERSONAS.map(p => [p.id, 1])),  // runtime progression; +1 per successful Task after reset/server start
   stats: { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0, dayKey: today() },
   dedupe: new Dedupe(4096),
   lastToolActivity: new Map(),       // personaId → ts (mark busy while within window)
@@ -187,13 +187,15 @@ export function recordUsage({ model, usage, dedupeKey, sessionId }) {
   if (!usage) return;
   if (dedupeKey && state.dedupe.seen(dedupeKey)) return;
   rolloverIfNewDay();
-  state.stats.tokensToday +=
+  const tokensCounted =
     (usage.input_tokens || 0) +
     (usage.output_tokens || 0) +
     (usage.cache_read_input_tokens || 0) +
     (usage.cache_creation_input_tokens || 0);
+  state.stats.tokensToday += tokensCounted;
   state.stats.spendToday += costUsd(model, usage);
   broadcastStats();
+  if (tokensCounted > 0) bus.emit('reward.usage', { tokens: tokensCounted });
 }
 
 // ---------- Tasks (Task tool spawns) ----------
@@ -231,6 +233,8 @@ export function finishTask({ tool_use_id, status = 'done' }) {
   if (status === 'done' && t.personaId) {
     const cur = state.personaLevels.get(t.personaId) ?? 1;
     state.personaLevels.set(t.personaId, cur + 1);
+    bus.emit('reward.task', { personaId: t.personaId, taskId: t.id });
+    bus.emit('persona.levels', Object.fromEntries(state.personaLevels));
   }
   recomputePersonaStatus();
   recomputeStats();
@@ -361,11 +365,18 @@ export function clearState() {
   state.lastToolActivity.clear();
   // Reset every persona to Lv.1 — fresh RPG progression starts here.
   for (const p of PERSONAS) state.personaLevels.set(p.id, 1);
+  bus.emit('persona.levels', Object.fromEntries(state.personaLevels));
   recomputePersonaStatus();
   recomputeStats();
   broadcastPersonaStatus();
   broadcastStats();
   bus.emit('reset');
+}
+
+// Reset only RPG levels. Keeps activity, sessions, tasks, stats, and notes.
+export function resetPersonaLevels() {
+  for (const p of PERSONAS) state.personaLevels.set(p.id, 1);
+  bus.emit('persona.levels', Object.fromEntries(state.personaLevels));
 }
 
 // ---------- Snapshot ----------
@@ -389,7 +400,7 @@ export function snapshot() {
     }, 0);
     return {
       ...p,
-      level: state.personaLevels.get(p.id) ?? p.level,    // dynamic — reset to 1 by clearState, +1 per task done
+      level: state.personaLevels.get(p.id) ?? 1,    // dynamic — reset to 1 by clearState, +1 per task done
       status,
       currentTask: recent?.currentTask || (status === 'idle' ? '— idle' : 'awaiting work'),
       stats: {
