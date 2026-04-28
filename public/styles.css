@@ -423,7 +423,8 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; letter-spac
   justify-content: space-between;
   gap: 12px;
 }
-.cmd-selected-prompt {
+.cmd-selected-prompt,
+.cmd-message {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -436,11 +437,17 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; letter-spac
   display: flex;
   gap: 8px;
   justify-content: space-between;
-  padding: 8px 10px;
-  border-radius: 10px;
   background: rgba(34,211,238,0.08);
-  border: 1px solid rgba(34,211,238,0.16);
-  font-size: 12px;
+  border-color: rgba(34,211,238,0.16);
+}
+.cmd-msg-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 .cmd-message span {
   min-width: 0;

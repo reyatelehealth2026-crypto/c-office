@@ -318,21 +318,26 @@ const CommandCenter = ({ onOpenAgent }) => {
           </div>
           {selected ? (
             <>
-              <div className="cmd-selected-prompt">{selected.prompt}</div>
+              <div className="cmd-messages">
+                <div className="cmd-message cmd-message-mission">
+                  <strong>Mission</strong>
+                  <span>{selected.prompt}</span>
+                  <em>{relTime(selected.createdAt)}</em>
+                </div>
+                {(selected.messages || []).length === 0 && <div className="muted" style={{fontSize:12}}>Start a short handoff chat for this note.</div>}
+                {(selected.messages || []).map((m, i) => (
+                  <div key={i} className="cmd-message">
+                    <strong>{m.role || 'pilot'}</strong>
+                    <span>{m.text}</span>
+                    <em>{relTime(m.ts)}</em>
+                  </div>
+                ))}
+              </div>
               <div className="cmd-preview">
                 <span>{selectedCommand}</span>
                 <button className="btn ghost" onClick={() => copyCommand(selectedCommand, selected.id)}>
                   {copied === selected.id ? 'Copied' : 'Copy'}
                 </button>
-              </div>
-              <div className="cmd-messages">
-                {(selected.messages || []).length === 0 && <div className="muted" style={{fontSize:12}}>Start a short handoff chat for this note.</div>}
-                {(selected.messages || []).map((m, i) => (
-                  <div key={i} className="cmd-message">
-                    <span>{m.text}</span>
-                    <em>{relTime(m.ts)}</em>
-                  </div>
-                ))}
               </div>
               <div className="cmd-chat-input">
                 <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendChat(); }} placeholder="คุยต่อกับเอเจนท์จากโน้ตนี้..." />
