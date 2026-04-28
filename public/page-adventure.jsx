@@ -325,6 +325,8 @@ const AdventurePage = ({ onOpenAgent }) => {
     return rows;
   }, [(window.ACTIVITY || []).length]);
 
+  const questQueue = (window.DISPATCHES || []).slice(0, 5);
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="adv-stage">
@@ -388,6 +390,30 @@ const AdventurePage = ({ onOpenAgent }) => {
       </div>
 
       {/* ── Bottom Section ── */}
+      {questQueue.length > 0 && (
+        <div className="adv-quest-board panel">
+          <div className="panel-head">
+            <h3>Quest Queue</h3>
+            <div className="right">from dashboard notes</div>
+          </div>
+          <div className="adv-quest-list">
+            {questQueue.map((q) => {
+              const ag = agents.find((a) => a.id === q.personaId);
+              return (
+                <div key={q.id} className={'adv-quest-card state-' + q.status}>
+                  <AgentDot agent={ag} size={30}/>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div className="adv-quest-title">{q.title}</div>
+                    <div className="mono-s">{ag?.name || q.personaId} · {q.provider} · {q.status}</div>
+                  </div>
+                  <span className="badge gold">{(q.messages || []).length} chat</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="adv-bottom">
 
         {/* Combat Log */}

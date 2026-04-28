@@ -263,6 +263,10 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; letter-spac
   border-color: transparent;
   font-weight: 600;
 }
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 
 /* ============ PANELS ============ */
 .panel {
@@ -310,3 +314,160 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; letter-spac
 .muted { color: var(--text-3); }
 .mono-s { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--text-3); }
 .divider { height: 1px; background: var(--border); margin: 10px 0; }
+
+/* ============ COMMAND CENTER ============ */
+.command-center {
+  background:
+    radial-gradient(520px 180px at 10% 0%, rgba(34,211,238,0.08), transparent 70%),
+    radial-gradient(520px 220px at 90% 0%, rgba(251,191,36,0.08), transparent 70%),
+    var(--panel);
+}
+.cmd-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(220px, 0.8fr) minmax(300px, 1fr);
+  gap: 14px;
+}
+.cmd-compose,
+.cmd-notes,
+.cmd-chat {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cmd-textarea {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: var(--text);
+  padding: 12px;
+  outline: none;
+  font: 13px/1.5 var(--font-body);
+}
+.cmd-textarea:focus,
+.cmd-select:focus,
+.cmd-chat-input input:focus {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px rgba(157,92,255,0.18);
+}
+.cmd-controls {
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  gap: 8px;
+}
+.cmd-select {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--text);
+  padding: 8px 10px;
+  outline: none;
+  font: 12px var(--font-body);
+}
+.cmd-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(7,4,26,0.45);
+}
+.cmd-preview span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font: 11px var(--font-mono);
+}
+.cmd-note-list,
+.cmd-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 250px;
+  overflow: auto;
+}
+.cmd-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.cmd-note:hover,
+.cmd-note.is-selected {
+  border-color: var(--purple);
+  background: rgba(157,92,255,0.12);
+}
+.cmd-note-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cmd-chat-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cmd-selected-prompt {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.cmd-message {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(34,211,238,0.08);
+  border: 1px solid rgba(34,211,238,0.16);
+  font-size: 12px;
+}
+.cmd-message span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cmd-message em {
+  flex-shrink: 0;
+  color: var(--text-3);
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.cmd-chat-input {
+  display: flex;
+  gap: 8px;
+}
+.cmd-chat-input input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--text);
+  padding: 9px 10px;
+  outline: none;
+}
+
+@media (max-width: 1180px) {
+  .cmd-grid { grid-template-columns: 1fr; }
+}

@@ -7,6 +7,7 @@
   window.TASKS          = [];
   window.MEMORY_NODES   = [];
   window.MEMORY_EDGES   = [];
+  window.DISPATCHES     = [];
   window.STATE_EDGES    = [];
   window.STATE_SESSIONS = [];
   window.STATS = { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0 };
@@ -67,6 +68,14 @@
     es.addEventListener('event',          e => pushEvent(JSON.parse(e.data)));
     es.addEventListener('stats',          e => { window.STATS = { ...window.STATS, ...JSON.parse(e.data) }; stateVersion++; fire(); });
     es.addEventListener('persona.status', e => applyPersonaStatus(JSON.parse(e.data)));
+    es.addEventListener('dispatch',       e => {
+      const dispatch = JSON.parse(e.data);
+      window.DISPATCHES = [dispatch, ...window.DISPATCHES.filter(d => d.id !== dispatch.id)]
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        .slice(0, 100);
+      stateVersion++;
+      fire();
+    });
     es.addEventListener('task',           () => {
       fetch('/api/state').then(r => r.json()).then(applySnapshot).catch(()=>{});
     });
