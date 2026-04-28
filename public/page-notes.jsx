@@ -184,18 +184,48 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
   );
 };
 
-const AgentPicker = ({ agents, value, onChange, compact = false }) => {
+const AgentPicker = ({ agents, value, onChange }) => {
   const [open, setOpen] = React.useState(false);
-  const ref = React.useRef(null);
-  React.useEffect(() => {
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+  const [pos, setPos] = React.useState({ top: 0, left: 0, width: 280 });
+  const buttonRef = React.useRef(null);
+  const menuRef   = React.useRef(null);
+
+  // Compute menu position from button rect — using position: fixed lets the
+  // dropdown escape any ancestor panel with overflow: hidden.
+  const measure = React.useCallback(() => {
+    const el = buttonRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = 280;
+    const left = Math.min(window.innerWidth - width - 8, r.left);
+    const top  = r.bottom + 4;
+    setPos({ top, left: Math.max(8, left), width });
   }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    measure();
+    const close = (e) => {
+      if (buttonRef.current?.contains(e.target)) return;
+      if (menuRef.current?.contains(e.target))   return;
+      setOpen(false);
+    };
+    const onScroll = () => measure();
+    document.addEventListener('mousedown', close);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [open, measure]);
+
   const selected = agents.find(a => a.id === value);
   return (
-    <div ref={ref} className="agent-picker">
+    <div className="agent-picker">
       <button
+        ref={buttonRef}
         className="btn"
         onClick={() => setOpen(o => !o)}
         style={{display: 'inline-flex', alignItems: 'center', gap: 8}}
@@ -205,7 +235,11 @@ const AgentPicker = ({ agents, value, onChange, compact = false }) => {
         <span className="mono-s">▾</span>
       </button>
       {open && (
-        <div className="agent-picker-menu panel">
+        <div
+          ref={menuRef}
+          className="agent-picker-menu panel"
+          style={{ top: pos.top, left: pos.left, width: pos.width }}
+        >
           {agents.map(a => (
             <div key={a.id} className="agent-picker-row" onClick={() => { onChange(a.id); setOpen(false); }}>
               <AgentDot agent={a} size={26}/>
