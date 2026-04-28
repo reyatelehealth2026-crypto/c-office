@@ -397,13 +397,13 @@ const AdventurePage = ({ onOpenAgent }) => {
       {/* ── Topbar ── */}
       <div className="topbar">
         <div>
-          <h1>Adventure <span className="accent">Mode</span></h1>
+          <h1>บอสฮันต์ <span className="accent">โจมตี</span></h1>
           <div className="sub">
-            Quest active &middot; Tier {tier.name} &middot; {liveAgents} party members
+            ภารกิจ &middot; ระดับ {tier.name} &middot; {liveAgents} สมาชิกพร้อมรบ
           </div>
         </div>
         <div className="topbar-actions">
-          <span className="chip"><span className="dot"/> battle live</span>
+          <span className="chip"><span className="dot"/> สู้สด</span>
           <button
             className="btn primary"
             onClick={quickStrike}

@@ -1,31 +1,34 @@
 /* ====== SIDEBAR / SHELL ====== */
 const NAV = [
-  { id: 'dashboard', label: 'ภาพรวม', icon: '▤', group: 'ศูนย์ควบคุม' },
-  { id: 'notes', label: 'สั่งงาน', icon: '✎', group: 'ศูนย์ควบคุม' },
-  { id: 'shop', label: 'ร้านค้าเอเจนท์', icon: '$', group: 'ศูนย์ควบคุม' },
-  { id: 'agents', label: 'เอเจนท์', icon: '◆', group: 'ศูนย์ควบคุม' },
-  { id: 'tasks', label: 'บันทึกภารกิจ', icon: '▷', group: 'ปฏิบัติการ' },
-  { id: 'skills', label: 'สกิล', icon: '✦', group: 'ปฏิบัติการ' },
-  { id: 'memory', label: 'ความจำ', icon: '◎', group: 'ปฏิบัติการ' },
-  { id: 'adventure', label: 'ผจญภัย', icon: '⚔', group: 'ปฏิบัติการ' },
+  { id: 'dashboard', label: 'หอกิลด์', icon: '⚜', group: 'กิลด์' },
+  { id: 'notes', label: 'เควสต์', icon: '📜', group: 'กิลด์' },
+  { id: 'shop', label: 'ตลาดสมาคม', icon: '$', group: 'กิลด์' },
+  { id: 'agents', label: 'สมาชิก', icon: '◆', group: 'กิลด์' },
+  { id: 'tasks', label: 'บันทึกภารกิจ', icon: '▷', group: 'ภารกิจ' },
+  { id: 'skills', label: 'สกิล', icon: '✦', group: 'ภารกิจ' },
+  { id: 'memory', label: 'ความจำ', icon: '◎', group: 'ภารกิจ' },
+  { id: 'adventure', label: 'บอสฮันต์', icon: '⚔', group: 'ภารกิจ' },
   { id: 'settings', label: 'ตั้งค่า', icon: '⚙', group: 'ระบบ' },
+  // Hidden — accessible via URL/localStorage as legacy fallback for old Dashboard.
+  { id: 'mission-control', label: 'Mission Control', icon: '▤', group: 'ระบบ', hidden: true },
 ];
 
 const Sidebar = ({ page, setPage }) => {
-  const groups = [...new Set(NAV.map(n => n.group))];
+  const visibleNav = NAV.filter(n => !n.hidden);
+  const groups = [...new Set(visibleNav.map(n => n.group))];
   return (
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-mark"/>
         <div>
           <div className="brand-name">C-OFFICE</div>
-          <div className="brand-sub">ศูนย์เอเจนท์</div>
+          <div className="brand-sub">สมาคมเอเจนท์</div>
         </div>
       </div>
       {groups.map(g => (
         <React.Fragment key={g}>
           <div className="nav-group-label">{g}</div>
-          {NAV.filter(n => n.group === g).map(n => (
+          {visibleNav.filter(n => n.group === g).map(n => (
             <div key={n.id}
               className={`nav-item ${page === n.id ? 'active' : ''}`}
               onClick={() => setPage(n.id)}>

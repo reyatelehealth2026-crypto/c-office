@@ -1,5 +1,14 @@
 /* ===== NOTES PAGE — capture ideas, pick agent, chat or dispatch ===== */
 
+const NOTE_STATUS_TH = {
+  idea:     'ไอเดีย',
+  queued:   'คิว',
+  running:  'ออกภารกิจ',
+  done:     'จบภารกิจ',
+  archived: 'เก็บ',
+};
+const noteStatusLabel = (s) => NOTE_STATUS_TH[s] || s;
+
 const NoteTagPalette = ['idea', 'task', 'bug', 'research', 'design', 'ops'];
 
 const NotesPage = ({ onOpenAgent, presetAgentId }) => {
@@ -58,8 +67,8 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>ศูนย์ <span className="accent">สั่งงาน</span></h1>
-          <div className="sub">จดโน้ต · เลือกเอเจนท์ · คุยก่อน · เข้า Scene เพื่อรันงาน</div>
+          <h1>เควสต์ <span className="accent">ทั้งหมด</span></h1>
+          <div className="sub">รับเควสต์ · มอบหมายสมาชิก · คุยก่อน · ออกเดินทางเมื่อพร้อม</div>
         </div>
         <div className="topbar-actions">
           <span className="chip"><span className="dot"/> {notes.length} โน้ต</span>
@@ -136,7 +145,7 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
               >
                 <div className="note-row-head">
                   <span className="note-row-title">{n.title}</span>
-                  <span className={'note-status status-' + n.status}>{n.status}</span>
+                  <span className={'note-status status-' + n.status}>{noteStatusLabel(n.status)}</span>
                 </div>
                 <div className="note-row-meta">
                   {agent && (
@@ -320,7 +329,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
             {note.body && <div className="note-body">{note.body}</div>}
             <div className="row" style={{gap: 6, flexWrap: 'wrap', marginTop: 8}}>
               {note.tag && <span className="badge gold" style={{fontSize: 10}}>{note.tag}</span>}
-              <span className={'note-status status-' + note.status}>{note.status}</span>
+              <span className={'note-status status-' + note.status}>{noteStatusLabel(note.status)}</span>
               <span className="mono-s">created {fmtDate(note.createdAt)}</span>
             </div>
           </div>
@@ -404,10 +413,10 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
             Ctrl/⌘+Enter เพื่อส่ง · ใช้ <b>{provider}</b>
           </span>
           <button className="btn ghost" disabled={busy} onClick={() => dispatch('')}>
-            เข้า Scene จากโน้ต
+            ออกเดินทาง
           </button>
           <button className="btn primary" disabled={busy || !draft.trim()} onClick={() => dispatch()}>
-            {busy ? 'กำลังรัน...' : 'คุยแล้วรัน'}
+            {busy ? 'กำลังออกภารกิจ...' : 'มอบหมาย & ออกภารกิจ'}
           </button>
         </div>
       </div>

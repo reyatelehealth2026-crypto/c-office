@@ -60,8 +60,8 @@ const AgentShopPage = ({ onOpenAgent }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>ร้านค้า <span className="accent">เอเจนท์</span></h1>
-          <div className="sub">ซื้อเอเจนท์ · ติดตั้งสกิล · ใช้ทองจากรางวัล Adventure และการทำงานจริง</div>
+          <h1>ตลาด <span className="accent">สมาคม</span></h1>
+          <div className="sub">เกณฑ์สมาชิก · ฝึกความสามารถ · ใช้ทองจากรางวัลภารกิจและงานจริง</div>
         </div>
         <div className="topbar-actions">
           <span className="shop-wallet">{Number(inventory.gold || 0).toLocaleString()} ทอง</span>
@@ -72,7 +72,7 @@ const AgentShopPage = ({ onOpenAgent }) => {
       <div className="shop-layout">
         <section className="panel">
           <div className="panel-head">
-            <h3>ตลาดเอเจนท์</h3>
+            <h3>ตลาดสมาชิก</h3>
             <div className="right">{ownedAgents.size}/{agents.length} owned</div>
           </div>
           <div className="shop-agent-grid">
@@ -119,7 +119,7 @@ const AgentShopPage = ({ onOpenAgent }) => {
 
         <section className="panel">
           <div className="panel-head">
-            <h3>ติดตั้งสกิล</h3>
+            <h3>ติดตั้งความสามารถ</h3>
             <div className="right">{selected?.name || 'เลือกเอเจนท์'}</div>
           </div>
           {selected && (

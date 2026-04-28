@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "c-office (dev)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--watch", "server/index.js"],
+      "port": 7878
+    },
+    {
+      "name": "c-office (start)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/index.js"],
+      "port": 7878
+    }
+  ]
+}

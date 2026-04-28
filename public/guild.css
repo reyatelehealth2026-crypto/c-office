@@ -1,0 +1,351 @@
+/* =========================================================================
+   guild.css — Adventurer's Guild × Command Deck visual layer
+   Inherits design tokens from styles.css (no token redefinition).
+   Theme: warm gold + purple parchment energy on top of existing dark base.
+   Reuses: .panel, .topbar, .chip, .badge, .btn (from styles.css);
+           .office-card states (cards.css); .scene-* (scene.css inline panel).
+   ========================================================================= */
+
+/* ─── Hero (top of Guild Hall) ───────────────────────────────────────────── */
+.guild-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 24px;
+  align-items: center;
+  padding: 22px 28px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--panel-2), var(--panel));
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+.guild-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 80% at 12% 10%, rgba(251, 191, 36, 0.18), transparent 70%),
+    radial-gradient(40% 60% at 90% 90%, rgba(157, 92, 255, 0.18), transparent 70%);
+}
+.guild-hero-crest {
+  position: relative; z-index: 1;
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(251, 191, 36, 0.4), transparent 70%),
+    var(--bg-2);
+  border: 1.5px solid rgba(251, 191, 36, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold);
+  box-shadow: 0 0 22px -6px rgba(251, 191, 36, 0.55);
+}
+.guild-hero-meta { position: relative; z-index: 1; }
+.guild-hero-name {
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 24px; letter-spacing: -0.01em;
+  color: #fff;
+  margin: 0;
+}
+.guild-hero-name .accent {
+  background: var(--r-ssr);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.guild-hero-sub {
+  margin-top: 4px;
+  color: var(--text-3);
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+}
+.guild-hero-stats {
+  position: relative; z-index: 1;
+  display: flex; gap: 14px; align-items: center;
+}
+
+/* Gold counter pip (reuses .shop-wallet idiom) */
+.guild-gold-pip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(157, 92, 255, 0.10));
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  font-family: var(--font-display); font-weight: 700; font-size: 14px;
+  color: var(--gold);
+  box-shadow: 0 0 18px -8px rgba(251, 191, 36, 0.7);
+}
+.guild-gold-pip .num {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.45);
+}
+
+/* ─── Quest Board ────────────────────────────────────────────────────────── */
+.quest-board {
+  display: grid;
+  gap: 12px;
+}
+.quest-board-empty {
+  padding: 30px 12px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: rgba(157, 92, 255, 0.04);
+}
+
+/* Quest scroll wrapper around .note-row content */
+.quest-scroll {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background:
+    linear-gradient(160deg, rgba(157, 92, 255, 0.06), transparent 70%),
+    var(--bg-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+.quest-scroll:hover {
+  border-color: rgba(251, 191, 36, 0.55);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 26px -16px rgba(251, 191, 36, 0.65);
+}
+.quest-scroll.is-running {
+  border-color: rgba(251, 191, 36, 0.55);
+  background:
+    linear-gradient(160deg, rgba(251, 191, 36, 0.10), transparent 70%),
+    var(--bg-2);
+}
+.quest-scroll.is-done {
+  opacity: 0.7;
+  border-color: rgba(52, 211, 153, 0.45);
+}
+.quest-scroll-body { min-width: 0; }
+.quest-scroll-row {
+  display: flex; gap: 8px; align-items: center;
+  margin-bottom: 6px;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-3);
+}
+.quest-scroll-title {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 15px;
+  color: #fff;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.quest-scroll-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.quest-scroll-actions {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+}
+
+/* ─── Roster grid (compact agent cards) ──────────────────────────────────── */
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+}
+
+/* Skill chip slot row — overlay above scan-line (z-index > 4 for ::after layers) */
+.skill-slots {
+  position: absolute;
+  top: 6px; left: 6px;
+  z-index: 5;
+  display: flex; gap: 4px;
+  pointer-events: none;
+}
+.skill-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(7, 4, 26, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(251, 191, 36, 0.65);
+  color: var(--gold);
+  text-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+  box-shadow: 0 0 10px -2px rgba(251, 191, 36, 0.5);
+  pointer-events: auto;
+  cursor: help;
+}
+.skill-chip.tier-rare { border-color: rgba(157, 92, 255, 0.7); color: var(--purple); text-shadow: 0 0 6px rgba(157, 92, 255, 0.5); box-shadow: 0 0 10px -2px rgba(157, 92, 255, 0.45); }
+.skill-chip.tier-epic { border-color: rgba(244, 114, 182, 0.75); color: var(--pink); text-shadow: 0 0 6px rgba(244, 114, 182, 0.5); box-shadow: 0 0 12px -2px rgba(244, 114, 182, 0.55); }
+.skill-chip.tier-empty {
+  border-color: var(--border-2);
+  color: var(--text-4);
+  background: rgba(7, 4, 26, 0.4);
+  text-shadow: none;
+  box-shadow: none;
+}
+
+/* ─── After-Action Panel (inline; reuses .scene-mission-card styling lite) ── */
+.aar-panel {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(157, 92, 255, 0.08), var(--bg-2));
+  border: 1px solid rgba(157, 92, 255, 0.35);
+}
+.aar-head {
+  display: flex; gap: 10px; align-items: center;
+  margin-bottom: 10px;
+}
+.aar-head-title {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 14px;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+.aar-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 10px;
+  padding: 6px 0;
+  align-items: baseline;
+  border-bottom: 1px dashed rgba(157, 92, 255, 0.12);
+  font-size: 12px;
+}
+.aar-row:last-child { border-bottom: none; }
+.aar-row .aar-when {
+  color: var(--text-4);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.aar-row .aar-msg {
+  color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.aar-row .aar-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.aar-status.ok   { color: var(--green); }
+.aar-status.err  { color: var(--red); }
+.aar-status.run  { color: var(--gold); }
+.aar-empty {
+  padding: 16px 6px;
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ─── CTA: "ออกเดินทาง" sortie button ─────────────────────────────────────── */
+.guild-cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(157, 92, 255, 0.12));
+  color: var(--gold);
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 140ms ease;
+  position: relative;
+  overflow: hidden;
+}
+.guild-cta:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -8px rgba(251, 191, 36, 0.7);
+  animation: guild-rune-pulse 1.4s ease-in-out infinite;
+}
+.guild-cta:disabled {
+  opacity: 0.4; cursor: not-allowed; filter: grayscale(0.6);
+}
+.guild-cta.compact { padding: 5px 10px; font-size: 11px; }
+
+/* Section heads with sigil glyph */
+.guild-section-head {
+  display: flex; align-items: center; gap: 10px;
+  margin: 18px 0 12px;
+}
+.guild-section-head h2 {
+  font-family: var(--font-display);
+  font-size: 14px; font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  margin: 0;
+}
+.guild-section-head .glyph {
+  color: var(--gold);
+  display: inline-flex;
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.45));
+}
+.guild-section-head .right-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ─── Layout shell ──────────────────────────────────────────────────────── */
+.guild-hall {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Animations ────────────────────────────────────────────────────────── */
+@keyframes guild-rune-pulse {
+  0%, 100% { box-shadow: 0 6px 16px -8px rgba(251, 191, 36, 0.5), 0 0 0 0 rgba(251, 191, 36, 0.25); }
+  50%      { box-shadow: 0 6px 22px -6px rgba(251, 191, 36, 0.95), 0 0 0 8px rgba(251, 191, 36, 0); }
+}
+
+@keyframes guild-scroll-arrive {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.quest-scroll {
+  animation: guild-scroll-arrive 240ms cubic-bezier(.2, .8, .2, 1) backwards;
+}
+.quest-scroll:nth-of-type(2) { animation-delay: 40ms; }
+.quest-scroll:nth-of-type(3) { animation-delay: 80ms; }
+.quest-scroll:nth-of-type(4) { animation-delay: 120ms; }
+.quest-scroll:nth-of-type(5) { animation-delay: 160ms; }
+.quest-scroll:nth-of-type(6) { animation-delay: 200ms; }
+
+/* ─── Reduced motion ────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .guild-cta,
+  .guild-cta:hover,
+  .quest-scroll,
+  .quest-scroll:hover {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* ─── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 880px) {
+  .guild-hero {
+    grid-template-columns: 1fr;
+    text-align: center;
+    gap: 14px;
+  }
+  .guild-hero-stats { justify-content: center; }
+  .roster-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+}
+
+/* end of guild.css */

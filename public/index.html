@@ -7,12 +7,13 @@
 <title>C-Office — ศูนย์สั่งงานเอเจนท์</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="cards.css"/>
 <link rel="stylesheet" href="adventure.css"/>
 <link rel="stylesheet" href="notes.css"/>
 <link rel="stylesheet" href="scene.css"/>
+<link rel="stylesheet" href="guild.css"/>
 <style>
 .feed-row {
   display:flex; gap:12px; align-items:center;
@@ -33,6 +34,8 @@
 
 <script src="data.js"></script>
 <script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="guild-icons.jsx"></script>
+<script type="text/babel" src="page-guild.jsx"></script>
 <script type="text/babel" src="page-agents.jsx"></script>
 <script type="text/babel" src="page-shop.jsx"></script>
 <script type="text/babel" src="page-dashboard.jsx"></script>
@@ -59,7 +62,8 @@ const App = () => {
     <div className="app" data-screen-label={page}>
       <Sidebar page={page} setPage={(p) => { setPage(p); setActiveAgent(null); }}/>
       <main className="main">
-        {page === 'dashboard' && <Dashboard layout={dashLayout} setLayout={setDashLayout} onOpenAgent={openAgent}/>}
+        {page === 'dashboard' && <GuildHall onOpenAgent={openAgent}/>}
+        {page === 'mission-control' && <Dashboard layout={dashLayout} setLayout={setDashLayout} onOpenAgent={openAgent}/>}
         {page === 'agents' && <AgentsPage onOpenAgent={openAgent} setPage={setPage}/>}
         {page === 'shop' && <AgentShopPage onOpenAgent={openAgent}/>}
         {page === 'agent-detail' && agent && <AgentDetail agent={agent} onBack={() => setPage('agents')} onOpenAgent={openAgent}/>}

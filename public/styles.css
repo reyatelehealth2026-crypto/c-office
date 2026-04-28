@@ -40,9 +40,10 @@
   --shadow-glow-purple: 0 0 40px var(--purple-glow);
   --shadow-glow-gold: 0 0 50px var(--gold-glow);
 
-  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
-  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk', 'Sarabun', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', 'Sarabun', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-thai: 'Sarabun', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
   --radius-sm: 6px;
   --radius: 12px;
