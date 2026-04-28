@@ -36,6 +36,17 @@ const nextDispatchId = () => `dispatch_${Date.now().toString(36)}_${(dispatchCou
 const DISPATCH_STATUSES = new Set(['draft', 'queued', 'chatting', 'done']);
 
 const hasPersona = (id) => PERSONAS_BY_ID.has(id);
+const resolvePersonaId = (value) => {
+  const raw = String(value || '').trim();
+  if (hasPersona(raw)) return raw;
+  const norm = raw.toLowerCase().replace(/\s+/g, '-');
+  const match = PERSONAS.find(p =>
+    p.id === norm ||
+    p.name.toLowerCase() === raw.toLowerCase() ||
+    p.name.toLowerCase().replace(/\s+/g, '-') === norm
+  );
+  return match?.id || 'orchestra';
+};
 
 const summarize = (s, n = 140) => {
   s = String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -232,7 +243,7 @@ export function finishTask({ tool_use_id, status = 'done' }) {
 export function createDispatch(input = {}) {
   const now = Date.now();
   const prompt = String(input.prompt || input.title || '').trim();
-  const personaId = hasPersona(input.personaId) ? input.personaId : 'orchestra';
+  const personaId = resolvePersonaId(input.personaId);
   const dispatch = {
     id: nextDispatchId(),
     title: summarize(input.title || prompt || 'Untitled mission', 80),
@@ -266,7 +277,7 @@ export function updateDispatch(id, patch = {}) {
   if ('title' in patch) next.title = summarize(patch.title || existing.title, 80);
   if ('prompt' in patch) next.prompt = String(patch.prompt || '').trim();
   if ('provider' in patch) next.provider = String(patch.provider || existing.provider);
-  if ('personaId' in patch && hasPersona(patch.personaId)) next.personaId = patch.personaId;
+  if ('personaId' in patch) next.personaId = resolvePersonaId(patch.personaId);
   if ('status' in patch && DISPATCH_STATUSES.has(patch.status)) next.status = patch.status;
   if (Array.isArray(patch.messages)) next.messages = patch.messages.slice(-50);
   next.updatedAt = Date.now();
