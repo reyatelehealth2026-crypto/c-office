@@ -241,6 +241,7 @@ const CommandCenter = ({ onOpenAgent }) => {
       { role: 'pilot', text: chatText.trim(), ts: Date.now() },
     ];
     setChatText('');
+    window.COfficeApplyDispatch?.({ ...selected, messages, status: 'chatting', updatedAt: Date.now() });
     await updateSelected({ messages, status: 'chatting' });
   };
 
