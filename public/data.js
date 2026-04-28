@@ -7,6 +7,7 @@
   window.TASKS          = [];
   window.MEMORY_NODES   = [];
   window.MEMORY_EDGES   = [];
+  window.DISPATCHES     = [];
   window.STATE_EDGES    = [];
   window.STATE_SESSIONS = [];
   window.STATS = { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0 };
@@ -23,6 +24,7 @@
     window.AGENTS         = s.personas || [];
     window.ACTIVITY       = (s.events || []).slice(-50).reverse();
     window.TASKS          = s.tasks || [];
+    window.DISPATCHES     = s.dispatches || [];
     window.STATS          = s.stats || window.STATS;
     window.STATE_EDGES    = s.edges || [];
     window.STATE_SESSIONS = s.sessions || [];
@@ -92,6 +94,14 @@
     es.addEventListener('event',          e => pushEvent(JSON.parse(e.data)));
     es.addEventListener('stats',          e => { window.STATS = { ...window.STATS, ...JSON.parse(e.data) }; stateVersion++; fire(); });
     es.addEventListener('persona.status', e => applyPersonaStatus(JSON.parse(e.data)));
+    window.COfficeApplyDispatch = function applyDispatch(dispatch) {
+      window.DISPATCHES = [dispatch, ...window.DISPATCHES.filter(d => d.id !== dispatch.id)]
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        .slice(0, 100);
+      stateVersion++;
+      fire();
+    };
+    es.addEventListener('dispatch',       e => window.COfficeApplyDispatch(JSON.parse(e.data)));
     es.addEventListener('task',           () => {
       fetch('/api/state').then(r => r.json()).then(applySnapshot).catch(()=>{});
     });

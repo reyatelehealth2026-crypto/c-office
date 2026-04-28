@@ -13,6 +13,35 @@ function relTime(input) {
   return Math.floor(h/24) + 'd';
 }
 
+const CLI_PROVIDERS = [
+  { id: 'claude', label: 'Claude Code', command: 'claude', hint: 'Claude Code CLI session' },
+  { id: 'codex', label: 'Codex CLI', command: 'codex', hint: 'OpenAI Codex compatible CLI' },
+  { id: 'gpt', label: 'GPT CLI', command: 'gpt', hint: 'Generic GPT terminal CLI' },
+];
+
+function shellQuote(s) {
+  return "'" + String(s || '').replace(/'/g, "'\\''") + "'";
+}
+
+function providerCommand(provider, agent, prompt) {
+  const p = CLI_PROVIDERS.find(x => x.id === provider) || CLI_PROVIDERS[0];
+  const personaLine = agent ? `Act as ${agent.name}, ${agent.role}. ` : '';
+  const body = `${personaLine}${prompt || 'Describe the mission here.'}`.trim();
+  if (p.id === 'claude') return `${p.command} ${shellQuote(body)}`;
+  if (p.id === 'codex') return `${p.command} exec ${shellQuote(body)}`;
+  return `${p.command} ${shellQuote(body)}`;
+}
+
+async function writeClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    window.prompt('Copy command', text);
+    return false;
+  }
+}
+
 const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
   // live numbers come from the SSE-fed STATS object
   const totalTokens = (window.STATS?.tokensToday || 0);
@@ -58,6 +87,10 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
       {/* OFFICE FLOOR — every agent at a glance */}
       <div style={{marginBottom: 18}}>
         <OfficeFloor onOpenAgent={onOpenAgent}/>
+      </div>
+
+      <div style={{marginBottom: 18}}>
+        <CommandCenter onOpenAgent={onOpenAgent}/>
       </div>
 
       <div className="grid" style={{gridTemplateColumns: layout === 'focus' ? '1fr 320px' : layout === 'compact' ? '1fr 1fr 1fr' : '2fr 1fr'}}>
@@ -159,6 +192,167 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
             <CollabGraph onOpenAgent={onOpenAgent}/>
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+const CommandCenter = ({ onOpenAgent }) => {
+  window.useCOfficeRefresh();
+  const [prompt, setPrompt] = React.useState('');
+  const [provider, setProvider] = React.useState('claude');
+  const [personaId, setPersonaId] = React.useState('orchestra');
+  const [selectedId, setSelectedId] = React.useState(null);
+  const [chatText, setChatText] = React.useState('');
+  const [copied, setCopied] = React.useState('');
+
+  const dispatches = window.DISPATCHES || [];
+  const selected = dispatches.find(d => d.id === selectedId) || dispatches[0] || null;
+  const activeAgent = AGENTS.find(a => a.id === (selected?.personaId || personaId)) || AGENTS[0];
+  const draftAgent = AGENTS.find(a => a.id === personaId) || AGENTS[0];
+  const draftCommand = providerCommand(provider, draftAgent, prompt);
+  const selectedCommand = selected ? providerCommand(selected.provider, activeAgent, selected.prompt) : '';
+
+  React.useEffect(() => {
+    if (!selectedId && dispatches[0]) setSelectedId(dispatches[0].id);
+  }, [dispatches.length, selectedId]);
+
+  const submitDispatch = async () => {
+    const body = prompt.trim();
+    if (!body) return;
+    const res = await fetch('/api/dispatches', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ prompt: body, provider, personaId, status: 'queued' }),
+    });
+    const created = await res.json();
+    setPrompt('');
+    if (created?.id) setSelectedId(created.id);
+  };
+
+  const updateSelected = async (patch) => {
+    if (!selected) return;
+    await fetch(`/api/dispatches/${selected.id}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(patch),
+    });
+  };
+
+  const sendChat = async () => {
+    if (!selected || !chatText.trim()) return;
+    const messages = [
+      ...(selected.messages || []),
+      { role: 'pilot', text: chatText.trim(), ts: Date.now() },
+    ];
+    setChatText('');
+    window.COfficeApplyDispatch?.({ ...selected, messages, status: 'chatting', updatedAt: Date.now() });
+    await updateSelected({ messages, status: 'chatting' });
+  };
+
+  const copyCommand = async (cmd, key) => {
+    await writeClipboard(cmd);
+    setCopied(key);
+    setTimeout(() => setCopied(''), 1200);
+  };
+
+  return (
+    <div className="panel command-center">
+      <div className="panel-head">
+        <h3>Agent Command Center</h3>
+        <div className="right">notes → agent → cli</div>
+      </div>
+      <div className="cmd-grid">
+        <div className="cmd-compose">
+          <div className="mono-s">MISSION NOTE</div>
+          <textarea
+            className="cmd-textarea"
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            placeholder="จดสิ่งที่อยากให้เอเจนท์ทำ เช่น ขยาย Adventure, ตรวจ bug, เขียน feature..."
+          />
+          <div className="cmd-controls">
+            <select className="cmd-select" value={personaId} onChange={e => setPersonaId(e.target.value)}>
+              {AGENTS.map(a => <option key={a.id} value={a.id}>{a.name} · {a.role}</option>)}
+            </select>
+            <select className="cmd-select" value={provider} onChange={e => setProvider(e.target.value)}>
+              {CLI_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            </select>
+          </div>
+          <div className="cmd-preview">
+            <span>{draftCommand}</span>
+            <button className="btn ghost" onClick={() => copyCommand(draftCommand, 'draft')} disabled={!prompt.trim()}>
+              {copied === 'draft' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <button className="btn primary" onClick={submitDispatch} disabled={!prompt.trim()}>Queue Mission</button>
+        </div>
+
+        <div className="cmd-notes">
+          <div className="mono-s">CLICK A NOTE TO TALK</div>
+          <div className="cmd-note-list">
+            {dispatches.length === 0 && (
+              <div className="muted" style={{fontSize:12, padding:'18px 0'}}>No mission notes yet.</div>
+            )}
+            {dispatches.slice(0, 8).map(d => {
+              const ag = AGENTS.find(a => a.id === d.personaId);
+              return (
+                <div key={d.id} className={'cmd-note ' + (selected?.id === d.id ? 'is-selected' : '')} onClick={() => setSelectedId(d.id)}>
+                  <AgentDot agent={ag} size={30}/>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div className="cmd-note-title">{d.title}</div>
+                    <div className="mono-s">{d.provider} · {d.status} · {relTime(d.updatedAt)}</div>
+                  </div>
+                  <span className="badge cyan">{(d.messages || []).length}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="cmd-chat">
+          <div className="cmd-chat-head">
+            <div>
+              <div className="mono-s">SELECTED AGENT</div>
+              <div className="row" style={{gap:8, marginTop:6, cursor:'pointer'}} onClick={() => activeAgent && onOpenAgent(activeAgent.id)}>
+                <AgentDot agent={activeAgent} size={28}/>
+                <b>{activeAgent?.name || '—'}</b>
+              </div>
+            </div>
+            {selected && <button className="btn gold" onClick={() => updateSelected({status: 'done'})}>Mark Done</button>}
+          </div>
+          {selected ? (
+            <>
+              <div className="cmd-messages">
+                <div className="cmd-message cmd-message-mission">
+                  <strong>Mission</strong>
+                  <span>{selected.prompt}</span>
+                  <em>{relTime(selected.createdAt)}</em>
+                </div>
+                {(selected.messages || []).length === 0 && <div className="muted" style={{fontSize:12}}>Start a short handoff chat for this note.</div>}
+                {(selected.messages || []).map((m, i) => (
+                  <div key={i} className="cmd-message">
+                    <strong>{m.role || 'pilot'}</strong>
+                    <span>{m.text}</span>
+                    <em>{relTime(m.ts)}</em>
+                  </div>
+                ))}
+              </div>
+              <div className="cmd-preview">
+                <span>{selectedCommand}</span>
+                <button className="btn ghost" onClick={() => copyCommand(selectedCommand, selected.id)}>
+                  {copied === selected.id ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <div className="cmd-chat-input">
+                <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendChat(); }} placeholder="คุยต่อกับเอเจนท์จากโน้ตนี้..." />
+                <button className="btn" onClick={sendChat}>Send</button>
+              </div>
+            </>
+          ) : (
+            <div className="muted" style={{fontSize:12}}>Create or select a note to start.</div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -286,91 +480,4 @@ const OfficeFloor = ({ onOpenAgent }) => {
   );
 };
 
-/* ===== COMMAND BAR — quick dispatch from Dashboard ===== */
-const CommandBar = ({ onOpenAgent }) => {
-  const agents    = window.AGENTS    || [];
-  const providers = (window.PROVIDERS?.providers) || [];
-  const def       = window.PROVIDERS?.default || 'echo';
-
-  const [text, setText] = React.useState('');
-  const [agentId, setAgentId] = React.useState(() => agents[0]?.id || 'orchestra');
-  const [provider, setProvider] = React.useState(def);
-  const [busy, setBusy] = React.useState(false);
-  const [lastResult, setLastResult] = React.useState(null);
-
-  React.useEffect(() => {
-    if (!agents.find(a => a.id === agentId) && agents[0]) setAgentId(agents[0].id);
-  }, [agents.length]);
-
-  React.useEffect(() => { if (def && !provider) setProvider(def); }, [def]);
-
-  function dispatch() {
-    if (!text.trim() || busy) return;
-    setBusy(true);
-    setLastResult({ ok: true, provider, output: 'Scene launched — see the dialogue overlay.' });
-    // openScene will create the note + dispatch + render JRPG-style scene.
-    // It runs async; we don't await so the UI feels instant.
-    window.openScene({
-      message: text,
-      agentId,
-      provider,
-      title: text.slice(0, 60),
-      body: text,
-      tag: 'task',
-    });
-    setText('');
-    setBusy(false);
-  }
-
-  const agent = agents.find(a => a.id === agentId);
-
-  return (
-    <div className="panel">
-      <div className="panel-head">
-        <h3>Command <span className="accent">Bar</span></h3>
-        <div className="right">say what you want — pick an agent — run a CLI</div>
-      </div>
-      <div className="command-bar">
-        <input
-          className="note-input command-bar-input"
-          placeholder="What do you want done? (e.g. 'summarize today's incidents')"
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
-              if (!e.shiftKey) { e.preventDefault(); dispatch(); }
-            }
-          }}
-        />
-        <AgentPicker agents={agents} value={agentId} onChange={setAgentId}/>
-        <select className="provider-select" value={provider} onChange={e => setProvider(e.target.value)}>
-          {providers.map(p => (
-            <option key={p.name} value={p.name} disabled={!p.available}>
-              {p.display} {p.available ? '' : '(not installed)'}
-            </option>
-          ))}
-        </select>
-        <button className="btn primary" disabled={busy || !text.trim()} onClick={dispatch}>
-          {busy ? 'Running…' : '▶ Dispatch'}
-        </button>
-      </div>
-      {lastResult && (
-        <div style={{marginTop: 12, padding: 10, borderRadius: 8, background: 'var(--bg-2)', border: '1px solid var(--border)'}}>
-          <div className="mono-s" style={{marginBottom: 4}}>
-            {lastResult.ok ? '✓ ' : '✗ '} {lastResult.provider} → {agent?.name || agentId}
-            {lastResult.noteId && (
-              <span style={{marginLeft: 8}}>
-                · stored as <a href="#" onClick={(e) => { e.preventDefault(); }} className="mono-s" style={{color: 'var(--cyan)'}}>note</a>
-              </span>
-            )}
-          </div>
-          <div style={{fontSize: 12, fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', color: 'var(--text-2)'}}>
-            {lastResult.output || '(no output)'}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-Object.assign(window, { Dashboard, OfficeFloor, CommandBar });
+Object.assign(window, { Dashboard, OfficeFloor, CommandCenter });

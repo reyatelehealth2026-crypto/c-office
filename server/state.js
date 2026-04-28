@@ -15,6 +15,7 @@ export const state = {
   sessions: new Map(),               // sessionId → {pid, sessionId, cwd, startedAt, endedAt, kind, personaId, parentSessionId, currentTask}
   events:   new RingBuffer(2000),    // normalized events
   tasks:    new Map(),               // tool_use_id → task
+  dispatches: new Map(),             // dashboard-created mission notes / CLI dispatch drafts
   fileOffsets: new Map(),            // jsonlPath → byte offset
   personaStatus: new Map(PERSONAS.map(p => [p.id, 'idle'])),
   personaLevels: new Map(PERSONAS.map(p => [p.id, p.level])),  // dynamic; reset to 1 on clearState; +1 per Task done
@@ -29,6 +30,28 @@ const BUSY_WINDOW_MS = 8000;
 
 let evCounter = 0;
 const nextId = () => `ev_${Date.now().toString(36)}_${(evCounter++).toString(36)}`;
+let dispatchCounter = 0;
+const nextDispatchId = () => `dispatch_${Date.now().toString(36)}_${(dispatchCounter++).toString(36)}`;
+
+const DISPATCH_STATUSES = new Set(['draft', 'queued', 'chatting', 'done']);
+
+const hasPersona = (id) => PERSONAS_BY_ID.has(id);
+const resolvePersonaId = (value) => {
+  const raw = String(value || '').trim();
+  if (hasPersona(raw)) return raw;
+  const norm = raw.toLowerCase().replace(/\s+/g, '-');
+  const match = PERSONAS.find(p =>
+    p.id === norm ||
+    p.name.toLowerCase() === raw.toLowerCase() ||
+    p.name.toLowerCase().replace(/\s+/g, '-') === norm
+  );
+  return match?.id || 'orchestra';
+};
+
+const summarize = (s, n = 140) => {
+  s = String(s ?? '').replace(/\s+/g, ' ').trim();
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+};
 
 function rolloverIfNewDay() {
   const k = today();
@@ -215,6 +238,66 @@ export function finishTask({ tool_use_id, status = 'done' }) {
   broadcastStats();
 }
 
+// ---------- Dashboard dispatches / mission notes ----------
+
+export function createDispatch(input = {}) {
+  const now = Date.now();
+  const prompt = String(input.prompt || input.title || '').trim();
+  const personaId = resolvePersonaId(input.personaId);
+  const dispatch = {
+    id: nextDispatchId(),
+    title: summarize(input.title || prompt || 'Untitled mission', 80),
+    prompt,
+    provider: String(input.provider || 'claude'),
+    personaId,
+    status: DISPATCH_STATUSES.has(input.status) ? input.status : 'queued',
+    messages: Array.isArray(input.messages) ? input.messages.slice(0, 50) : [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  state.dispatches.set(dispatch.id, dispatch);
+  bus.emit('dispatch', dispatch);
+  pushEvent({
+    ts: now,
+    personaId,
+    verb: 'prompt',
+    toolName: 'Dashboard',
+    text: summarize(prompt || dispatch.title),
+    status: 'ok',
+    dispatchId: dispatch.id,
+    dedupeKey: `dispatch:create:${dispatch.id}`,
+  });
+  return dispatch;
+}
+
+export function updateDispatch(id, patch = {}) {
+  const existing = state.dispatches.get(id);
+  if (!existing) return null;
+  const next = { ...existing };
+  if ('title' in patch) next.title = summarize(patch.title || existing.title, 80);
+  if ('prompt' in patch) next.prompt = String(patch.prompt || '').trim();
+  if ('provider' in patch) next.provider = String(patch.provider || existing.provider);
+  if ('personaId' in patch) next.personaId = resolvePersonaId(patch.personaId);
+  if ('status' in patch && DISPATCH_STATUSES.has(patch.status)) next.status = patch.status;
+  if (Array.isArray(patch.messages)) next.messages = patch.messages.slice(-50);
+  next.updatedAt = Date.now();
+  state.dispatches.set(id, next);
+  bus.emit('dispatch', next);
+  if (patch.status === 'done') {
+    pushEvent({
+      ts: next.updatedAt,
+      personaId: next.personaId,
+      verb: 'turn-end',
+      toolName: 'Dashboard',
+      text: summarize(`${next.title} complete`),
+      status: 'ok',
+      dispatchId: next.id,
+      dedupeKey: `dispatch:done:${next.id}:${next.updatedAt}`,
+    });
+  }
+  return next;
+}
+
 // ---------- Reset ----------
 
 // Clear in-memory accumulated state without restarting the server.
@@ -223,6 +306,7 @@ export function finishTask({ tool_use_id, status = 'done' }) {
 export function clearState() {
   state.events = new RingBuffer(2000);
   state.tasks.clear();
+  state.dispatches.clear();
   for (const [sid, s] of state.sessions) {
     if (s.endedAt) state.sessions.delete(sid);
   }
@@ -290,6 +374,7 @@ export function snapshot() {
     sessions: [...state.sessions.values()],
     events: state.events.toArray(),
     tasks: [...state.tasks.values()].sort((a,b) => b.startedAt - a.startedAt).slice(0, 100),
+    dispatches: [...state.dispatches.values()].sort((a,b) => b.updatedAt - a.updatedAt).slice(0, 100),
     stats: state.stats,
     edges,
     serverTime: Date.now(),
