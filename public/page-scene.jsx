@@ -144,20 +144,26 @@ const SceneStage = ({ scene, phase, onClose }) => {
   // Index of current dialogue line, plus typewriter progress for that line.
   const [cursor, setCursor] = React.useState(0);
   const [typed, setTyped]   = React.useState(0);   // chars revealed in current beat
-  const [auto, setAuto]     = React.useState(true);
+  // Default to manual mode — JRPG convention is "press to continue". Toggle
+  // to auto-advance with the [A] key or the Auto button.
+  const [auto, setAuto]     = React.useState(false);
 
   // Reset when scene starts fresh
   React.useEffect(() => {
     setCursor(0); setTyped(0);
   }, [scene.noteId]);
 
-  // When new beats arrive (loading→ready) and cursor is past previewBeats,
-  // keep cursor where it was. When we still on the last preview beat and the
-  // ready beats are now available, advance to first ready beat.
+  // When the script transitions from `loading` (3 preview beats) to `ready`
+  // (8+ real beats), the preview beats are replaced. If the user already
+  // auto-advanced past the previews while the CLI was running, restart the
+  // ready script from beat 0 so they actually see the dialogue.
+  const lastPhaseRef = React.useRef(phase);
   React.useEffect(() => {
-    if (phase === 'ready' && cursor >= (scene.previewBeats?.length || 0) && cursor >= beats.length - 1) {
-      // already past — leave cursor alone (final beat will be shown)
+    if (lastPhaseRef.current === 'loading' && phase === 'ready') {
+      setCursor(0);
+      setTyped(0);
     }
+    lastPhaseRef.current = phase;
   }, [phase]);
 
   // Clamp cursor when beats list shrinks
@@ -168,31 +174,33 @@ const SceneStage = ({ scene, phase, onClose }) => {
   const current = beats[cursor];
   const fullText = current?.text || '';
 
-  // Typewriter — reveal characters at ~30 chars/sec
+  // Typewriter — reveal one character at a time (~28 chars/sec)
   React.useEffect(() => {
     setTyped(0);
     if (!fullText) return;
     let i = 0;
     const id = setInterval(() => {
-      i += 2;
+      i += 1;
       if (i >= fullText.length) {
         setTyped(fullText.length);
         clearInterval(id);
       } else {
         setTyped(i);
       }
-    }, 24);
+    }, 36);
     return () => clearInterval(id);
   }, [cursor, fullText]);
 
-  // Auto-advance after a beat finishes typing — cinematic mode
+  // Auto-advance after a beat finishes typing — cinematic mode.
+  // Dwell scales with text length so users always have time to read.
   React.useEffect(() => {
     if (!auto) return;
     if (typed < fullText.length) return;
     if (cursor >= beats.length - 1) return;
-    // Wait long enough to read, longer for system framing beats.
-    const dwell = current?.speaker === 'system' ? 1100 :
-                  fullText.length > 80 ? 2400 : 1500;
+    const len = fullText.length;
+    const dwell =
+      current?.speaker === 'system' ? Math.max(1800, 1200 + len * 18) :
+      Math.max(2400, 1400 + len * 24);
     const t = setTimeout(() => setCursor(c => Math.min(beats.length - 1, c + 1)), dwell);
     return () => clearTimeout(t);
   }, [typed, fullText, cursor, beats.length, auto, current?.speaker]);

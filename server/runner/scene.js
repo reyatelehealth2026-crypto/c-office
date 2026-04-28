@@ -72,16 +72,22 @@ function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 // Echo output begins with: 「Name」 received your task: ...
 // followed by the prompt we built. We extract everything AFTER the section
 // titled "## Your reply ..." OR — if absent — keep only the last paragraph.
-function extractReply(raw, providerName) {
+function extractReply(raw /*, providerName */) {
   if (!raw) return '';
   let t = String(raw).trim();
-  // Remove our prompt-template echo if present
-  const replyMarker = /## Your reply[^\n]*\n+/i;
-  const m = t.match(replyMarker);
-  if (m) t = t.slice(m.index + m[0].length).trim();
-  // Drop the echo footer reminder if present
+  // The prompt template echoes "## Your reply ..." back into the output
+  // verbatim, so the reply we actually want is everything AFTER the LAST
+  // occurrence of that marker. Falls through to the raw text if absent.
+  const re = /## Your reply[^\n]*\n+/gi;
+  let last = null;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    last = { index: m.index, end: re.lastIndex };
+  }
+  if (last) t = t.slice(last.end).trim();
+  // Drop the echo footer reminder
   t = t.replace(/\(echo provider —[^)]*\)\s*$/i, '').trim();
-  // Drop the "received your task" preamble if echo
+  // Drop the "received your task" preamble if it slipped through
   t = t.replace(/^「[^」]+」\s*received your task:[\s\S]*?\n\n/, '').trim();
   return t;
 }

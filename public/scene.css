@@ -98,13 +98,13 @@
   width: calc(100% - 40px);
   padding: 14px 22px;
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(20,16,42,0.92), rgba(28,21,56,0.92));
+  background: linear-gradient(135deg, rgba(20,16,42,0.94), rgba(28,21,56,0.94));
   border: 1px solid rgba(157,92,255,0.45);
   box-shadow:
     0 0 0 1px rgba(0,0,0,0.5) inset,
     0 18px 50px -16px rgba(0,0,0,0.7),
     0 0 24px -4px rgba(157,92,255,0.4);
-  z-index: 5;
+  z-index: 8;
   animation: scene-card-drop 480ms cubic-bezier(.2,.8,.2,1);
 }
 @keyframes scene-card-drop {

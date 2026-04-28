@@ -80,18 +80,71 @@ function runArgv(argv, onChunk, { timeoutMs = 60_000 } = {}) {
 
 // ── Provider definitions ──────────────────────────────────────────────────────
 
+// Per-persona canned replies for the echo provider, so users see something
+// in-character even without a real LLM CLI installed. Picks one line at random.
+const ECHO_LINES = {
+  Orchestra: [
+    'Plan locked. I\'m routing the audit to Vivi, the docs to Luna, and the deploy to Ori. We move in fifteen.',
+    'Three moves: scope it, ship a slice, measure. I\'ll keep the tempo — call out blockers as they land.',
+  ],
+  Aira: [
+    'I\'ll structure this as a three-step learning path so the next person can pick it up cold. Drafting modules now.',
+    'Curriculum first, then exercises. Give me a draft outline before EOD and I\'ll layer the assessments on top.',
+  ],
+  Luna: [
+    'Hook, promise, payoff — give me the angle and I\'ll spin a 600-word draft you can ship raw or polish twice.',
+    'Tone: warm, specific, a little cheeky. I\'ll cut three takeaways at the end so readers leave with something to do.',
+  ],
+  Vivi: [
+    'Scanned the surface — three suspect spots: token rotation, session fixation, error-message leaks. I\'ll write the proof for each.',
+    'Audit pass: revoke on logout, harden the cookie flags, and add a guard in the auth middleware before this ships.',
+  ],
+  Kira: [
+    'I\'ll spike a working slice tonight — single endpoint, in-memory only — then we iterate the schema and tests in the morning.',
+    'Forging a fix now: refactor the handler, add a regression test, ship behind a flag. Should land in under an hour.',
+  ],
+  Miku: [
+    'Two hooks tested side-by-side, post at peak, lean into UGC for the second beat. I\'ll have the asset list ready in twenty.',
+    'Plan: 3 short-form posts, 1 carousel, 1 livestream tease. CTA goes to the waitlist — measure click-through, kill what flops.',
+  ],
+  Emi: [
+    'I\'ll mock three frames with different palettes — pick one, I\'ll motion it. Quiet rule: nothing ships unaligned to the grid.',
+    'Composition first, color second. I\'ll send a thumbnail set within an hour so we can lock the direction before render.',
+  ],
+  Nana: [
+    'Pulling three signal sources, controlling for last week\'s release. I\'ll send a one-page memo with the top causal candidates.',
+    'Hypothesis: the spike correlates with the Tuesday cohort. Need 24h of analytics — then I can give you a verdict, not a vibe.',
+  ],
+  Ori: [
+    'Runbook ready: stage, smoke, prod, rollback at 5%. I\'ll page the channel before each gate so nothing surprises anyone.',
+    'I\'ll batch the deploy, throttle the cache warmup, and keep an eye on the queue depth. Lights stay on — promise.',
+  ],
+};
+
+function pickEchoLine(agentName) {
+  const arr = ECHO_LINES[agentName] || [
+    'Understood — I\'ve received the brief. Without a real LLM provider attached this is a templated reply, but the dispatch pipeline is working end-to-end.',
+  ];
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 const echo = {
   name: 'echo',
   display: 'Echo (built-in demo)',
   description: 'Local echo provider — no external CLI required. Useful for testing the pipeline.',
   detect: () => true,
   async run({ prompt, agentName }, onChunk) {
-    const reply = `「${agentName || 'Agent'}」 received your task:\n  ${prompt}\n\n` +
+    // Build a reply that mirrors the prompt header (preserves the scene
+    // builder's "## Your reply" cut-point) but ends with an in-character line.
+    const inCharacter = pickEchoLine(agentName);
+    const reply =
+      `「${agentName || 'Agent'}」 received your task:\n  ${prompt}\n\n` +
+      `## Your reply (be concise, actionable, and stay in character):\n` +
+      inCharacter + '\n\n' +
       `(echo provider — install Claude Code, Codex, or GPT CLI to dispatch real LLM responses.)`;
-    // Stream reply char-by-char so the UI animation feels live.
-    for (let i = 0; i < reply.length; i += 24) {
-      onChunk?.(reply.slice(i, i + 24));
-      await new Promise(r => setTimeout(r, 18));
+    for (let i = 0; i < reply.length; i += 32) {
+      onChunk?.(reply.slice(i, i + 32));
+      await new Promise(r => setTimeout(r, 14));
     }
     return { ok: true, output: reply, exitCode: 0 };
   },
