@@ -15,6 +15,7 @@ export const state = {
   sessions: new Map(),               // sessionId → {pid, sessionId, cwd, startedAt, endedAt, kind, personaId, parentSessionId, currentTask}
   events:   new RingBuffer(2000),    // normalized events
   tasks:    new Map(),               // tool_use_id → task
+  runs:     new Map(),               // run_id → orchestrator run record (server-side agent execution)
   dispatches: new Map(),             // dashboard-created mission notes / CLI dispatch drafts
   fileOffsets: new Map(),            // jsonlPath → byte offset
   personaStatus: new Map(PERSONAS.map(p => [p.id, 'idle'])),
@@ -238,6 +239,49 @@ export function finishTask({ tool_use_id, status = 'done' }) {
   broadcastStats();
 }
 
+// ---------- Orchestrator runs (server-side agent execution) ----------
+
+export function startRun(runId, goal) {
+  const run = {
+    id: runId,
+    goal: String(goal || '').slice(0, 4000),
+    steps: [],
+    status: 'running',
+    result: null,
+    startedAt: Date.now(),
+    endedAt: null,
+  };
+  state.runs.set(runId, run);
+  bus.emit('run', run);
+  return run;
+}
+
+export function stepRun(runId, step) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  run.steps.push({
+    tool_use_id: step.tool_use_id,
+    persona: step.persona,
+    instruction: summarize(step.instruction || '', 220),
+    result: {
+      ok: !!step.result?.ok,
+      text: summarize(step.result?.text || '', 4000),
+      image: step.result?.image || null,
+    },
+    ts: Date.now(),
+  });
+  bus.emit('run', run);
+}
+
+export function finishRun(runId, outcome = {}) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  run.status = outcome.status || 'done';
+  run.result = outcome.final ?? outcome.error ?? null;
+  run.endedAt = Date.now();
+  bus.emit('run', run);
+}
+
 // ---------- Dashboard dispatches / mission notes ----------
 
 export function createDispatch(input = {}) {
@@ -306,6 +350,7 @@ export function updateDispatch(id, patch = {}) {
 export function clearState() {
   state.events = new RingBuffer(2000);
   state.tasks.clear();
+  state.runs.clear();
   state.dispatches.clear();
   for (const [sid, s] of state.sessions) {
     if (s.endedAt) state.sessions.delete(sid);
@@ -374,6 +419,7 @@ export function snapshot() {
     sessions: [...state.sessions.values()],
     events: state.events.toArray(),
     tasks: [...state.tasks.values()].sort((a,b) => b.startedAt - a.startedAt).slice(0, 100),
+    runs: [...state.runs.values()].sort((a,b) => b.startedAt - a.startedAt).slice(0, 50),
     dispatches: [...state.dispatches.values()].sort((a,b) => b.updatedAt - a.updatedAt).slice(0, 100),
     stats: state.stats,
     edges,

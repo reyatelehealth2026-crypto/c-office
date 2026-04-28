@@ -1,0 +1,117 @@
+// Image-generation adapter. Default provider Gemini Imagen; pluggable to
+// Replicate FLUX or OpenAI gpt-image-1 by setting IMAGE_PROVIDER env.
+//
+// Adapter contract:
+//   generateImage({ prompt, size, persona }) → { url, provider, costUsd, localPath }
+//
+// All providers persist the result to ${COFFICE_IMAGE_DIR}/${run_id}-${ts}.png
+// and return both a /generated/<file> URL (served by express.static) and the
+// absolute local path.
+
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { getCreds } from '../auth/credentials.js';
+import { getGoogleAuth } from '../auth/google.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROVIDER = process.env.IMAGE_PROVIDER || 'gemini';
+const IMAGE_DIR = process.env.COFFICE_IMAGE_DIR
+  || path.resolve(__dirname, '..', '..', 'public', 'generated');
+
+async function ensureDir() {
+  await fs.mkdir(IMAGE_DIR, { recursive: true });
+}
+
+function publicPathFor(file) {
+  return `/generated/${path.basename(file)}`;
+}
+
+async function persist(buffer, slug) {
+  await ensureDir();
+  const ts = Date.now();
+  const file = path.join(IMAGE_DIR, `${slug || 'img'}-${ts}.png`);
+  await fs.writeFile(file, buffer);
+  return file;
+}
+
+// ─── Gemini Imagen ───────────────────────────────────────────────────────────
+async function generateGemini({ prompt, slug }) {
+  const auth = await getGoogleAuth();
+  if (!auth.connected) throw new Error('Google not connected. Connect in Settings.');
+  const { GoogleGenAI } = await import('@google/genai');
+  const client = new GoogleGenAI(
+    auth.mode === 'api-key'
+      ? { apiKey: auth.apiKey }
+      : { authOptions: { credentials: { access_token: auth.accessToken } } }
+  );
+  const resp = await client.models.generateImages({
+    model: 'imagen-3.0-generate-002',
+    prompt,
+    config: { numberOfImages: 1, aspectRatio: '3:4' },
+  });
+  const img = resp.generatedImages?.[0]?.image;
+  if (!img?.imageBytes) throw new Error('Gemini returned no image bytes');
+  const buf = Buffer.from(img.imageBytes, 'base64');
+  const file = await persist(buf, slug);
+  return { url: publicPathFor(file), provider: 'gemini', costUsd: 0.04, localPath: file };
+}
+
+// ─── Replicate FLUX ──────────────────────────────────────────────────────────
+async function generateReplicate({ prompt, slug }) {
+  const c = await getCreds('replicate');
+  if (!c?.apiKey) throw new Error('Replicate not connected. Paste token in Settings.');
+  const start = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${c.apiKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'wait',
+    },
+    body: JSON.stringify({ input: { prompt, aspect_ratio: '3:4', output_format: 'png' } }),
+  });
+  if (!start.ok) throw new Error(`Replicate ${start.status}: ${await start.text()}`);
+  const j = await start.json();
+  const url = Array.isArray(j.output) ? j.output[0] : j.output;
+  if (!url) throw new Error('Replicate returned no output URL');
+  const imgResp = await fetch(url);
+  if (!imgResp.ok) throw new Error(`Image fetch ${imgResp.status}`);
+  const buf = Buffer.from(await imgResp.arrayBuffer());
+  const file = await persist(buf, slug);
+  return { url: publicPathFor(file), provider: 'replicate', costUsd: 0.04, localPath: file };
+}
+
+// ─── OpenAI gpt-image-1 ──────────────────────────────────────────────────────
+async function generateOpenAI({ prompt, slug }) {
+  const c = await getCreds('openai');
+  if (!c?.apiKey) throw new Error('OpenAI not connected. Paste token in Settings.');
+  const resp = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${c.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1536', n: 1 }),
+  });
+  if (!resp.ok) throw new Error(`OpenAI ${resp.status}: ${await resp.text()}`);
+  const j = await resp.json();
+  const b64 = j.data?.[0]?.b64_json;
+  if (!b64) throw new Error('OpenAI returned no b64_json');
+  const buf = Buffer.from(b64, 'base64');
+  const file = await persist(buf, slug);
+  return { url: publicPathFor(file), provider: 'openai', costUsd: 0.04, localPath: file };
+}
+
+const ADAPTERS = {
+  gemini:    generateGemini,
+  replicate: generateReplicate,
+  openai:    generateOpenAI,
+};
+
+export async function generateImage({ prompt, persona = 'echo' }) {
+  const fn = ADAPTERS[PROVIDER];
+  if (!fn) throw new Error(`Unknown IMAGE_PROVIDER: ${PROVIDER}`);
+  return fn({ prompt, slug: persona });
+}
+
+export function imageProvider() { return PROVIDER; }

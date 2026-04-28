@@ -42,6 +42,121 @@ async function writeClipboard(text) {
   }
 }
 
+/* Server-side multi-agent run — Orchestra decomposes the goal and
+   delegates to specialist personas. Requires Anthropic to be connected
+   in Settings. Run progress streams through the existing SSE bus. */
+const SendToOrchestra = () => {
+  const [goal, setGoal] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [authStatus, setAuthStatus] = React.useState(null);
+  const [runs, setRuns] = React.useState(window.RUNS || []);
+
+  React.useEffect(() => {
+    fetch('/api/auth/status').then(r => r.json()).then(setAuthStatus).catch(()=>{});
+    fetch('/api/tasks').then(r => r.json()).then(j => setRuns(j.runs || [])).catch(()=>{});
+    const refresh = () => {
+      setRuns(window.RUNS || []);
+      if (window.AUTH_STATUS) setAuthStatus(window.AUTH_STATUS);
+    };
+    window.COfficeBus?.addEventListener('refresh', refresh);
+    return () => window.COfficeBus?.removeEventListener('refresh', refresh);
+  }, []);
+
+  const connected = !!authStatus?.anthropic?.connected;
+
+  const submit = async () => {
+    if (!goal.trim() || busy) return;
+    setBusy(true);
+    try {
+      const r = await fetch('/api/task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal: goal.trim() }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        alert(j.error || 'Failed to start run');
+      } else {
+        setGoal('');
+        setRuns(prev => [{ id: j.run_id, goal: goal.trim(), status: 'running', steps: [], startedAt: Date.now() }, ...prev]);
+      }
+    } finally { setBusy(false); }
+  };
+
+  const liveRun = runs.find(r => r.status === 'running') || runs[0];
+
+  return (
+    <div className="panel" style={{padding: 14}}>
+      <div style={{display:'flex', alignItems:'center', gap:10, marginBottom: liveRun ? 10 : 0}}>
+        <div style={{
+          width:34, height:34, borderRadius:8,
+          background:'linear-gradient(135deg, var(--gold), var(--purple))',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          fontFamily:'var(--font-display)', fontWeight:700, color:'#000',
+        }}>OC</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13, fontWeight:600}}>Send to Orchestra</div>
+          <div className="mono-s">Decomposes & delegates to Nana → Luna → Emi → others as needed</div>
+        </div>
+        {!connected && (
+          <a href="#/settings" onClick={() => { localStorage.setItem('c-office-page','settings'); window.location.reload(); }}
+            style={{fontSize:11, color:'var(--gold)', textDecoration:'underline', fontFamily:'var(--font-mono)'}}>
+            Connect Anthropic in Settings →
+          </a>
+        )}
+      </div>
+      <div style={{display:'flex', gap:8}}>
+        <input
+          type="text"
+          value={goal}
+          onChange={e => setGoal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+          disabled={!connected || busy}
+          placeholder={connected ? 'e.g. Research 2026 ambient-AI wearable trends, draft a 200-word post, and generate a JRPG cover image' : 'Connect Anthropic first'}
+          style={{
+            flex:1, padding:'10px 14px',
+            border:'1px solid var(--border)', borderRadius:8,
+            background:'var(--bg-3)', color:'var(--text)',
+            fontSize:13,
+          }}
+        />
+        <button onClick={submit} disabled={!connected || busy || !goal.trim()}
+          style={{
+            padding:'10px 20px', borderRadius:8, border:'none',
+            background: connected && goal.trim() ? 'linear-gradient(135deg, var(--gold), var(--purple))' : 'var(--bg-3)',
+            color: connected && goal.trim() ? '#000' : 'var(--text-3)',
+            fontWeight:700, cursor: connected && goal.trim() ? 'pointer' : 'not-allowed',
+            fontSize:13,
+          }}>
+          {busy ? '...' : 'Send'}
+        </button>
+      </div>
+      {liveRun && (
+        <div style={{marginTop:10, padding:'10px 12px', background:'var(--bg-2)', borderRadius:8, border:'1px solid var(--border)'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
+            <span className="mono-s">RUN {liveRun.id?.slice(-8)} · {liveRun.status}</span>
+            <span className="mono-s" style={{color:'var(--text-3)'}}>{liveRun.steps?.length || 0} steps</span>
+          </div>
+          <div style={{fontSize:12, color:'var(--text-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{liveRun.goal}</div>
+          {liveRun.steps?.length > 0 && (
+            <div style={{marginTop:6, display:'flex', gap:6, flexWrap:'wrap'}}>
+              {liveRun.steps.map((s,i) => {
+                const a = AGENTS.find(x => x.id === s.persona);
+                const ok = s.result?.ok;
+                return (
+                  <span key={i} className="badge" style={{background: ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: ok ? 'var(--green)' : 'var(--red)'}}>
+                    {a?.name || s.persona} · {ok ? 'done' : 'err'}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
   // live numbers come from the SSE-fed STATS object
   const totalTokens = (window.STATS?.tokensToday || 0);
@@ -77,6 +192,11 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
           </div>
           <span className="chip"><span className="dot"/> Live</span>
         </div>
+      </div>
+
+      {/* SEND TO ORCHESTRA — server-side multi-agent orchestration */}
+      <div style={{marginBottom: 14}}>
+        <SendToOrchestra/>
       </div>
 
       {/* OFFICE FLOOR — every agent at a glance */}
