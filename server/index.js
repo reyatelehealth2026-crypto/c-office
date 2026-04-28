@@ -7,6 +7,7 @@ import hooksRoute from './api/hooks.js';
 import { clearState } from './state.js';
 import agentHistoryRoute from './api/agents.js';
 import memoryRoute from './api/memory.js';
+import dispatchesRoute from './api/dispatches.js';
 import { getSettings } from './api/settings.js';
 import { startSessionsWatcher } from './watchers/sessions.js';
 import { startTranscriptsWatcher } from './watchers/transcripts.js';
@@ -25,6 +26,7 @@ app.get ('/api/stream',         streamRoute);
 app.post('/hooks/event',        hooksRoute);
 app.get ('/api/agents/:id/history', agentHistoryRoute);
 app.get ('/api/memory',         memoryRoute);
+app.use ('/api/dispatches',     dispatchesRoute);
 app.get ('/api/settings',       getSettings);
 
 app.use(express.static(PUBLIC_DIR, {
