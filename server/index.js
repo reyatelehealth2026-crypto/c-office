@@ -8,6 +8,12 @@ import { clearState } from './state.js';
 import agentHistoryRoute from './api/agents.js';
 import memoryRoute from './api/memory.js';
 import { getSettings } from './api/settings.js';
+import {
+  listRoute as notesList, getOneRoute as notesGet, createRoute as notesCreate,
+  patchRoute as notesPatch, deleteRoute as notesDelete,
+  messageRoute as notesMessage, dispatchRoute as notesDispatch,
+  providersRoute as notesProviders,
+} from './api/notes.js';
 import { startSessionsWatcher } from './watchers/sessions.js';
 import { startTranscriptsWatcher } from './watchers/transcripts.js';
 
@@ -26,6 +32,16 @@ app.post('/hooks/event',        hooksRoute);
 app.get ('/api/agents/:id/history', agentHistoryRoute);
 app.get ('/api/memory',         memoryRoute);
 app.get ('/api/settings',       getSettings);
+
+// Notes inbox + agent dispatch
+app.get   ('/api/notes',                   notesList);
+app.post  ('/api/notes',                   notesCreate);
+app.get   ('/api/notes/providers',         notesProviders);
+app.get   ('/api/notes/:id',               notesGet);
+app.patch ('/api/notes/:id',               notesPatch);
+app.delete('/api/notes/:id',               notesDelete);
+app.post  ('/api/notes/:id/message',       notesMessage);
+app.post  ('/api/notes/:id/dispatch',      notesDispatch);
 
 app.use(express.static(PUBLIC_DIR, {
   setHeaders: (res, filePath) => {

@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="cards.css"/>
 <link rel="stylesheet" href="adventure.css"/>
+<link rel="stylesheet" href="notes.css"/>
 <style>
 .feed-row {
   display:flex; gap:12px; align-items:center;
@@ -36,6 +37,7 @@
 <script type="text/babel" src="page-memory.jsx"></script>
 <script type="text/babel" src="page-misc.jsx"></script>
 <script type="text/babel" src="page-adventure.jsx"></script>
+<script type="text/babel" src="page-notes.jsx"></script>
 
 <script type="text/babel">
 const App = () => {
@@ -61,6 +63,7 @@ const App = () => {
         {page === 'memory' && <MemoryPanel onOpenAgent={openAgent}/>}
         {page === 'settings' && <SettingsPage/>}
         {page === 'adventure' && <AdventurePage onOpenAgent={openAgent}/>}
+        {page === 'notes' && <NotesPage onOpenAgent={openAgent}/>}
       </main>
     </div>
   );

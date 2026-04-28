@@ -50,6 +50,11 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
         </div>
       </div>
 
+      {/* COMMAND BAR — quick dispatch */}
+      <div style={{marginBottom: 18}}>
+        <CommandBar onOpenAgent={onOpenAgent}/>
+      </div>
+
       {/* OFFICE FLOOR — every agent at a glance */}
       <div style={{marginBottom: 18}}>
         <OfficeFloor onOpenAgent={onOpenAgent}/>
@@ -281,4 +286,110 @@ const OfficeFloor = ({ onOpenAgent }) => {
   );
 };
 
-Object.assign(window, { Dashboard, OfficeFloor });
+/* ===== COMMAND BAR — quick dispatch from Dashboard ===== */
+const CommandBar = ({ onOpenAgent }) => {
+  const agents    = window.AGENTS    || [];
+  const providers = (window.PROVIDERS?.providers) || [];
+  const def       = window.PROVIDERS?.default || 'echo';
+
+  const [text, setText] = React.useState('');
+  const [agentId, setAgentId] = React.useState(() => agents[0]?.id || 'orchestra');
+  const [provider, setProvider] = React.useState(def);
+  const [busy, setBusy] = React.useState(false);
+  const [lastResult, setLastResult] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!agents.find(a => a.id === agentId) && agents[0]) setAgentId(agents[0].id);
+  }, [agents.length]);
+
+  React.useEffect(() => { if (def && !provider) setProvider(def); }, [def]);
+
+  async function dispatch() {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setLastResult(null);
+    try {
+      const note = await fetch('/api/notes', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          title: text.slice(0, 60),
+          body: text,
+          tag: 'task',
+          agentId,
+        }),
+      }).then(r => r.json());
+
+      const r = await fetch(`/api/notes/${note.id}/dispatch`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ provider, agentId, message: text }),
+      }).then(r => r.json());
+
+      setLastResult({
+        ok: r.ok,
+        provider,
+        noteId: note.id,
+        output: (r.output || '').slice(0, 280),
+      });
+      setText('');
+      window.refreshNotes && window.refreshNotes();
+    } catch (e) {
+      setLastResult({ ok: false, output: 'Error: ' + e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const agent = agents.find(a => a.id === agentId);
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <h3>Command <span className="accent">Bar</span></h3>
+        <div className="right">say what you want — pick an agent — run a CLI</div>
+      </div>
+      <div className="command-bar">
+        <input
+          className="note-input command-bar-input"
+          placeholder="What do you want done? (e.g. 'summarize today's incidents')"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+              if (!e.shiftKey) { e.preventDefault(); dispatch(); }
+            }
+          }}
+        />
+        <AgentPicker agents={agents} value={agentId} onChange={setAgentId}/>
+        <select className="provider-select" value={provider} onChange={e => setProvider(e.target.value)}>
+          {providers.map(p => (
+            <option key={p.name} value={p.name} disabled={!p.available}>
+              {p.display} {p.available ? '' : '(not installed)'}
+            </option>
+          ))}
+        </select>
+        <button className="btn primary" disabled={busy || !text.trim()} onClick={dispatch}>
+          {busy ? 'Running…' : '▶ Dispatch'}
+        </button>
+      </div>
+      {lastResult && (
+        <div style={{marginTop: 12, padding: 10, borderRadius: 8, background: 'var(--bg-2)', border: '1px solid var(--border)'}}>
+          <div className="mono-s" style={{marginBottom: 4}}>
+            {lastResult.ok ? '✓ ' : '✗ '} {lastResult.provider} → {agent?.name || agentId}
+            {lastResult.noteId && (
+              <span style={{marginLeft: 8}}>
+                · stored as <a href="#" onClick={(e) => { e.preventDefault(); }} className="mono-s" style={{color: 'var(--cyan)'}}>note</a>
+              </span>
+            )}
+          </div>
+          <div style={{fontSize: 12, fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', color: 'var(--text-2)'}}>
+            {lastResult.output || '(no output)'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+Object.assign(window, { Dashboard, OfficeFloor, CommandBar });
