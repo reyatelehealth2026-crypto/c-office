@@ -1,4 +1,7 @@
+import express from 'express';
 import { createDispatch, snapshot, updateDispatch } from '../state.js';
+
+const router = express.Router();
 
 export function listDispatches(req, res) {
   res.json({ dispatches: snapshot().dispatches });
@@ -30,3 +33,9 @@ export function updateDispatchRoute(req, res) {
   }
   res.json({ ok: true, dispatch });
 }
+
+router.get('/', listDispatches);
+router.post('/', createDispatchRoute);
+router.patch('/:id', updateDispatchRoute);
+
+export default router;
