@@ -1,0 +1,517 @@
+/* ========== GACHA CARD SYSTEM ========== */
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+/* outer wrapper to allow glow halo without clipping */
+.gacha-wrap {
+  position: relative;
+  perspective: 1200px;
+  transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+}
+.gacha-wrap:hover { transform: translateY(-4px); }
+
+/* the card itself */
+.gacha {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4.2;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 280ms cubic-bezier(.2,.8,.2,1), box-shadow 280ms ease;
+  isolation: isolate;
+  background: var(--bg-2);
+}
+
+/* rarity-specific border (gradient frame) */
+.gacha::before {
+  content: ''; position: absolute; inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: var(--rarity-gradient, var(--r-n));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none; z-index: 3;
+}
+
+/* holographic sheen on hover */
+.gacha::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg,
+    transparent 20%,
+    rgba(255,255,255,0.0) 30%,
+    rgba(255,255,255,0.15) 45%,
+    rgba(157, 92, 255, 0.25) 55%,
+    rgba(34, 211, 238, 0.15) 62%,
+    transparent 80%);
+  background-size: 300% 300%;
+  background-position: 0% 50%;
+  opacity: 0;
+  transition: opacity 220ms ease, background-position 900ms ease;
+  mix-blend-mode: overlay;
+  pointer-events: none; z-index: 2;
+}
+.gacha-wrap:hover .gacha::after { opacity: 1; background-position: 100% 50%; }
+
+/* SSR rainbow border pulse */
+.gacha[data-rarity="SSR"] { box-shadow: 0 14px 40px -10px rgba(251,191,36,0.35), 0 0 0 1px rgba(251,191,36,0.15); }
+.gacha-wrap:hover .gacha[data-rarity="SSR"] { box-shadow: 0 16px 60px -10px rgba(251,191,36,0.6), 0 0 0 1px rgba(251,191,36,0.3); }
+.gacha[data-rarity="SR"] { box-shadow: 0 14px 40px -12px rgba(157,92,255,0.4), 0 0 0 1px rgba(157,92,255,0.15); }
+.gacha-wrap:hover .gacha[data-rarity="SR"] { box-shadow: 0 16px 60px -10px rgba(157,92,255,0.6); }
+.gacha[data-rarity="R"] { box-shadow: 0 12px 32px -12px rgba(34,211,238,0.35); }
+.gacha[data-rarity="N"] { box-shadow: 0 8px 24px -12px rgba(0,0,0,0.6); }
+
+/* background art (placeholder gradient) */
+.gacha-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--art-gradient, linear-gradient(160deg, #5b21b6, #1e1b4b 60%, #06b6d4));
+  overflow: hidden;
+}
+/* art grain */
+.gacha-art::before {
+  content: ''; position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence baseFrequency='0.8' numOctaves='2'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.08 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: 0.6;
+  mix-blend-mode: overlay;
+}
+/* art vignette bottom so text is readable */
+.gacha-art::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 30%, rgba(7,4,26,0.3) 60%, rgba(7,4,26,0.95) 100%);
+}
+
+/* placeholder label centered on art */
+.art-placeholder {
+  position: absolute; inset: 0;
+  z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 8px;
+  color: rgba(255,255,255,0.85);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 40px 20px 120px;
+  text-align: center;
+  opacity: 0.8;
+}
+.art-placeholder .ap-icon {
+  width: 72px; height: 72px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.08);
+  border: 1px dashed rgba(255,255,255,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-size: 28px; font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: 0;
+  backdrop-filter: blur(6px);
+}
+.art-placeholder .ap-label { font-size: 9px; opacity: 0.7; }
+
+/* decorative sparkles */
+.spark {
+  position: absolute; border-radius: 50%;
+  background: #fff;
+  pointer-events: none; z-index: 1;
+  box-shadow: 0 0 8px rgba(255,255,255,0.9);
+  animation: float 4s ease-in-out infinite;
+  opacity: 0.6;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.4; }
+  50% { transform: translateY(-6px) scale(1.2); opacity: 0.9; }
+}
+
+/* ======= HEADER: rarity + element type ======= */
+.gacha-head {
+  position: absolute; top: 10px; left: 10px; right: 10px;
+  z-index: 4;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 8px;
+}
+.rarity-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: var(--font-display);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  color: var(--rarity-color, #fff);
+  border: 1px solid currentColor;
+  box-shadow: 0 0 12px -2px currentColor;
+}
+.rarity-tag .stars {
+  font-size: 9px; letter-spacing: 0;
+}
+.elem-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+/* ======= FOOT: name + role + stats ======= */
+.gacha-foot {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  z-index: 4;
+  padding: 14px 14px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.agent-name {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: 20px; letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+.agent-role {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.75);
+}
+
+.gacha-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+.gs {
+  display: flex; flex-direction: column; gap: 1px;
+}
+.gs-label {
+  font-family: var(--font-mono);
+  font-size: 8px; letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+.gs-value {
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 13px;
+  color: #fff;
+}
+
+/* status ribbon on card */
+.status-ribbon {
+  position: absolute;
+  top: 42px; left: -6px;
+  z-index: 5;
+  padding: 3px 10px 3px 10px;
+  background: rgba(7,4,26,0.9);
+  border: 1px solid var(--border-2);
+  border-left: 3px solid var(--green);
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--green);
+  box-shadow: 0 4px 12px -4px rgba(0,0,0,0.6);
+}
+.status-ribbon.idle { border-left-color: var(--text-3); color: var(--text-2); }
+.status-ribbon.busy { border-left-color: var(--gold); color: var(--gold); }
+.status-ribbon.offline { border-left-color: var(--text-4); color: var(--text-4); }
+
+/* ====== RARITY PRESETS ====== */
+.rarity-SSR { --rarity-gradient: var(--r-ssr); --rarity-color: #fbbf24; }
+.rarity-SR  { --rarity-gradient: var(--r-sr);  --rarity-color: #c084fc; }
+.rarity-R   { --rarity-gradient: var(--r-r);   --rarity-color: #22d3ee; }
+.rarity-N   { --rarity-gradient: var(--r-n);   --rarity-color: #94a3b8; }
+
+/* ====== VARIANT: foil (holographic sweep always on) ====== */
+.gacha.variant-foil::after {
+  opacity: 0.8;
+  animation: foil-sweep 6s linear infinite;
+}
+@keyframes foil-sweep {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+/* ====== VARIANT: minimal (no bg image, clean panel) ====== */
+.gacha.variant-minimal .gacha-art { background: var(--panel); }
+.gacha.variant-minimal .gacha-art::after { background: none; }
+.gacha.variant-minimal .art-placeholder { opacity: 0.5; }
+.gacha.variant-minimal .agent-name,
+.gacha.variant-minimal .agent-role { color: var(--text); }
+.gacha.variant-minimal .agent-role { color: var(--text-3); }
+
+/* ====== VARIANT: neon (strong glow, dark fill) ====== */
+.gacha.variant-neon .gacha-art { background: radial-gradient(circle at 30% 30%, var(--rarity-color), transparent 55%), var(--bg-1); filter: saturate(1.2); }
+.gacha.variant-neon::before { padding: 1.5px; filter: brightness(1.3) drop-shadow(0 0 8px var(--rarity-color)); }
+
+/* ====== VARIANT: compact (smaller, more text) ====== */
+.gacha.variant-compact { aspect-ratio: 3 / 3.6; }
+.gacha.variant-compact .gacha-foot { padding: 10px; }
+.gacha.variant-compact .agent-name { font-size: 16px; }
+.gacha.variant-compact .art-placeholder .ap-icon { width: 56px; height: 56px; font-size: 22px; }
+
+/* pity/level ribbon top-right corner */
+.level-pip {
+  position: absolute;
+  top: 42px; right: 10px;
+  z-index: 5;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border-2);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em;
+  color: #fff;
+}
+.level-pip b { color: var(--gold); font-weight: 700; }
+
+/* ============================================================
+   OFFICE FLOOR — compact all-agents card grid for dashboard
+   ============================================================ */
+.office-floor {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+.office-card {
+  position: relative;
+  aspect-ratio: 1 / 1.35;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1), border-color 180ms, box-shadow 180ms;
+  isolation: isolate;
+}
+.office-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-2);
+  box-shadow: 0 8px 22px -10px rgba(0,0,0,0.7);
+}
+
+.office-card .of-art {
+  position: absolute; inset: 0;
+  background: var(--art-gradient, linear-gradient(160deg, #5b21b6, #06b6d4));
+  z-index: 0;
+}
+.office-card .of-art img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center top;
+  display: block;
+}
+.office-card .of-art::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 35%, rgba(7,4,26,0.55) 65%, rgba(7,4,26,0.95) 100%);
+  z-index: 1;
+}
+.office-card .of-initials {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 22px;
+  color: rgba(255,255,255,0.95);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  z-index: 1;
+}
+
+.office-card .of-name {
+  position: absolute;
+  left: 6px; right: 6px; bottom: 20px;
+  z-index: 3;
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 600;
+  line-height: 1.1; letter-spacing: -0.01em;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.85);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.office-card .of-status {
+  position: absolute;
+  left: 6px; right: 6px; bottom: 5px;
+  z-index: 3;
+  display: flex; align-items: center; justify-content: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 8px; letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.office-card .of-status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-4);
+  flex-shrink: 0;
+}
+
+/* rarity-tinted frame hint */
+.office-card.rarity-SSR { border-color: rgba(251,191,36,0.28); }
+.office-card.rarity-SR  { border-color: rgba(157,92,255,0.28); }
+.office-card.rarity-R   { border-color: rgba(34,211,238,0.28); }
+
+/* ----- STATES ----- */
+
+/* active / online (has live session, not running a task) */
+.office-card.state-active {
+  border-color: rgba(52,211,153,0.4);
+  box-shadow: 0 0 0 1px rgba(52,211,153,0.2), 0 6px 18px -10px rgba(52,211,153,0.35);
+}
+.office-card.state-active .of-status { color: var(--green); }
+.office-card.state-active .of-status-dot {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: of-pulse 1.6s ease-in-out infinite;
+}
+/* gentle green breathing glow ring */
+.office-card.state-active::before {
+  content: '';
+  position: absolute; inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: of-active-glow 2.6s ease-in-out infinite;
+}
+/* slow vertical shimmer (quieter than busy) */
+.office-card.state-active::after {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0;
+  height: 45%;
+  z-index: 2;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(52,211,153,0.08) 45%,
+    rgba(52,211,153,0.18) 50%,
+    rgba(52,211,153,0.08) 55%,
+    transparent 100%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: of-scan 4.2s linear infinite;
+}
+
+@keyframes of-active-glow {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(52,211,153,0.18), 0 0 6px  -2px rgba(52,211,153,0.2); }
+  50%      { box-shadow: inset 0 0 0 1px rgba(52,211,153,0.55), 0 0 16px 0    rgba(52,211,153,0.45); }
+}
+
+/* idle */
+.office-card.state-idle { opacity: 0.85; }
+.office-card.state-idle .of-status-dot { background: var(--text-3); }
+
+/* offline */
+.office-card.state-offline { opacity: 0.42; filter: grayscale(0.75) brightness(0.85); }
+.office-card.state-offline .of-status-dot { background: var(--text-4); }
+
+/* BUSY — the "at work" animation set (loud on purpose) */
+.office-card.state-busy {
+  border-color: var(--gold);
+  animation: of-busy-shadow 1.6s ease-in-out infinite, of-breathe 2.4s ease-in-out infinite;
+  z-index: 2;  /* lift above neighbors so outer glow isn't clipped */
+}
+.office-card.state-busy .of-status { color: var(--gold); font-weight: 700; }
+.office-card.state-busy .of-status-dot {
+  background: var(--gold);
+  box-shadow: 0 0 10px var(--gold);
+  animation: of-pulse 0.9s ease-in-out infinite;
+}
+/* inner border + inset glow pulses gold */
+.office-card.state-busy::before {
+  content: '';
+  position: absolute; inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: of-glow 1.4s ease-in-out infinite;
+}
+/* scan line sweeping down the card — high-contrast, no blend mode */
+.office-card.state-busy::after {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0;
+  height: 55%;
+  z-index: 2;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(251,191,36,0.00) 35%,
+    rgba(251,191,36,0.55) 50%,
+    rgba(255,230,140,0.75) 52%,
+    rgba(251,191,36,0.55) 54%,
+    rgba(251,191,36,0.00) 65%,
+    transparent 100%);
+  pointer-events: none;
+  animation: of-scan 2s linear infinite;
+  will-change: transform;
+}
+@keyframes of-busy-shadow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(251,191,36,0.55), 0 0 14px -2px rgba(251,191,36,0.55), 0 8px 24px -8px rgba(251,191,36,0.5); }
+  50%      { box-shadow: 0 0 0 2px rgba(251,191,36,0.90), 0 0 28px  2px rgba(251,191,36,0.85), 0 12px 34px -6px rgba(251,191,36,0.7); }
+}
+
+/* typing dots badge (top-right) — only visible when busy */
+.office-card .of-busy-dots {
+  position: absolute;
+  top: 6px; right: 6px;
+  z-index: 5;
+  display: none;
+  gap: 3px;
+  padding: 4px 7px;
+  border-radius: 10px;
+  background: rgba(251,191,36,0.22);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(251,191,36,0.7);
+  box-shadow: 0 0 10px rgba(251,191,36,0.5);
+}
+.office-card.state-busy .of-busy-dots { display: flex; }
+.office-card .of-busy-dots span {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: #fff8dc;
+  box-shadow: 0 0 4px var(--gold);
+  animation: of-dot 1.1s ease-in-out infinite;
+  opacity: 0.45;
+}
+.office-card .of-busy-dots span:nth-child(2) { animation-delay: 0.15s; }
+.office-card .of-busy-dots span:nth-child(3) { animation-delay: 0.30s; }
+
+@keyframes of-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.5);  opacity: 0.55; }
+}
+@keyframes of-glow {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(251,191,36,0.4),  inset 0 0 10px  rgba(251,191,36,0.2); }
+  50%      { box-shadow: inset 0 0 0 2px rgba(251,191,36,0.95), inset 0 0 22px  rgba(251,191,36,0.5); }
+}
+@keyframes of-scan {
+  0%   { transform: translateY(-120%); }
+  100% { transform: translateY(280%); }
+}
+@keyframes of-breathe {
+  0%, 100% { transform: translateY(0)    scale(1); }
+  50%      { transform: translateY(-2px) scale(1.02); }
+}
+@keyframes of-dot {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  40%      { opacity: 1;   transform: translateY(-2px); }
+}
+
+/* respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .office-card.state-busy,
+  .office-card.state-busy::before,
+  .office-card.state-busy::after,
+  .office-card .of-busy-dots span,
+  .office-card.state-busy .of-status-dot {
+    animation: none !important;
+  }
+}

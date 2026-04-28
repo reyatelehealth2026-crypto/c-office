@@ -1,0 +1,297 @@
+import { EventEmitter } from 'node:events';
+import { Dedupe, RingBuffer } from './util/dedupe.js';
+import { PERSONAS, PERSONAS_BY_ID, mapPersona } from './mapping/personas.js';
+import { costUsd } from './mapping/pricing.js';
+
+export const bus = new EventEmitter();
+bus.setMaxListeners(50);
+
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+
+export const state = {
+  sessions: new Map(),               // sessionId → {pid, sessionId, cwd, startedAt, endedAt, kind, personaId, parentSessionId, currentTask}
+  events:   new RingBuffer(2000),    // normalized events
+  tasks:    new Map(),               // tool_use_id → task
+  fileOffsets: new Map(),            // jsonlPath → byte offset
+  personaStatus: new Map(PERSONAS.map(p => [p.id, 'idle'])),
+  personaLevels: new Map(PERSONAS.map(p => [p.id, p.level])),  // dynamic; reset to 1 on clearState; +1 per Task done
+  stats: { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0, dayKey: today() },
+  dedupe: new Dedupe(4096),
+  lastToolActivity: new Map(),       // personaId → ts (mark busy while within window)
+};
+
+// Persona is "busy" for BUSY_WINDOW_MS after any tool_use event.
+// Stop hook (turn-end) clears immediately.
+const BUSY_WINDOW_MS = 8000;
+
+let evCounter = 0;
+const nextId = () => `ev_${Date.now().toString(36)}_${(evCounter++).toString(36)}`;
+
+function rolloverIfNewDay() {
+  const k = today();
+  if (k !== state.stats.dayKey) {
+    state.stats.dayKey = k;
+    state.stats.tokensToday = 0;
+    state.stats.spendToday = 0;
+  }
+}
+
+function recomputePersonaStatus() {
+  // base: idle for all
+  for (const p of PERSONAS) state.personaStatus.set(p.id, 'idle');
+  // active for any persona that owns a live session
+  for (const s of state.sessions.values()) {
+    if (s.endedAt) continue;
+    const cur = state.personaStatus.get(s.personaId) || 'idle';
+    state.personaStatus.set(s.personaId, cur === 'busy' ? 'busy' : 'active');
+  }
+  // busy: running Task-tool subagent
+  for (const t of state.tasks.values()) {
+    if (t.status === 'running') state.personaStatus.set(t.personaId, 'busy');
+  }
+  // busy: recent tool activity (Read/Edit/Bash/etc.) inside the decay window
+  const now = Date.now();
+  for (const [pid, ts] of state.lastToolActivity) {
+    if (now - ts <= BUSY_WINDOW_MS) state.personaStatus.set(pid, 'busy');
+  }
+}
+
+// periodic tick lets recent-tool-use decay back to active/idle even when
+// no further hooks fire (e.g. long silence after a tool finishes).
+let lastBroadcastStatus = '';
+setInterval(() => {
+  // cull stale entries from lastToolActivity to keep map tiny
+  const cutoff = Date.now() - BUSY_WINDOW_MS;
+  for (const [pid, ts] of state.lastToolActivity) {
+    if (ts < cutoff) state.lastToolActivity.delete(pid);
+  }
+  recomputePersonaStatus();
+  const snapshot = JSON.stringify(Object.fromEntries(state.personaStatus));
+  if (snapshot !== lastBroadcastStatus) {
+    lastBroadcastStatus = snapshot;
+    bus.emit('persona.status', Object.fromEntries(state.personaStatus));
+  }
+}, 2000).unref?.();
+
+function recomputeStats() {
+  state.stats.agentsOnline = new Set(
+    [...state.sessions.values()].filter(s => !s.endedAt).map(s => s.personaId)
+  ).size;
+  state.stats.tasksRunning = [...state.tasks.values()].filter(t => t.status === 'running').length;
+}
+
+function broadcastStats() {
+  bus.emit('stats', state.stats);
+}
+
+function broadcastPersonaStatus() {
+  const snapshot = Object.fromEntries(state.personaStatus);
+  bus.emit('persona.status', snapshot);
+}
+
+// ---------- Session lifecycle ----------
+
+export function upsertSession(meta) {
+  const { sessionId, pid, cwd, startedAt, kind, version, parentSessionId } = meta;
+  if (!sessionId) return;
+  const existing = state.sessions.get(sessionId);
+  const personaId = existing?.personaId || mapPersona(meta.subagent_type, kind);
+  const session = {
+    pid, sessionId, cwd, startedAt, kind, version, parentSessionId, personaId,
+    endedAt: null,                                  // upsert always revives — file presence wins
+    currentTask: existing?.currentTask || null,
+  };
+  state.sessions.set(sessionId, session);
+  recomputePersonaStatus();
+  recomputeStats();
+  bus.emit('session.start', session);
+  broadcastPersonaStatus();
+  broadcastStats();
+}
+
+export function endSession(sessionId, reason = 'closed') {
+  const s = state.sessions.get(sessionId);
+  if (!s || s.endedAt) return;
+  s.endedAt = Date.now();
+  s.endReason = reason;
+  recomputePersonaStatus();
+  recomputeStats();
+  bus.emit('session.end', { sessionId, reason });
+  broadcastPersonaStatus();
+  broadcastStats();
+}
+
+// ---------- Events ----------
+
+export function pushEvent(ev) {
+  rolloverIfNewDay();
+  if (ev.dedupeKey && state.dedupe.seen(ev.dedupeKey)) return;
+  if (!ev.id) ev.id = nextId();
+  if (!ev.ts) ev.ts = Date.now();
+  // resolve persona via session
+  if (!ev.personaId && ev.sessionId) {
+    const s = state.sessions.get(ev.sessionId);
+    if (s) ev.personaId = s.personaId;
+  }
+  if (!ev.personaId) ev.personaId = 'orchestra';
+
+  state.events.push(ev);
+  bus.emit('event', ev);
+
+  // tool-activity → busy state (both PreToolUse and PostToolUse refresh the window)
+  if (ev.personaId && (ev.verb === 'used' || ev.verb === 'result')) {
+    state.lastToolActivity.set(ev.personaId, ev.ts);
+    recomputePersonaStatus();
+    broadcastPersonaStatus();
+  }
+  // turn ended → clear busy immediately
+  if (ev.personaId && ev.verb === 'turn-end') {
+    state.lastToolActivity.delete(ev.personaId);
+    recomputePersonaStatus();
+    broadcastPersonaStatus();
+  }
+}
+
+// Usage tracking is intentionally separate from event dedupe.
+// Hook + JSONL tail will both hit the same tool_use_id, but JSONL line carries
+// the assistant `usage` block — recording it under a uuid-based key prevents
+// the hook duplicate from drowning the token tally.
+export function recordUsage({ model, usage, dedupeKey, sessionId }) {
+  if (!usage) return;
+  if (dedupeKey && state.dedupe.seen(dedupeKey)) return;
+  rolloverIfNewDay();
+  state.stats.tokensToday +=
+    (usage.input_tokens || 0) +
+    (usage.output_tokens || 0) +
+    (usage.cache_read_input_tokens || 0) +
+    (usage.cache_creation_input_tokens || 0);
+  state.stats.spendToday += costUsd(model, usage);
+  broadcastStats();
+}
+
+// ---------- Tasks (Task tool spawns) ----------
+
+export function startTask({ tool_use_id, sessionId, subagent_type, description }) {
+  if (!tool_use_id) return;
+  const personaId = mapPersona(subagent_type, 'agent');
+  const task = {
+    id: tool_use_id,
+    sessionId,
+    subagent_type,
+    personaId,
+    status: 'running',
+    description,
+    startedAt: Date.now(),
+    endedAt: null,
+  };
+  state.tasks.set(tool_use_id, task);
+  // overlay current task on the conducting session
+  const parent = state.sessions.get(sessionId);
+  if (parent) parent.currentTask = description;
+  recomputePersonaStatus();
+  recomputeStats();
+  bus.emit('task', task);
+  broadcastPersonaStatus();
+  broadcastStats();
+}
+
+export function finishTask({ tool_use_id, status = 'done' }) {
+  const t = state.tasks.get(tool_use_id);
+  if (!t) return;
+  t.status = status;
+  t.endedAt = Date.now();
+  // Level up the actor on success — accumulates indefinitely after a reset.
+  if (status === 'done' && t.personaId) {
+    const cur = state.personaLevels.get(t.personaId) ?? 1;
+    state.personaLevels.set(t.personaId, cur + 1);
+  }
+  recomputePersonaStatus();
+  recomputeStats();
+  bus.emit('task', t);
+  broadcastPersonaStatus();
+  broadcastStats();
+}
+
+// ---------- Reset ----------
+
+// Clear in-memory accumulated state without restarting the server.
+// Keeps live sessions (so currently-running claudes stay visible) and file offsets
+// (so we don't re-replay historical JSONL bytes).
+export function clearState() {
+  state.events = new RingBuffer(2000);
+  state.tasks.clear();
+  for (const [sid, s] of state.sessions) {
+    if (s.endedAt) state.sessions.delete(sid);
+  }
+  state.stats.tokensToday = 0;
+  state.stats.spendToday  = 0;
+  state.dedupe = new Dedupe(4096);
+  state.lastToolActivity.clear();
+  // Reset every persona to Lv.1 — fresh RPG progression starts here.
+  for (const p of PERSONAS) state.personaLevels.set(p.id, 1);
+  recomputePersonaStatus();
+  recomputeStats();
+  broadcastPersonaStatus();
+  broadcastStats();
+  bus.emit('reset');
+}
+
+// ---------- Snapshot ----------
+
+export function snapshot() {
+  recomputeStats();
+  recomputePersonaStatus();
+  const personas = PERSONAS.map(p => {
+    const status = state.personaStatus.get(p.id) || 'idle';
+    // pick the most recent live session this persona owns for currentTask + stats
+    const owned = [...state.sessions.values()].filter(s => s.personaId === p.id);
+    const live  = owned.filter(s => !s.endedAt);
+    const recent = (live[0] || owned[0]);
+    const tasksDone = [...state.tasks.values()].filter(t => t.personaId === p.id && t.status !== 'running').length;
+    const success = tasksDone
+      ? Math.round(100 * [...state.tasks.values()].filter(t => t.personaId === p.id && t.status === 'done').length / tasksDone)
+      : 100;
+    const tokens = state.events.filter(e => e.personaId === p.id).reduce((acc, e) => {
+      if (!e.usage) return acc;
+      return acc + (e.usage.input_tokens||0) + (e.usage.output_tokens||0) + (e.usage.cache_read_input_tokens||0);
+    }, 0);
+    return {
+      ...p,
+      level: state.personaLevels.get(p.id) ?? p.level,    // dynamic — reset to 1 by clearState, +1 per task done
+      status,
+      currentTask: recent?.currentTask || (status === 'idle' ? '— idle' : 'awaiting work'),
+      stats: {
+        tasks: tasksDone,
+        success,
+        uptime: live.length ? '100%' : '—',
+        tokens: tokens > 1000 ? `${(tokens/1000).toFixed(1)}k` : `${tokens}`,
+      },
+      memoryNodes: 0,
+      memoryFresh: 0,
+    };
+  });
+
+  // session→subagent edges (Task spawns) for collab graph, last 1h
+  const horizon = Date.now() - 60*60*1000;
+  const edges = [...state.tasks.values()]
+    .filter(t => t.startedAt >= horizon)
+    .map(t => {
+      const parent = state.sessions.get(t.sessionId);
+      return parent ? [parent.personaId, t.personaId] : null;
+    })
+    .filter(Boolean)
+    .filter(([a,b]) => a !== b);
+
+  return {
+    personas,
+    sessions: [...state.sessions.values()],
+    events: state.events.toArray(),
+    tasks: [...state.tasks.values()].sort((a,b) => b.startedAt - a.startedAt).slice(0, 100),
+    stats: state.stats,
+    edges,
+    serverTime: Date.now(),
+  };
+}

@@ -1,0 +1,17 @@
+{
+  "name": "c-office",
+  "version": "0.1.0",
+  "description": "C-Office — live monitor for Claude Code CLI agents (gacha aesthetic).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "install-hooks": "node server/install-hooks.js install",
+    "uninstall-hooks": "node server/install-hooks.js uninstall"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "express": "^4.21.2"
+  }
+}
