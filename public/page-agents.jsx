@@ -2,6 +2,7 @@
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: '▤', group: 'Overview' },
   { id: 'agents', label: 'Agents', icon: '◆', group: 'Overview' },
+  { id: 'notes', label: 'Notes', icon: '✎', group: 'Overview' },
   { id: 'tasks', label: 'Mission Log', icon: '▷', group: 'Operations' },
   { id: 'skills', label: 'Skills', icon: '✦', group: 'Operations' },
   { id: 'memory', label: 'Memory Graph', icon: '◎', group: 'Operations' },
@@ -30,6 +31,9 @@ const Sidebar = ({ page, setPage }) => {
               <span className="ico" style={{fontSize:14}}>{n.icon}</span>
               <span>{n.label}</span>
               {n.id === 'agents' && <span className="badge" style={{marginLeft:'auto', fontSize:9}}>{AGENTS.length}</span>}
+              {n.id === 'notes' && (window.NOTES?.length || 0) > 0 && (
+                <span className="badge cyan" style={{marginLeft:'auto', fontSize:9}}>{window.NOTES.length}</span>
+              )}
               {n.id === 'tasks' && TASKS.filter(t=>t.status==='running').length > 0 && (
                 <span className="badge gold" style={{marginLeft:'auto', fontSize:9}}>{TASKS.filter(t=>t.status==='running').length}</span>
               )}

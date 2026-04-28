@@ -79,6 +79,11 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
         </div>
       </div>
 
+      {/* COMMAND BAR — quick dispatch */}
+      <div style={{marginBottom: 18}}>
+        <CommandBar onOpenAgent={onOpenAgent}/>
+      </div>
+
       {/* OFFICE FLOOR — every agent at a glance */}
       <div style={{marginBottom: 18}}>
         <OfficeFloor onOpenAgent={onOpenAgent}/>

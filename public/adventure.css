@@ -711,4 +711,105 @@
   }
 }
 
+/* ------------------------------------------------------------------
+   WEAKNESS ROW (boss meta) + QUEST LOG
+   ------------------------------------------------------------------ */
+.adv-weakness-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(157, 92, 255, 0.08);
+  border: 1px dashed rgba(157, 92, 255, 0.35);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.adv-weakness-label {
+  color: var(--text-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.adv-weakness-tag {
+  color: var(--cyan);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.adv-weakness-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.adv-weakness-agent {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--gold);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  font-weight: 500;
+}
+.adv-weakness-agent:hover { background: rgba(251, 191, 36, 0.25); }
+
+.adv-log-weak {
+  color: var(--gold);
+  font-weight: 600;
+  margin-left: 4px;
+  letter-spacing: 0.04em;
+}
+.adv-log-damage.is-weak {
+  color: #fbbf24;
+  text-shadow: 0 0 6px rgba(251, 191, 36, 0.45);
+}
+
+.adv-quest-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.adv-quest-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 120ms;
+}
+.adv-quest-row:hover { border-color: var(--border-2); background: var(--bg-3); }
+
+.adv-quest-state {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.adv-quest-state.state-running { color: var(--gold); background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.4); }
+.adv-quest-state.state-done    { color: var(--green); background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.35); }
+.adv-quest-state.state-failed  { color: var(--red);   background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.35); }
+
+.adv-quest-info { flex: 1; min-width: 0; }
+.adv-quest-title {
+  font-size: 13px; font-weight: 600;
+  color: #fff;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.adv-quest-meta {
+  display: flex; gap: 10px; align-items: center;
+  font-size: 11px; color: var(--text-3);
+  margin-top: 3px;
+}
+.adv-quest-meta span { display: flex; align-items: center; gap: 4px; }
+
 /* end of adventure.css */

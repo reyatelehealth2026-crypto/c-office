@@ -11,6 +11,8 @@
   window.STATE_EDGES    = [];
   window.STATE_SESSIONS = [];
   window.STATS = { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0 };
+  window.NOTES          = [];
+  window.PROVIDERS      = { providers: [], default: 'echo' };
 
   const Bus = window.COfficeBus = new EventTarget();
   const fire = () => Bus.dispatchEvent(new Event('refresh'));
@@ -43,6 +45,27 @@
     fire();
   }
 
+  async function refreshNotes() {
+    try {
+      const r = await fetch('/api/notes');
+      const j = await r.json();
+      window.NOTES = j.notes || [];
+      stateVersion++;
+      fire();
+    } catch (e) { /* ignore */ }
+  }
+  window.refreshNotes = refreshNotes;
+
+  async function refreshProviders() {
+    try {
+      const r = await fetch('/api/notes/providers');
+      window.PROVIDERS = await r.json();
+      stateVersion++;
+      fire();
+    } catch (e) { /* ignore */ }
+  }
+  window.refreshProviders = refreshProviders;
+
   async function fetchMemory() {
     try {
       const r = await fetch('/api/memory');
@@ -64,6 +87,8 @@
       return;
     }
     fetchMemory();
+    refreshNotes();
+    refreshProviders();
     if (es) try { es.close(); } catch {}
     es = new EventSource('/api/stream');
     es.addEventListener('event',          e => pushEvent(JSON.parse(e.data)));

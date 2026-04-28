@@ -160,6 +160,41 @@ const SettingsPage = () => {
         </div>
 
         <div className="panel" style={{gridColumn:'span 2'}}>
+          <div className="panel-head">
+            <h3>CLI Providers</h3>
+            <div className="right">install one to dispatch real LLM responses</div>
+          </div>
+          <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap: 10}}>
+            {((window.PROVIDERS?.providers) || []).map(p => (
+              <div key={p.name} style={{
+                padding: '10px 12px',
+                background: 'var(--bg-2)',
+                border: '1px solid ' + (p.available ? 'rgba(52,211,153,0.4)' : 'var(--border)'),
+                borderRadius: 10,
+              }}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4}}>
+                  <span style={{fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600}}>{p.name}</span>
+                  <span className={'badge ' + (p.available ? 'green' : 'slate')} style={{fontSize: 9}}>
+                    {p.available ? 'AVAILABLE' : 'NOT INSTALLED'}
+                  </span>
+                </div>
+                <div style={{fontSize: 12, color: 'var(--text-2)', marginBottom: 4}}>{p.display}</div>
+                <div className="mono-s" style={{fontSize: 10, lineHeight: 1.4}}>{p.description}</div>
+              </div>
+            ))}
+          </div>
+          <div className="divider"/>
+          <div className="mono-s" style={{lineHeight: 1.6}}>
+            Default → <span className="mono" style={{color: 'var(--gold)'}}>{window.PROVIDERS?.default || 'echo'}</span>
+            &nbsp;·&nbsp; Override commands with env vars:
+            <span className="mono" style={{marginLeft: 4}}>C_OFFICE_CLAUDE_CMD</span>,
+            <span className="mono" style={{marginLeft: 4}}>C_OFFICE_CODEX_CMD</span>,
+            <span className="mono" style={{marginLeft: 4}}>C_OFFICE_GPT_CMD</span>
+            &nbsp;(use <span className="mono">${'{PROMPT}'}</span> placeholder).
+          </div>
+        </div>
+
+        <div className="panel" style={{gridColumn:'span 2'}}>
           <div className="panel-head"><h3>Today's Spend</h3></div>
           <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14}}>
             <div style={{padding:'14px 16px', background:'var(--bg-2)', borderRadius: 10, border:'1px solid var(--border)'}}>

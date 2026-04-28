@@ -23,6 +23,25 @@ function bossTier(text) {
   return           { name: 'World Eater',      hp: 15000, color: '#fbbf24' };
 }
 
+// Boss weaknesses — lookup from text → personaIds that get a damage boost
+// against this boss. Encourages routing the right agent at the right quest.
+const WEAKNESS_RULES = [
+  { match: /(bug|crash|fix|debug|error|fail|broken)/i,                 weak: ['vex', 'kai'],     element: '🛡️ Audit' },
+  { match: /(write|article|blog|copy|narrative|story|doc|content)/i,    weak: ['lumen', 'astra'], element: '✍️ Word' },
+  { match: /(design|ui|ux|visual|video|render|game|3d|xr)/i,            weak: ['echo'],           element: '🎨 Visual' },
+  { match: /(deploy|infra|incident|ops|workflow|sprint|pipeline)/i,    weak: ['orbit'],          element: '🛰️ Ops' },
+  { match: /(market|tiktok|instagram|sales|growth|seo|ad|campaign)/i,   weak: ['mira'],           element: '📈 Growth' },
+  { match: /(research|trend|analy|benchmark|investig|insight)/i,        weak: ['nyx'],            element: '🔍 Intel' },
+  { match: /(teach|train|course|mentor|learn|tutor)/i,                  weak: ['astra'],          element: '🎓 Sage' },
+  { match: /(plan|coord|orchestrat|delegat|route)/i,                    weak: ['orchestra'],      element: '👑 Lead' },
+];
+
+function weaknessOf(text) {
+  const t = (text || '').toLowerCase();
+  for (const r of WEAKNESS_RULES) if (r.match.test(t)) return r;
+  return { match: /./, weak: ['orchestra'], element: '✦ Generic' };
+}
+
 // ── Boss SVG — stylized 4-armed crystal wizard silhouette ────────────────────
 const BossSVG = ({ color }) => (
   <svg
@@ -155,6 +174,7 @@ const AdventurePage = ({ onOpenAgent }) => {
   const bossText  = (promptEv?.text || 'The Idle Void awaits…').trim();
   const bossSince = promptEv?.ts || 0;
   const tier      = bossTier(bossText);
+  const weakness  = weaknessOf(bossText);
   const bossDisplayName =
     bossText.length > 60 ? bossText.slice(0, 60) + '…' : bossText;
 
@@ -162,10 +182,12 @@ const AdventurePage = ({ onOpenAgent }) => {
   const sumDamage = React.useMemo(() => {
     return (window.ACTIVITY || []).reduce((acc, ev) => {
       if (bossSince > 0 && ev.ts < bossSince) return acc;
-      return acc + damageOf(ev);
+      // Apply 1.5x weakness multiplier when the right persona attacks
+      let dmg = damageOf(ev);
+      if (dmg > 0 && weakness.weak.includes(ev.personaId)) dmg = Math.round(dmg * 1.5);
+      return acc + dmg;
     }, 0);
-    // Re-derive whenever bossText or the activity array length changes
-  }, [bossText, (window.ACTIVITY || []).length]);
+  }, [bossText, weakness, (window.ACTIVITY || []).length]);
 
   const bossHp = Math.max(0, tier.hp - sumDamage);
 
@@ -311,8 +333,10 @@ const AdventurePage = ({ onOpenAgent }) => {
     const agts = window.AGENTS  || [];
     for (let i = 0; i < arr.length && rows.length < 14; i++) {
       const ev  = arr[i];
-      const dmg = damageOf(ev);
+      let dmg = damageOf(ev);
       if (dmg <= 0) continue;
+      const isWeak = weakness.weak.includes(ev.personaId);
+      if (isWeak) dmg = Math.round(dmg * 1.5);
       const agent = agts.find((a) => a.id === ev.personaId);
       rows.push({
         id:        ev.id || String(i),
@@ -320,10 +344,44 @@ const AdventurePage = ({ onOpenAgent }) => {
         action:    ev.toolName || ev.verb || '?',
         dmg,
         crit:      isCrit(dmg),
+        weak:      isWeak,
       });
     }
     return rows;
-  }, [(window.ACTIVITY || []).length]);
+  }, [weakness, (window.ACTIVITY || []).length]);
+
+  // Quest log — running tasks become active quests
+  const quests = React.useMemo(() => {
+    const tasks = window.TASKS || [];
+    const agts  = window.AGENTS || [];
+    return tasks.slice(0, 8).map(t => ({
+      id: t.id,
+      title: t.description || 'Unnamed quest',
+      status: t.status,
+      personaId: t.personaId,
+      agent: agts.find(a => a.id === t.personaId),
+      startedAt: t.startedAt,
+      endedAt: t.endedAt,
+    }));
+  }, [(window.TASKS || []).length, (window.TASKS || [])[0]?.id]);
+
+  // Quick strike — open the JRPG-style scene to dispatch this quest
+  const [quickBusy, setQuickBusy] = React.useState(false);
+  function quickStrike() {
+    if (quickBusy) return;
+    setQuickBusy(true);
+    const def = window.PROVIDERS?.default || 'echo';
+    const targetAgent = weakness.weak[0] || 'orchestra';
+    window.openScene({
+      title: bossDisplayName,
+      body: bossText,
+      message: bossText,
+      tag: 'task',
+      agentId: targetAgent,
+      provider: def,
+    });
+    setQuickBusy(false);
+  }
 
   const questQueue = (window.DISPATCHES || []).slice(0, 5);
 
@@ -341,6 +399,14 @@ const AdventurePage = ({ onOpenAgent }) => {
         </div>
         <div className="topbar-actions">
           <span className="chip"><span className="dot"/> battle live</span>
+          <button
+            className="btn primary"
+            onClick={quickStrike}
+            disabled={quickBusy || bossHp === 0}
+            title={'Dispatch ' + (weakness.weak[0] || 'orchestra') + ' against this quest'}
+          >
+            {quickBusy ? 'Striking…' : '⚔ Quick Strike'}
+          </button>
         </div>
       </div>
 
@@ -372,6 +438,22 @@ const AdventurePage = ({ onOpenAgent }) => {
               : someoneAttacking
               ? 'INCOMING ATTACK'
               : 'AWAITING ACTION'}
+          </div>
+          <div className="adv-weakness-row">
+            <span className="adv-weakness-label">Weak to</span>
+            <span className="adv-weakness-tag">{weakness.element}</span>
+            <span className="adv-weakness-list">
+              {weakness.weak.map(id => {
+                const a = agents.find(x => x.id === id);
+                if (!a) return null;
+                return (
+                  <span key={id} className="adv-weakness-agent" onClick={() => onOpenAgent && onOpenAgent(id)}>
+                    {a.name}
+                  </span>
+                );
+              })}
+            </span>
+            <span className="mono-s" style={{marginLeft: 'auto'}}>×1.5 dmg bonus</span>
           </div>
         </div>
       </div>
@@ -430,8 +512,11 @@ const AdventurePage = ({ onOpenAgent }) => {
           {combatLog.map((row) => (
             <div key={row.id} className="adv-log-row">
               <span className="adv-log-actor">{row.actorName}</span>
-              <span className="adv-log-action">cast {row.action}</span>
-              <span className={'adv-log-damage' + (row.crit ? ' is-crit' : '')}>
+              <span className="adv-log-action">
+                cast {row.action}
+                {row.weak && <span className="adv-log-weak"> ✦ weakness</span>}
+              </span>
+              <span className={'adv-log-damage' + (row.crit ? ' is-crit' : '') + (row.weak ? ' is-weak' : '')}>
                 &minus;{row.dmg}
               </span>
             </div>
@@ -500,6 +585,39 @@ const AdventurePage = ({ onOpenAgent }) => {
             );
           })}
         </div>
+      </div>
+
+      {/* ── Quest Log ── */}
+      <div className="adv-quest-log panel">
+        <div className="panel-head">
+          <h3>Quest Log</h3>
+          <div className="right">{quests.length} active · last 8</div>
+        </div>
+        {quests.length === 0 && (
+          <div className="muted" style={{fontSize: 12, padding: '20px 0', textAlign:'center'}}>
+            No quests yet. Use <b>Command Bar</b> on the dashboard or <b>Quick Strike</b> above to dispatch one.
+          </div>
+        )}
+        {quests.map(q => {
+          const elapsed = (q.endedAt || Date.now()) - (q.startedAt || Date.now());
+          const mins = Math.max(0, Math.floor(elapsed / 1000));
+          return (
+            <div
+              key={q.id}
+              className={'adv-quest-row state-' + q.status}
+              onClick={() => q.agent && onOpenAgent && onOpenAgent(q.agent.id)}
+            >
+              <span className={'adv-quest-state state-' + q.status}>{q.status}</span>
+              <div className="adv-quest-info">
+                <div className="adv-quest-title">{q.title}</div>
+                <div className="adv-quest-meta">
+                  {q.agent && <span><AgentDot agent={q.agent} size={16}/> {q.agent.name}</span>}
+                  <span className="mono-s">{mins}s</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* ── Victory Overlay ── */}
