@@ -13,6 +13,45 @@ function damageOf(ev) {
   return Math.min(1500, Math.round(Math.sqrt(tok + 1) * 5 * mult));
 }
 
+// One strike per tool_use_id: hooks + JSONL emit both `used` and `result` with different dedupe keys.
+function buildStrikes(activity, bossSince) {
+  const byTool = new Map();
+  const chrono = [...(activity || [])].reverse();
+  for (const ev of chrono) {
+    if (bossSince > 0 && ev.ts < bossSince) continue;
+    if (ev.verb !== 'used' && ev.verb !== 'result') continue;
+    const key = ev.toolUseId || ('ev:' + (ev.id || String(ev.ts)));
+    if (!byTool.has(key)) byTool.set(key, { used: null, result: null });
+    const ent = byTool.get(key);
+    if (ev.verb === 'used') ent.used = ev;
+    if (ev.verb === 'result') ent.result = ev;
+  }
+  const strikes = [];
+  for (const [, ent] of byTool) {
+    const dUsed = ent.used ? damageOf(ent.used) : 0;
+    const dRes = ent.result ? damageOf(ent.result) : 0;
+    const baseDmg = Math.max(dUsed, dRes);
+    if (baseDmg <= 0) continue;
+    const evPick = ent.result && dRes >= dUsed ? ent.result : (ent.used || ent.result);
+    const ts = Math.max(ent.used?.ts || 0, ent.result?.ts || 0);
+    strikes.push({ key: evPick.toolUseId || evPick.id, ev: evPick, baseDmg, ts });
+  }
+  strikes.sort((a, b) => b.ts - a.ts);
+  return strikes;
+}
+
+function finalStrikeDmg(strike, weakness) {
+  let d = strike.baseDmg;
+  if (weakness.weak.includes(strike.ev.personaId)) d = Math.round(d * 1.5);
+  return d;
+}
+
+// ATB full bar: speed 92 → ~1104ms (linear clamp; tuned once for JRPG feel).
+function atbFillMs(speed) {
+  const s = speed ?? 70;
+  return Math.min(6000, Math.max(400, Math.round(10120 - 98 * s)));
+}
+
 const isCrit = (dmg) => dmg >= 400;
 
 function bossTier(text) {
@@ -178,80 +217,93 @@ const AdventurePage = ({ onOpenAgent }) => {
   const bossDisplayName =
     bossText.length > 60 ? bossText.slice(0, 60) + '…' : bossText;
 
-  // ── 2. Boss HP — sum damage for all events since this boss appeared ───────
-  const sumDamage = React.useMemo(() => {
-    return (window.ACTIVITY || []).reduce((acc, ev) => {
-      if (bossSince > 0 && ev.ts < bossSince) return acc;
-      // Apply 1.5x weakness multiplier when the right persona attacks
-      let dmg = damageOf(ev);
-      if (dmg > 0 && weakness.weak.includes(ev.personaId)) dmg = Math.round(dmg * 1.5);
-      return acc + dmg;
-    }, 0);
-  }, [bossText, weakness, (window.ACTIVITY || []).length]);
+  const strikes = React.useMemo(
+    () => buildStrikes(window.ACTIVITY || [], bossSince),
+    [bossSince, (window.ACTIVITY || []).length]
+  );
+
+  const sumDamage = React.useMemo(
+    () => strikes.reduce((acc, s) => acc + finalStrikeDmg(s, weakness), 0),
+    [strikes, weakness]
+  );
 
   const bossHp = Math.max(0, tier.hp - sumDamage);
 
-  // ── 3. Victory overlay (2.5s, once per boss) ─────────────────────────────
-  const [showVictory, setShowVictory] = React.useState(false);
-  const victoryKeyRef = React.useRef(null);
-
-  React.useEffect(() => {
-    if (bossHp === 0 && victoryKeyRef.current !== bossText) {
-      victoryKeyRef.current = bossText;
-      setShowVictory(true);
-      fetch('/api/shop/grant-victory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: tier.name }),
-      }).then(() => window.fetchCOfficeShop?.()).catch(() => {});
-      const t = setTimeout(() => setShowVictory(false), 2500);
-      return () => clearTimeout(t);
-    }
-  }, [bossHp, bossText, tier.name]);
-
-  // ── 4. Boss hit flash (250ms after a new damage event) ───────────────────
-  const [bossHit, setBossHit] = React.useState(false);
-  const lastDmgIdRef = React.useRef(null);
-
-  // Find the most recent event that deals damage
-  const latestDmgEvent = React.useMemo(() => {
+  const latestTurnEnd = React.useMemo(() => {
     const arr = window.ACTIVITY || [];
     for (let i = 0; i < arr.length; i++) {
-      if (damageOf(arr[i]) > 0) return arr[i];
+      const e = arr[i];
+      if (e.verb === 'turn-end' && (!bossSince || e.ts >= bossSince)) return e;
     }
     return null;
-  }, [(window.ACTIVITY || [])[0]?.id]);
+  }, [bossSince, (window.ACTIVITY || []).length]);
+
+  // ── 3. Victory overlay (2.5s, once per boss prompt) ───────────────────────
+  const [showVictory, setShowVictory] = React.useState(false);
+  const victoryShownForBossRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (!latestDmgEvent) return;
-    if (latestDmgEvent.id === lastDmgIdRef.current) return;
-    lastDmgIdRef.current = latestDmgEvent.id;
+    victoryShownForBossRef.current = null;
+  }, [bossText]);
+
+  React.useEffect(() => {
+    const hasCombat = strikes.length > 0;
+    const hpWin = bossHp === 0;
+    // Policy (b): Stop / turn-end shows VICTORY only after at least one strike this quest.
+    const stopWin = !!(latestTurnEnd && hasCombat && bossSince && latestTurnEnd.ts >= bossSince);
+    if (!hpWin && !stopWin) return;
+    if (victoryShownForBossRef.current === bossText) return;
+    victoryShownForBossRef.current = bossText;
+    setShowVictory(true);
+    fetch('/api/shop/grant-victory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier: tier.name }),
+    }).then(() => window.fetchCOfficeShop?.()).catch(() => {});
+    const t = setTimeout(() => setShowVictory(false), 2500);
+    return () => clearTimeout(t);
+  }, [bossHp, bossText, tier.name, latestTurnEnd?.id, strikes.length, bossSince]);
+
+  // ── 4. Boss hit flash (250ms after a new strike) ───────────────────────────
+  const [bossHit, setBossHit] = React.useState(false);
+  const lastStrikeKeyRef = React.useRef(null);
+
+  const latestStrike = strikes[0] || null;
+
+  React.useEffect(() => {
+    if (!latestStrike) return;
+    if (latestStrike.key === lastStrikeKeyRef.current) return;
+    lastStrikeKeyRef.current = latestStrike.key;
     if (reducedMotion) return;
     setBossHit(true);
     const t = setTimeout(() => setBossHit(false), 250);
     return () => clearTimeout(t);
-  }, [latestDmgEvent?.id, reducedMotion]);
+  }, [latestStrike?.key, reducedMotion]);
 
   // ── 5. Floating damage popups ─────────────────────────────────────────────
   const [popups, setPopups] = React.useState([]);
-  const seenIdsRef = React.useRef(new Set());
+  const seenStrikeKeysRef = React.useRef(new Set());
 
-  // Run after every render to catch new events — intentionally no dep array
+  React.useEffect(() => {
+    seenStrikeKeysRef.current = new Set();
+    lastStrikeKeyRef.current = null;
+  }, [bossText]);
+
+  // Run after every render to catch new strikes — intentionally no dep array
   React.useEffect(() => {
     if (reducedMotion) return;
-    const arr = window.ACTIVITY || [];
     const fresh = [];
-    for (let i = 0; i < arr.length; i++) {
-      const ev = arr[i];
-      if (!ev.id || seenIdsRef.current.has(ev.id)) continue;
-      const dmg = damageOf(ev);
+    for (let i = 0; i < strikes.length; i++) {
+      const s = strikes[i];
+      if (!s.key || seenStrikeKeysRef.current.has(s.key)) continue;
+      const dmg = finalStrikeDmg(s, weakness);
       if (dmg <= 0) continue;
-      seenIdsRef.current.add(ev.id);
+      seenStrikeKeysRef.current.add(s.key);
       fresh.push({
-        key:  ev.id,
+        key: s.key,
         dmg,
         crit: isCrit(dmg),
-        x:    30 + Math.random() * 40,
+        x:   30 + Math.random() * 40,
       });
     }
     if (fresh.length === 0) return;
@@ -275,23 +327,24 @@ const AdventurePage = ({ onOpenAgent }) => {
     const now = Date.now();
     const result = {};
     (window.AGENTS || []).forEach((agent) => {
-      // MP drain: each damage event in last 30s costs min(30, dmg/5) MP
-      const recent = (window.ACTIVITY || []).filter(
-        (ev) => ev.personaId === agent.id && now - (ev.ts || 0) <= 30000
-      );
+      const myStrikes = strikes.filter((s) => s.ev.personaId === agent.id);
       let mpDrain = 0;
-      recent.forEach((ev) => { mpDrain += Math.min(30, damageOf(ev) / 5); });
-      const mp = Math.max(0, Math.min(100, 100 - mpDrain));
+      for (const s of myStrikes) {
+        if (now - s.ts > 30000) continue;
+        mpDrain += Math.min(30, finalStrikeDmg(s, weakness) / 5);
+      }
+      const mpBase = Math.max(0, Math.min(100, 100 - mpDrain));
+      const lastStrikeTs = myStrikes.reduce((m, s) => Math.max(m, s.ts || 0), 0);
+      const regenSteps = lastStrikeTs ? Math.floor((now - lastStrikeTs) / 1000) : 0;
+      const mp = Math.min(100, Math.round(mpBase + regenSteps));
 
-      // ATB: time elapsed since last event relative to fill duration
       const lastEv = (window.ACTIVITY || []).find((ev) => ev.personaId === agent.id);
       let atb = 100;
       if (lastEv && lastEv.ts) {
         const speed = agent.personality?.speed ?? 70;
-        const fillDuration = Math.max(1000, 14000 - speed * 100);
-        atb = Math.min(100, ((now - lastEv.ts) / fillDuration) * 100);
+        const fillMs = atbFillMs(speed);
+        atb = Math.min(100, ((now - lastEv.ts) / fillMs) * 100);
       }
-      // Idle/offline agents stay below 40%
       if (agent.status === 'idle' || agent.status === 'offline') {
         atb = Math.min(atb, 40);
       }
@@ -300,22 +353,22 @@ const AdventurePage = ({ onOpenAgent }) => {
     });
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [Math.floor(Date.now() / 250), (window.AGENTS || []).length, (window.ACTIVITY || []).length]);
+  }, [Math.floor(Date.now() / 250), (window.AGENTS || []).length, (window.ACTIVITY || []).length, strikes, weakness]);
 
   // ── 7. Attacking dict (flash 600ms on latest damage event) ───────────────
   const [attacking, setAttacking] = React.useState({});
   const attackTimersRef = React.useRef({});
 
   React.useEffect(() => {
-    if (!latestDmgEvent) return;
-    const pid = latestDmgEvent.personaId;
+    if (!latestStrike) return;
+    const pid = latestStrike.ev.personaId;
     if (!pid) return;
     if (attackTimersRef.current[pid]) clearTimeout(attackTimersRef.current[pid]);
     setAttacking((prev) => ({ ...prev, [pid]: true }));
     attackTimersRef.current[pid] = setTimeout(() => {
       setAttacking((prev) => ({ ...prev, [pid]: false }));
     }, 600);
-  }, [latestDmgEvent?.id]);
+  }, [latestStrike?.key]);
 
   // Cleanup all attack timers on unmount
   React.useEffect(() => {
@@ -331,29 +384,24 @@ const AdventurePage = ({ onOpenAgent }) => {
 
   const someoneAttacking = agents.some((a) => attacking[a.id]);
 
-  // ── 8. Combat log — latest 14 damage events ──────────────────────────────
+  // ── 8. Combat log — latest 14 strikes (one per tool_use) ───────────────────
   const combatLog = React.useMemo(() => {
-    const rows = [];
-    const arr = window.ACTIVITY || [];
-    const agts = window.AGENTS  || [];
-    for (let i = 0; i < arr.length && rows.length < 14; i++) {
-      const ev  = arr[i];
-      let dmg = damageOf(ev);
-      if (dmg <= 0) continue;
+    const agts = window.AGENTS || [];
+    return strikes.slice(0, 14).map((s) => {
+      const ev = s.ev;
+      const dmg = finalStrikeDmg(s, weakness);
       const isWeak = weakness.weak.includes(ev.personaId);
-      if (isWeak) dmg = Math.round(dmg * 1.5);
       const agent = agts.find((a) => a.id === ev.personaId);
-      rows.push({
-        id:        ev.id || String(i),
+      return {
+        id:        s.key,
         actorName: agent ? agent.name : (ev.personaId || 'Unknown'),
         action:    ev.toolName || ev.verb || '?',
         dmg,
         crit:      isCrit(dmg),
         weak:      isWeak,
-      });
-    }
-    return rows;
-  }, [weakness, (window.ACTIVITY || []).length]);
+      };
+    });
+  }, [strikes, weakness]);
 
   // Quest log — running tasks become active quests
   const quests = React.useMemo(() => {
@@ -394,7 +442,7 @@ const AdventurePage = ({ onOpenAgent }) => {
   return (
     <div className="adv-stage">
 
-      {/* ── Topbar ── */}
+      {/* ── Topbar (minimal battle HUD; dispatch under “More”) ── */}
       <div className="topbar">
         <div>
           <h1>Adventure <span className="accent">Mode</span></h1>
@@ -404,14 +452,6 @@ const AdventurePage = ({ onOpenAgent }) => {
         </div>
         <div className="topbar-actions">
           <span className="chip"><span className="dot"/> battle live</span>
-          <button
-            className="btn primary"
-            onClick={quickStrike}
-            disabled={quickBusy || bossHp === 0}
-            title={'Dispatch ' + (weakness.weak[0] || 'orchestra') + ' against this quest'}
-          >
-            {quickBusy ? 'Striking…' : '⚔ Quick Strike'}
-          </button>
         </div>
       </div>
 
@@ -444,22 +484,6 @@ const AdventurePage = ({ onOpenAgent }) => {
               ? 'INCOMING ATTACK'
               : 'AWAITING ACTION'}
           </div>
-          <div className="adv-weakness-row">
-            <span className="adv-weakness-label">Weak to</span>
-            <span className="adv-weakness-tag">{weakness.element}</span>
-            <span className="adv-weakness-list">
-              {weakness.weak.map(id => {
-                const a = agents.find(x => x.id === id);
-                if (!a) return null;
-                return (
-                  <span key={id} className="adv-weakness-agent" onClick={() => onOpenAgent && onOpenAgent(id)}>
-                    {a.name}
-                  </span>
-                );
-              })}
-            </span>
-            <span className="mono-s" style={{marginLeft: 'auto'}}>×1.5 dmg bonus</span>
-          </div>
         </div>
       </div>
 
@@ -477,30 +501,6 @@ const AdventurePage = ({ onOpenAgent }) => {
       </div>
 
       {/* ── Bottom Section ── */}
-      {questQueue.length > 0 && (
-        <div className="adv-quest-board panel">
-          <div className="panel-head">
-            <h3>Quest Queue</h3>
-            <div className="right">จากโน้ตสั่งงาน</div>
-          </div>
-          <div className="adv-quest-list">
-            {questQueue.map((q) => {
-              const ag = agents.find((a) => a.id === (q.agentId || q.personaId));
-              return (
-                <div key={q.id} className={'adv-quest-card state-' + q.status}>
-                  <AgentDot agent={ag} size={30}/>
-                  <div style={{flex:1, minWidth:0}}>
-                    <div className="adv-quest-title">{q.title}</div>
-                    <div className="mono-s">{ag?.name || 'ยังไม่เลือก'} · {q.tag || 'task'} · {q.status}</div>
-                  </div>
-                  <span className="badge gold">{(q.messages || []).length} แชท</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <div className="adv-bottom">
 
         {/* Combat Log */}
@@ -592,38 +592,93 @@ const AdventurePage = ({ onOpenAgent }) => {
         </div>
       </div>
 
-      {/* ── Quest Log ── */}
-      <div className="adv-quest-log panel">
-        <div className="panel-head">
-          <h3>Quest Log</h3>
-          <div className="right">{quests.length} active · last 8</div>
-        </div>
-        {quests.length === 0 && (
-          <div className="muted" style={{fontSize: 12, padding: '20px 0', textAlign:'center'}}>
-            No quests yet. Use <b>Command Bar</b> on the dashboard or <b>Quick Strike</b> above to dispatch one.
+      <details className="adv-details panel">
+        <summary className="adv-details-summary">
+          More — dispatch, weaknesses &amp; quests
+        </summary>
+        <div className="adv-details-body">
+          <div className="adv-weakness-row" style={{ marginBottom: 12 }}>
+            <span className="adv-weakness-label">Weak to</span>
+            <span className="adv-weakness-tag">{weakness.element}</span>
+            <span className="adv-weakness-list">
+              {weakness.weak.map((id) => {
+                const a = agents.find((x) => x.id === id);
+                if (!a) return null;
+                return (
+                  <span key={id} className="adv-weakness-agent" onClick={() => onOpenAgent && onOpenAgent(id)}>
+                    {a.name}
+                  </span>
+                );
+              })}
+            </span>
+            <span className="mono-s" style={{ marginLeft: 'auto' }}>×1.5 dmg bonus</span>
           </div>
-        )}
-        {quests.map(q => {
-          const elapsed = (q.endedAt || Date.now()) - (q.startedAt || Date.now());
-          const mins = Math.max(0, Math.floor(elapsed / 1000));
-          return (
-            <div
-              key={q.id}
-              className={'adv-quest-row state-' + q.status}
-              onClick={() => q.agent && onOpenAgent && onOpenAgent(q.agent.id)}
+          <div style={{ marginBottom: 16 }}>
+            <button
+              className="btn primary"
+              onClick={quickStrike}
+              disabled={quickBusy || bossHp === 0}
+              title={'Dispatch ' + (weakness.weak[0] || 'orchestra') + ' against this quest'}
             >
-              <span className={'adv-quest-state state-' + q.status}>{q.status}</span>
-              <div className="adv-quest-info">
-                <div className="adv-quest-title">{q.title}</div>
-                <div className="adv-quest-meta">
-                  {q.agent && <span><AgentDot agent={q.agent} size={16}/> {q.agent.name}</span>}
-                  <span className="mono-s">{mins}s</span>
-                </div>
+              {quickBusy ? 'Striking…' : '⚔ Quick Strike'}
+            </button>
+          </div>
+          {questQueue.length > 0 && (
+            <div className="adv-quest-board" style={{ marginBottom: 16 }}>
+              <div className="panel-head" style={{ paddingLeft: 0, paddingRight: 0 }}>
+                <h3>Quest Queue</h3>
+                <div className="right">จากโน้ตสั่งงาน</div>
+              </div>
+              <div className="adv-quest-list">
+                {questQueue.map((q) => {
+                  const ag = agents.find((a) => a.id === (q.agentId || q.personaId));
+                  return (
+                    <div key={q.id} className={'adv-quest-card state-' + q.status}>
+                      <AgentDot agent={ag} size={30}/>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="adv-quest-title">{q.title}</div>
+                        <div className="mono-s">{ag?.name || 'ยังไม่เลือก'} · {q.tag || 'task'} · {q.status}</div>
+                      </div>
+                      <span className="badge gold">{(q.messages || []).length} แชท</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          );
-        })}
-      </div>
+          )}
+          <div className="adv-quest-log">
+            <div className="panel-head" style={{ paddingLeft: 0, paddingRight: 0 }}>
+              <h3>Quest Log</h3>
+              <div className="right">{quests.length} active · last 8</div>
+            </div>
+            {quests.length === 0 && (
+              <div className="muted" style={{ fontSize: 12, padding: '20px 0', textAlign: 'center' }}>
+                No quests yet. Use <b>Command Bar</b> on the dashboard or <b>Quick Strike</b> here to dispatch one.
+              </div>
+            )}
+            {quests.map((q) => {
+              const elapsed = (q.endedAt || Date.now()) - (q.startedAt || Date.now());
+              const mins = Math.max(0, Math.floor(elapsed / 1000));
+              return (
+                <div
+                  key={q.id}
+                  className={'adv-quest-row state-' + q.status}
+                  onClick={() => q.agent && onOpenAgent && onOpenAgent(q.agent.id)}
+                >
+                  <span className={'adv-quest-state state-' + q.status}>{q.status}</span>
+                  <div className="adv-quest-info">
+                    <div className="adv-quest-title">{q.title}</div>
+                    <div className="adv-quest-meta">
+                      {q.agent && <span><AgentDot agent={q.agent} size={16}/> {q.agent.name}</span>}
+                      <span className="mono-s">{mins}s</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </details>
 
       {/* ── Victory Overlay ── */}
       {showVictory && (

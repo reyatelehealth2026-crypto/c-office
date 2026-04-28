@@ -18,6 +18,44 @@
   width: 100%;
 }
 
+/* Collapsed “extra JRPG chrome” — weakness, Quick Strike, quest boards */
+.adv-details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+  padding: 0 14px 12px;
+}
+
+.adv-details-summary {
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-display, inherit);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--muted, #9ca3af);
+  padding: 12px 0;
+  user-select: none;
+}
+
+.adv-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.adv-details-summary::before {
+  content: '▸ ';
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.adv-details[open] .adv-details-summary::before {
+  transform: rotate(90deg);
+}
+
+.adv-details-body {
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
 .adv-bottom {
   display: grid;
   grid-template-columns: 3fr 2fr;
