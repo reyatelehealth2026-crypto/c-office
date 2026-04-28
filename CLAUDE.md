@@ -105,6 +105,38 @@ Writes into `~/.claude/settings.json` using **deep-merge with idempotency**. Det
 
 If you add a new hook event to listen on, append it to the `EVENTS` array — uninstall scans the same array.
 
+## Agent execution layer
+
+`server/agents/` adds a **server-side agent execution surface** alongside the passive monitor. The dashboard's "Send to Orchestra" input + `POST /api/task { goal }` invokes `runOrchestrator()` in `server/agents/runner.js`, which:
+
+1. Calls Anthropic via `@anthropic-ai/claude-agent-sdk` with Orchestra's system prompt (`server/agents/personas.js`) and a single tool: `delegate(persona, instruction)`.
+2. Loops while `stop_reason === 'tool_use'`. For each delegation:
+   - `persona === 'echo'` → image adapter (`server/agents/image.js`, default Gemini Imagen, swap with `IMAGE_PROVIDER=replicate|openai`).
+   - any other persona → child `messages.create` with that persona's system prompt + tool allowlist.
+3. Emits **synthetic events through the existing `pushEvent` / `startTask` / `finishTask` pipeline** so the gacha busy animation, persona-status broadcast, level-ups, and event feed light up unchanged. Each delegation gets a synthetic `tool_use_id` so the dedupe contract still holds.
+4. Persists run state in `state.runs` (Map by run_id). Snapshot exposes the last 50 runs; `'run'` is a new SSE event type for live updates.
+
+The CLI surface is independent: `.claude/agents/<persona>.md` files (orchestra, nana, luna, emi to start) make the same personas usable via the Task tool inside any Claude Code session — existing hook events already render them in the dashboard with no extra wiring. **Slug ↔ persona id ↔ display name** are three different things; `mapPersona()` reconciles them, but when authoring system prompts and `delegate` enums use **persona ids** (`nyx`, `lumen`, `echo`, …).
+
+## OAuth credential store
+
+There is **no `ANTHROPIC_API_KEY`, no `REPLICATE_API_TOKEN` env var**. Credentials live in `~/.c-office/credentials.json`, AES-256-GCM encrypted with a per-machine key derived from `os.hostname()` + a one-time salt under `~/.c-office/.salt`. Same trust model as Claude Code's own `~/.claude/.credentials.json` — defeats casual `cat`, not a determined local attacker.
+
+Auth surface (`server/auth/`, `server/api/auth.js`):
+
+| Provider | Flow | Notes |
+|---|---|---|
+| Anthropic | "Connect" button reads `~/.claude/.credentials.json` (after `claude login`) and mirrors into the c-office store; refresh handled in `server/auth/anthropic.js` | Anthropic does not (yet) expose a public third-party OAuth provider. Fallback: paste an `sk-ant-…` key. |
+| Google (Gemini Imagen) | Full PKCE OAuth, loopback redirect to `/auth/google/callback` | First requires a `client_id` from Google Cloud Console — pasted in Settings (Desktop or Web client; PKCE means no secret needed). |
+| Replicate, OpenAI | Settings paste-token only | No public third-party OAuth. |
+
+The Settings → Connections panel shows live status per provider via the `'auth.status'` SSE event. The dashboard's "Send to Orchestra" button is gated on Anthropic being connected.
+
+When adding a new provider:
+1. Drop a module in `server/auth/<provider>.js` exposing `getXAuth()`, `statusOf()`, optionally `startAuth/handleCallback` for OAuth.
+2. Wire it in `server/api/auth.js` (route + status snapshot).
+3. Read it from the consuming adapter — never `process.env.X_API_KEY`.
+
 ## Conventions to follow
 
 - **ESM only** — `package.json` has `"type": "module"`. Use `import`, no CommonJS.

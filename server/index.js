@@ -8,6 +8,8 @@ import { clearState } from './state.js';
 import agentHistoryRoute from './api/agents.js';
 import memoryRoute from './api/memory.js';
 import dispatchesRoute from './api/dispatches.js';
+import authRoute from './api/auth.js';
+import taskRoute from './api/task.js';
 import { getSettings } from './api/settings.js';
 import {
   listRoute as notesList, getOneRoute as notesGet, createRoute as notesCreate,
@@ -33,6 +35,8 @@ app.post('/hooks/event',        hooksRoute);
 app.get ('/api/agents/:id/history', agentHistoryRoute);
 app.get ('/api/memory',         memoryRoute);
 app.use ('/api/dispatches',     dispatchesRoute);
+app.use (authRoute);                              // /auth/*, /api/auth/*
+app.use (taskRoute);                              // /api/task, /api/task/:id, /api/tasks
 app.get ('/api/settings',       getSettings);
 
 // Notes inbox + agent dispatch

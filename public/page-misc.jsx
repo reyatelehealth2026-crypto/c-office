@@ -89,6 +89,142 @@ const TasksPage = ({ onOpenAgent }) => {
   );
 };
 
+/* ===== CONNECTIONS (OAuth + paste-token credential management) ===== */
+const ConnectionsPanel = () => {
+  const [status, setStatus] = React.useState(null);
+  const [busy, setBusy] = React.useState(null);
+  const [tokenInputs, setTokenInputs] = React.useState({});
+  const [googleClientId, setGoogleClientId] = React.useState('');
+
+  const refresh = React.useCallback(() => {
+    fetch('/api/auth/status').then(r => r.json()).then(setStatus).catch(()=>{});
+  }, []);
+  React.useEffect(() => {
+    refresh();
+    const handler = () => refresh();
+    window.COfficeBus?.addEventListener('refresh', handler);
+    return () => window.COfficeBus?.removeEventListener('refresh', handler);
+  }, [refresh]);
+
+  const connectAnthropic = () => { window.location.href = '/auth/anthropic/connect'; };
+  const connectGoogle    = () => { window.location.href = '/auth/google/start'; };
+
+  const submitToken = async (provider, extra = {}) => {
+    setBusy(provider);
+    try {
+      const body = { provider, token: tokenInputs[provider] || undefined, ...extra };
+      const r = await fetch('/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        alert(err.error || 'Failed to save token');
+      } else {
+        setTokenInputs(s => ({ ...s, [provider]: '' }));
+        refresh();
+      }
+    } finally { setBusy(null); }
+  };
+
+  const disconnect = async (provider) => {
+    setBusy(provider);
+    try {
+      await fetch('/api/auth/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider }),
+      });
+      refresh();
+    } finally { setBusy(null); }
+  };
+
+  const fmtExpiry = (ts) => {
+    if (!ts) return '';
+    const d = ts - Date.now();
+    if (d <= 0) return 'expired';
+    const h = Math.floor(d / 3600_000);
+    const m = Math.floor((d % 3600_000) / 60_000);
+    return h > 0 ? `expires in ${h}h ${m}m` : `expires in ${m}m`;
+  };
+
+  const Row = ({ label, hint, state, action }) => (
+    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:14, padding:'12px 14px', background:'var(--bg-2)', borderRadius:10, border:'1px solid var(--border)'}}>
+      <div style={{flex: 1, minWidth: 0}}>
+        <div style={{display:'flex', alignItems:'center', gap:10}}>
+          <span style={{width:8, height:8, borderRadius:'50%', background: state?.connected ? 'var(--green)' : 'var(--text-3)', boxShadow: state?.connected ? '0 0 6px var(--green)' : 'none'}}/>
+          <span style={{fontWeight:600, fontSize:13}}>{label}</span>
+          {state?.mode && <span className="badge slate" style={{textTransform:'lowercase'}}>{state.mode}</span>}
+        </div>
+        <div className="mono-s" style={{marginTop:2}}>{state?.connected ? (fmtExpiry(state.expiresAt) || 'connected') : (hint || 'not connected')}</div>
+      </div>
+      <div>{action}</div>
+    </div>
+  );
+
+  const TokenField = ({ provider, placeholder }) => (
+    <div style={{display:'flex', gap:6}}>
+      <input
+        type="password"
+        placeholder={placeholder}
+        value={tokenInputs[provider] || ''}
+        onChange={e => setTokenInputs(s => ({ ...s, [provider]: e.target.value }))}
+        style={{padding:'6px 10px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-3)', color:'var(--text)', fontSize:12, fontFamily:'var(--font-mono)', width:200}}
+      />
+      <button disabled={busy === provider} onClick={() => submitToken(provider)} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--purple)', color:'#fff', fontSize:12, cursor: 'pointer'}}>
+        Save
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="panel" style={{gridColumn:'span 2'}}>
+      <div className="panel-head"><h3>Connections</h3>
+        <div className="right">OAuth where supported · paste token elsewhere</div>
+      </div>
+      <div className="stack" style={{gap:8}}>
+        <Row label="Anthropic" state={status?.anthropic} hint="reads ~/.claude/.credentials.json after `claude login`"
+          action={status?.anthropic?.connected
+            ? <button disabled={busy==='anthropic'} onClick={()=>disconnect('anthropic')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
+            : <button onClick={connectAnthropic} style={{padding:'6px 14px', borderRadius:6, border:'none', background:'var(--gold)', color:'#000', fontSize:12, fontWeight:600, cursor:'pointer'}}>Connect</button>
+          }/>
+        {!status?.anthropic?.connected && <TokenField provider="anthropic" placeholder="…or paste sk-ant-… key"/>}
+
+        <Row label="Google (Gemini Imagen)" state={status?.google}
+          hint={status?.google?.hasClientId ? 'OAuth client_id set' : 'set client_id below before connecting'}
+          action={status?.google?.connected
+            ? <button disabled={busy==='google'} onClick={()=>disconnect('google')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
+            : <button disabled={!status?.google?.hasClientId} onClick={connectGoogle} style={{padding:'6px 14px', borderRadius:6, border:'none', background: status?.google?.hasClientId ? 'var(--gold)' : 'var(--bg-3)', color:'#000', fontSize:12, fontWeight:600, cursor: status?.google?.hasClientId ? 'pointer' : 'not-allowed'}}>Connect</button>
+          }/>
+        {!status?.google?.hasClientId && (
+          <div style={{display:'flex', gap:6, marginLeft:12}}>
+            <input type="text" placeholder="Google OAuth client_id (Desktop or Web)" value={googleClientId} onChange={e=>setGoogleClientId(e.target.value)}
+              style={{padding:'6px 10px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-3)', color:'var(--text)', fontSize:12, fontFamily:'var(--font-mono)', flex:1}}/>
+            <button disabled={busy==='google' || !googleClientId} onClick={() => submitToken('google', { clientId: googleClientId })} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--purple)', color:'#fff', fontSize:12, cursor:'pointer'}}>Save</button>
+          </div>
+        )}
+
+        <Row label="Replicate" state={status?.replicate} hint="paste an r8_… API token"
+          action={status?.replicate?.connected
+            ? <button disabled={busy==='replicate'} onClick={()=>disconnect('replicate')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
+            : <TokenField provider="replicate" placeholder="r8_…"/>
+          }/>
+
+        <Row label="OpenAI" state={status?.openai} hint="paste an sk-… API key"
+          action={status?.openai?.connected
+            ? <button disabled={busy==='openai'} onClick={()=>disconnect('openai')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
+            : <TokenField provider="openai" placeholder="sk-…"/>
+          }/>
+
+        <div className="mono-s" style={{marginTop:6}}>
+          Tokens are stored locally encrypted in <span className="mono" style={{color:'var(--gold)'}}>~/.c-office/credentials.json</span>. Never committed.
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ===== SETTINGS ===== */
 const SettingsPage = () => {
   const [settings, setSettings] = React.useState(null);
@@ -113,6 +249,7 @@ const SettingsPage = () => {
         </div>
       </div>
       <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap: 18}}>
+        <ConnectionsPanel/>
         <div className="panel">
           <div className="panel-head"><h3>Hooks</h3>
             <div className="right">{installedCount}/{hookEvents.length} installed</div>

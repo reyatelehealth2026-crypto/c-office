@@ -11,6 +11,8 @@
     "uninstall-hooks": "node server/install-hooks.js uninstall"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "@google/genai": "^1.0.0",
     "chokidar": "^4.0.3",
     "express": "^4.21.2"
   }

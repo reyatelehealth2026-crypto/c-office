@@ -8,6 +8,8 @@
   window.MEMORY_NODES   = [];
   window.MEMORY_EDGES   = [];
   window.DISPATCHES     = [];
+  window.RUNS           = [];
+  window.AUTH_STATUS    = null;
   window.STATE_EDGES    = [];
   window.STATE_SESSIONS = [];
   window.STATS = { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0 };
@@ -24,6 +26,7 @@
     window.AGENTS         = s.personas || [];
     window.ACTIVITY       = (s.events || []).slice(-50).reverse();
     window.TASKS          = s.tasks || [];
+    window.RUNS           = s.runs || [];
     window.DISPATCHES     = s.dispatches || [];
     window.STATS          = s.stats || window.STATS;
     window.STATE_EDGES    = s.edges || [];
@@ -102,6 +105,13 @@
       fire();
     };
     es.addEventListener('dispatch',       e => window.COfficeApplyDispatch(JSON.parse(e.data)));
+    es.addEventListener('run',            e => {
+      const run = JSON.parse(e.data);
+      window.RUNS = [run, ...window.RUNS.filter(r => r.id !== run.id)].slice(0, 50);
+      stateVersion++;
+      fire();
+    });
+    es.addEventListener('auth.status',    e => { window.AUTH_STATUS = JSON.parse(e.data); stateVersion++; fire(); });
     es.addEventListener('task',           () => {
       fetch('/api/state').then(r => r.json()).then(applySnapshot).catch(()=>{});
     });

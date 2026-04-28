@@ -1,7 +1,7 @@
 import { bus } from '../state.js';
 
 const HEARTBEAT_MS = 25_000;
-const EVENT_TYPES = ['event', 'session.start', 'session.end', 'task', 'dispatch', 'stats', 'persona.status'];
+const EVENT_TYPES = ['event', 'session.start', 'session.end', 'task', 'dispatch', 'run', 'stats', 'persona.status', 'auth.status'];
 
 export default function streamRoute(req, res) {
   res.set({
