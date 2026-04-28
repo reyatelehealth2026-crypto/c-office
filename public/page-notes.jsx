@@ -58,13 +58,13 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>Notes <span className="accent">Inbox</span></h1>
-          <div className="sub">Capture · pick an agent · chat or dispatch</div>
+          <h1>ศูนย์ <span className="accent">สั่งงาน</span></h1>
+          <div className="sub">จดโน้ต · เลือกเอเจนท์ · คุยก่อน · เข้า Scene เพื่อรันงาน</div>
         </div>
         <div className="topbar-actions">
-          <span className="chip"><span className="dot"/> {notes.length} notes</span>
+          <span className="chip"><span className="dot"/> {notes.length} โน้ต</span>
           <button className="btn primary" onClick={() => setComposerOpen(o => !o)}>
-            {composerOpen ? '× Cancel' : '＋ New note'}
+            {composerOpen ? '× ยกเลิก' : '＋ โน้ตใหม่'}
           </button>
         </div>
       </div>
@@ -72,13 +72,13 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
       {composerOpen && (
         <div className="panel" style={{marginBottom: 18}}>
           <div className="panel-head">
-            <h3>Capture an idea</h3>
-            <div className="right">jot it down — pick an agent later</div>
+            <h3>จดสิ่งที่อยากทำ</h3>
+            <div className="right">บันทึกไว้ แล้วเลือกเอเจนท์ภายหลังได้</div>
           </div>
           <div className="stack" style={{gap: 10}}>
             <input
               className="note-input"
-              placeholder="Title — what do you want to do?"
+              placeholder="หัวข้อสั้นๆ"
               value={draft.title}
               onChange={e => setDraft({...draft, title: e.target.value})}
               autoFocus
@@ -86,7 +86,7 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
             <textarea
               className="note-input"
               rows={4}
-              placeholder="Notes, context, or full instructions for the agent…"
+              placeholder="รายละเอียด บริบท หรือคำสั่งเต็มที่อยากให้เอเจนท์ทำ..."
               value={draft.body}
               onChange={e => setDraft({...draft, body: e.target.value})}
             />
@@ -107,7 +107,7 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
                 value={draft.agentId}
                 onChange={(id) => setDraft({...draft, agentId: id})}
               />
-              <button className="btn primary" onClick={createDraft}>Save note</button>
+              <button className="btn primary" onClick={createDraft}>บันทึกโน้ต</button>
             </div>
           </div>
         </div>
@@ -116,12 +116,12 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
       <div className="notes-shell">
         <div className="notes-list panel">
           <div className="panel-head">
-            <h3>Inbox</h3>
+            <h3>กล่องงาน</h3>
             <div className="right">{notes.length}</div>
           </div>
           {notes.length === 0 && (
             <div className="muted" style={{fontSize: 12, padding: '20px 4px', textAlign:'center'}}>
-              No notes yet. Click <b>＋ New note</b> to capture your first idea.
+              ยังไม่มีโน้ต กด <b>＋ โน้ตใหม่</b> เพื่อเริ่มจดงานแรก
             </div>
           )}
           {notes.map(n => {
@@ -175,7 +175,7 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
             />
           ) : (
             <div className="panel" style={{padding: 60, textAlign: 'center'}}>
-              <div className="muted">Select a note from the inbox, or create a new one to begin.</div>
+              <div className="muted">เลือกโน้ตจากกล่องงาน หรือสร้างโน้ตใหม่เพื่อเริ่มสั่งงาน</div>
             </div>
           )}
         </div>
@@ -231,7 +231,7 @@ const AgentPicker = ({ agents, value, onChange }) => {
         style={{display: 'inline-flex', alignItems: 'center', gap: 8}}
       >
         {selected ? <AgentDot agent={selected} size={20}/> : <span className="mono-s">no agent</span>}
-        <span>{selected ? selected.name : 'Pick agent'}</span>
+        <span>{selected ? selected.name : 'เลือกเอเจนท์'}</span>
         <span className="mono-s">▾</span>
       </button>
       {open && (
@@ -310,8 +310,8 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
               onChange={e => setEditDraft({...editDraft, body: e.target.value})}
             />
             <div className="row" style={{gap: 8}}>
-              <button className="btn primary" onClick={saveEdit}>Save</button>
-              <button className="btn ghost" onClick={() => setEditing(false)}>Cancel</button>
+              <button className="btn primary" onClick={saveEdit}>บันทึก</button>
+              <button className="btn ghost" onClick={() => setEditing(false)}>ยกเลิก</button>
             </div>
           </div>
         ) : (
@@ -326,15 +326,15 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
           </div>
         )}
         <div className="row" style={{gap: 6, flexShrink: 0}}>
-          {!editing && <button className="btn ghost" onClick={() => setEditing(true)}>✎ Edit</button>}
-          <button className="btn ghost" onClick={onDelete} style={{color: 'var(--red)'}}>Delete</button>
+          {!editing && <button className="btn ghost" onClick={() => setEditing(true)}>✎ แก้ไข</button>}
+          <button className="btn ghost" onClick={onDelete} style={{color: 'var(--red)'}}>ลบ</button>
         </div>
       </div>
 
       <div className="divider"/>
 
       <div className="row" style={{gap: 10, flexWrap: 'wrap', marginBottom: 10}}>
-        <span className="mono-s">Assigned →</span>
+        <span className="mono-s">มอบหมาย →</span>
         <AgentPicker
           agents={agents}
           value={note.agentId || 'orchestra'}
@@ -342,11 +342,11 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
         />
         {agent && (
           <button className="btn ghost" onClick={() => onOpenAgent && onOpenAgent(agent.id)} style={{fontSize: 11}}>
-            view profile →
+            ดูโปรไฟล์ →
           </button>
         )}
         <div style={{flex: 1}}/>
-        <span className="mono-s">CLI →</span>
+        <span className="mono-s">ตัวรัน →</span>
         <select className="provider-select" value={provider} onChange={e => setProvider(e.target.value)}>
           {providers.map(p => (
             <option key={p.name} value={p.name} disabled={!p.available}>
@@ -359,7 +359,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
       <div className="note-chat">
         {(note.messages || []).length === 0 && (
           <div className="muted" style={{fontSize: 12, padding: '20px 0', textAlign: 'center'}}>
-            No messages yet — say hi to {agent?.name || 'your agent'}, or click <b>Dispatch</b> to send the note as-is.
+            ยังไม่มีบทสนทนา คุยกับ {agent?.name || 'เอเจนท์'} ก่อน หรือกด <b>เข้า Scene</b> เพื่อส่งโน้ตนี้ทันที
           </div>
         )}
         {(note.messages || []).map((m, i) => {
@@ -373,7 +373,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
               )}
               <div className="note-msg-bubble">
                 <div className="note-msg-meta">
-                  <b>{m.role === 'user' ? 'You' : (who?.name || m.role)}</b>
+                  <b>{m.role === 'user' ? 'คุณ' : (who?.name || m.role)}</b>
                   {m.provider && <span className="mono-s">via {m.provider}</span>}
                   <span className="mono-s" style={{marginLeft: 'auto'}}>{fmtDate(m.ts)}</span>
                 </div>
@@ -389,7 +389,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
         <textarea
           className="note-input"
           rows={3}
-          placeholder={`Talk to ${agent?.name || 'the agent'}…`}
+          placeholder={`คุยกับ ${agent?.name || 'เอเจนท์'}...`}
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -401,13 +401,13 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
         />
         <div className="row" style={{gap: 8, marginTop: 8, justifyContent: 'flex-end'}}>
           <span className="mono-s" style={{marginRight: 'auto'}}>
-            ⌘+Enter to send · runs <b>{provider}</b>
+            Ctrl/⌘+Enter เพื่อส่ง · ใช้ <b>{provider}</b>
           </span>
           <button className="btn ghost" disabled={busy} onClick={() => dispatch('')}>
-            Dispatch as-is
+            เข้า Scene จากโน้ต
           </button>
           <button className="btn primary" disabled={busy || !draft.trim()} onClick={() => dispatch()}>
-            {busy ? 'Running…' : 'Send & Run'}
+            {busy ? 'กำลังรัน...' : 'คุยแล้วรัน'}
           </button>
         </div>
       </div>

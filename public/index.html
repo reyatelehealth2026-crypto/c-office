@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="th">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <link rel="icon" href="/images/Orchestra.png"/>
-<title>C-Office — Agent Orchestration</title>
+<title>C-Office — ศูนย์สั่งงานเอเจนท์</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -34,6 +34,7 @@
 <script src="data.js"></script>
 <script type="text/babel" src="components.jsx"></script>
 <script type="text/babel" src="page-agents.jsx"></script>
+<script type="text/babel" src="page-shop.jsx"></script>
 <script type="text/babel" src="page-dashboard.jsx"></script>
 <script type="text/babel" src="page-detail.jsx"></script>
 <script type="text/babel" src="page-memory.jsx"></script>
@@ -59,7 +60,8 @@ const App = () => {
       <Sidebar page={page} setPage={(p) => { setPage(p); setActiveAgent(null); }}/>
       <main className="main">
         {page === 'dashboard' && <Dashboard layout={dashLayout} setLayout={setDashLayout} onOpenAgent={openAgent}/>}
-        {page === 'agents' && <AgentsPage onOpenAgent={openAgent}/>}
+        {page === 'agents' && <AgentsPage onOpenAgent={openAgent} setPage={setPage}/>}
+        {page === 'shop' && <AgentShopPage onOpenAgent={openAgent}/>}
         {page === 'agent-detail' && agent && <AgentDetail agent={agent} onBack={() => setPage('agents')} onOpenAgent={openAgent}/>}
         {page === 'tasks' && <TasksPage onOpenAgent={openAgent}/>}
         {page === 'skills' && <SkillsPage onOpenAgent={openAgent}/>}

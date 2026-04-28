@@ -72,9 +72,37 @@ function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 // Echo output begins with: 「Name」 received your task: ...
 // followed by the prompt we built. We extract everything AFTER the section
 // titled "## Your reply ..." OR — if absent — keep only the last paragraph.
+function normalizeProviderOutput(raw) {
+  const text = String(raw || '');
+  const rows = text.split(/\r?\n/).filter(Boolean);
+  const display = [];
+  let parsedRows = 0;
+  for (const row of rows) {
+    try {
+      parsedRows++;
+      const event = JSON.parse(row);
+      const content = event.message?.content;
+      const contentText = Array.isArray(content)
+        ? content.map((part) => part?.text || '').filter(Boolean).join('\n')
+        : '';
+      const resultText = event.result || event.final_message || event.output || event.text;
+      const msg = event.message || event.msg || event.data;
+      if (contentText) display.push(contentText);
+      else if (typeof resultText === 'string') display.push(resultText);
+      else if (event.type === 'system' || event.type === 'user' || event.type === 'assistant') continue;
+      else if (typeof msg === 'string') display.push(msg);
+      else if (typeof event.text === 'string') display.push(event.text);
+      else if (typeof event.delta === 'string') display.push(event.delta);
+    } catch {
+      display.push(row);
+    }
+  }
+  return display.join('\n') || (parsedRows > 0 ? '' : text);
+}
+
 function extractReply(raw /*, providerName */) {
   if (!raw) return '';
-  let t = String(raw).trim();
+  let t = normalizeProviderOutput(raw).trim();
   // The prompt template echoes "## Your reply ..." back into the output
   // verbatim, so the reply we actually want is everything AFTER the LAST
   // occurrence of that marker. Falls through to the raw text if absent.

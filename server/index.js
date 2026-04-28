@@ -4,12 +4,14 @@ import { fileURLToPath } from 'node:url';
 import stateRoute from './api/state.js';
 import streamRoute from './api/stream.js';
 import hooksRoute from './api/hooks.js';
-import { clearState } from './state.js';
+import { clearState, resetPersonaLevels } from './state.js';
 import agentHistoryRoute from './api/agents.js';
 import memoryRoute from './api/memory.js';
 import dispatchesRoute from './api/dispatches.js';
 import authRoute from './api/auth.js';
 import taskRoute from './api/task.js';
+import shopRoute from './api/shop.js';
+import { getInventory } from './orchestration/shop.js';
 import { getSettings } from './api/settings.js';
 import {
   listRoute as notesList, getOneRoute as notesGet, createRoute as notesCreate,
@@ -30,6 +32,7 @@ app.use(express.json({ limit: '4mb' }));
 
 app.get ('/api/state',          stateRoute);
 app.post('/api/state/reset',    (req, res) => { clearState(); res.json({ ok: true, cleared: true, ts: Date.now() }); });
+app.post('/api/levels/reset',   (req, res) => { resetPersonaLevels(); res.json({ ok: true, levelsReset: true, ts: Date.now() }); });
 app.get ('/api/stream',         streamRoute);
 app.post('/hooks/event',        hooksRoute);
 app.get ('/api/agents/:id/history', agentHistoryRoute);
@@ -43,11 +46,17 @@ app.get ('/api/settings',       getSettings);
 app.get   ('/api/notes',                   notesList);
 app.post  ('/api/notes',                   notesCreate);
 app.get   ('/api/notes/providers',         notesProviders);
+app.get   ('/api/providers',               notesProviders);
 app.get   ('/api/notes/:id',               notesGet);
 app.patch ('/api/notes/:id',               notesPatch);
 app.delete('/api/notes/:id',               notesDelete);
 app.post  ('/api/notes/:id/message',       notesMessage);
 app.post  ('/api/notes/:id/dispatch',      notesDispatch);
+app.get   ('/api/shop',                    shopRoute);
+app.post  ('/api/shop/buy',                shopRoute);
+app.post  ('/api/shop/unequip',            shopRoute);
+app.post  ('/api/shop/use',                shopRoute);
+app.post  ('/api/shop/grant-victory',      shopRoute);
 
 app.use(express.static(PUBLIC_DIR, {
   setHeaders: (res, filePath) => {
@@ -59,6 +68,12 @@ app.listen(PORT, HOST, async () => {
   console.log(`[c-office] monitor on http://${HOST}:${PORT}`);
   try { await startSessionsWatcher();    console.log('[c-office] sessions watcher up'); } catch (e) { console.error('[c-office] sessions watcher failed:', e.message); }
   try { await startTranscriptsWatcher(); console.log('[c-office] transcripts watcher up'); } catch (e) { console.error('[c-office] transcripts watcher failed:', e.message); }
+  try {
+    const inv = await getInventory();
+    console.log(`[c-office] shop inventory hydrated: ${inv.gold} gold, ${Object.keys(inv.skills).length} agents with skills`);
+  } catch (e) {
+    console.error('[c-office] inventory hydrate failed:', e.message);
+  }
 });
 
 process.on('uncaughtException',  e => console.error('[c-office] uncaught:', e));

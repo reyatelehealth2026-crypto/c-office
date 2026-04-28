@@ -25,6 +25,15 @@ notesBus.setMaxListeners(50);
 
 let cache = null;
 let writeQueue = Promise.resolve();
+const STALE_RUNNING_MS = 2 * 60 * 1000;
+const MAX_NOTE_BODY_CHARS = 3000;
+const MAX_MESSAGE_CHARS = 800;
+const MAX_PROMPT_CHARS = 8000;
+
+function clip(value, max) {
+  const text = String(value || '');
+  return text.length > max ? text.slice(0, max - 1) + '...' : text;
+}
 
 async function load() {
   if (cache) return cache;
@@ -57,15 +66,35 @@ function newId() {
   return 'n_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
 }
 
+function normalizeNote(note) {
+  if (!note || typeof note !== 'object') return note;
+  if (!Array.isArray(note.messages)) note.messages = [];
+  if (!note.agentId && note.selectedAgent) note.agentId = note.selectedAgent;
+  if (!note.status) note.status = 'idea';
+  return note;
+}
+
 export async function listNotes() {
   const data = await load();
+  const now = Date.now();
+  let changed = false;
+  for (const note of data.notes) {
+    normalizeNote(note);
+    if (note.status === 'running' && now - (note.updatedAt || note.createdAt || 0) > STALE_RUNNING_MS) {
+      note.status = 'queued';
+      note.updatedAt = now;
+      changed = true;
+    }
+  }
+  if (changed) await persist();
   // newest first
   return [...data.notes].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
 }
 
 export async function getNote(id) {
   const data = await load();
-  return data.notes.find(n => n.id === id) || null;
+  const note = data.notes.find(n => n.id === id) || null;
+  return note ? normalizeNote(note) : null;
 }
 
 export async function createNote({ title, body, tag, agentId }) {
@@ -92,6 +121,7 @@ export async function updateNote(id, patch) {
   const data = await load();
   const n = data.notes.find(x => x.id === id);
   if (!n) return null;
+  normalizeNote(n);
   for (const k of ['title', 'body', 'tag', 'agentId', 'status']) {
     if (patch[k] !== undefined) n[k] = patch[k];
   }
@@ -115,6 +145,7 @@ export async function appendMessage(id, message) {
   const data = await load();
   const n = data.notes.find(x => x.id === id);
   if (!n) return null;
+  normalizeNote(n);
   const msg = { ts: Date.now(), ...message };
   n.messages.push(msg);
   n.updatedAt = msg.ts;
@@ -136,20 +167,20 @@ export function buildPromptForNote(note, userMessage, persona) {
   lines.push(`## Note: ${note.title}`);
   if (note.body) {
     lines.push('');
-    lines.push(note.body);
+    lines.push(clip(note.body, MAX_NOTE_BODY_CHARS));
   }
   if (note.tag) lines.push(`\nTag: ${note.tag}`);
   if (note.messages && note.messages.length > 0) {
     lines.push('\n## Conversation so far');
-    for (const m of note.messages.slice(-12)) {
+    for (const m of note.messages.slice(-8)) {
       const who = m.role === 'user' ? 'User'
                 : m.role === 'agent' ? (persona?.name || 'Agent')
                 : 'System';
-      lines.push(`${who}: ${m.content}`);
+      lines.push(`${who}: ${clip(m.content, MAX_MESSAGE_CHARS)}`);
     }
   }
   lines.push('\n## Latest user message');
-  lines.push(userMessage || '(no message — please respond with next steps)');
+  lines.push(clip(userMessage, MAX_MESSAGE_CHARS) || '(no message - please respond with next steps)');
   lines.push('\n## Your reply (be concise, actionable, and stay in character):');
-  return lines.join('\n');
+  return clip(lines.join('\n'), MAX_PROMPT_CHARS);
 }

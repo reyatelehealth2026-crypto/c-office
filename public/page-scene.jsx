@@ -9,6 +9,7 @@
   const sceneListeners = new Set();
   let scene = null;          // { phase, script, note, persona, message, provider, error }
   let phase = null;          // 'loading' | 'ready' | 'error' | null
+  let activeAbort = null;
 
   function notify() { sceneListeners.forEach(fn => { try { fn(); } catch {} }); }
 
@@ -61,21 +62,28 @@
       script: null,
       // Pre-roll beats so the scene fades in immediately while we await the CLI.
       previewBeats: [
-        { speaker: 'system',  text: 'Scene loading — summoning ' + (persona?.name || 'agent') + '…', mood: 'enter' },
+        { speaker: 'system',  text: 'กำลังเปิดฉาก — เรียก ' + (persona?.name || 'agent') + '...', mood: 'enter' },
         { speaker: 'player',  text: 'เอเจนต์ ' + (persona?.name || 'Agent') + ', ภารกิจของคุณ:\n' + (message || ''), mood: null },
-        { speaker: 'system',  text: '(running ' + prov + '…)', mood: 'busy' },
+        { speaker: 'system',  text: '(กำลังรันผ่าน ' + prov + '...)', mood: 'busy' },
       ],
     };
     phase = 'loading';
     notify();
 
+    let timeout = null;
     try {
+      if (activeAbort) activeAbort.abort();
+      const controller = new AbortController();
+      activeAbort = controller;
+      timeout = setTimeout(() => controller.abort(), 50_000);
       const r = await fetch('/api/notes/' + nid + '/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider: prov, agentId: personaId, message: message || '' }),
+        signal: controller.signal,
       });
       const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Provider run failed');
       scene = {
         ...scene,
         script: j.scene || null,
@@ -87,13 +95,24 @@
       notify();
       window.refreshNotes && window.refreshNotes();
     } catch (e) {
-      scene = { ...(scene || {}), error: e.message };
+      const timedOut = e.name === 'AbortError';
+      scene = {
+        ...(scene || {}),
+        error: timedOut
+          ? 'Provider ใช้เวลานานเกินไปหรือกำลังรอหน้าต่าง/permission อยู่ ลองเปลี่ยนเป็น Echo หรือ Codex แล้วรันใหม่'
+          : e.message,
+        canRetryEcho: prov !== 'echo',
+      };
       phase = 'error';
       notify();
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      activeAbort = null;
     }
   };
 
   window.closeScene = function closeScene() {
+    if (activeAbort) activeAbort.abort();
     scene = null;
     phase = null;
     notify();
@@ -259,7 +278,7 @@ const SceneStage = ({ scene, phase, onClose }) => {
           <div className="scene-mission-meta">
             <span>provider · <b>{scene.provider}</b></span>
             <span className="dot-sep"/>
-            <span>agent · <b>{agentName}</b></span>
+          <span>agent · <b>{agentName}</b></span>
             <span className="dot-sep"/>
             <span>mode · <b>{phase}</b></span>
           </div>
@@ -267,7 +286,7 @@ const SceneStage = ({ scene, phase, onClose }) => {
 
         {/* close button */}
         <button className="scene-close" onClick={(e) => { e.stopPropagation(); onClose(); }} title="Close (Esc)">
-          ✕ Exit Scene
+          ✕ ออกจากฉาก
         </button>
 
         {/* characters layer */}
@@ -275,9 +294,9 @@ const SceneStage = ({ scene, phase, onClose }) => {
           {/* Player (left) */}
           <div className={'scene-actor scene-player' + (current?.speaker === 'player' ? ' is-speaking' : '')}>
             <div className="scene-actor-portrait scene-player-portrait">
-              <div className="scene-player-avatar">P</div>
+            <div className="scene-player-avatar">คุณ</div>
             </div>
-            <div className="scene-actor-name">Pilot</div>
+            <div className="scene-actor-name">ผู้ใช้</div>
           </div>
 
           {/* Agent (right) */}
@@ -306,9 +325,9 @@ const SceneStage = ({ scene, phase, onClose }) => {
         {/* dialogue box bottom */}
         <div className={'scene-dialogue speaker-' + (current?.speaker || 'system') + (current?.mood ? ' mood-' + current.mood : '')}>
           <div className="scene-dialogue-name">
-            {current?.speaker === 'player' ? 'You' :
+            {current?.speaker === 'player' ? 'คุณ' :
              current?.speaker === 'agent'  ? (persona?.name || 'Agent') :
-             '— narration'}
+             '— ฉาก'}
           </div>
           <div className="scene-dialogue-text">
             {fullText.slice(0, typed)}
@@ -319,17 +338,30 @@ const SceneStage = ({ scene, phase, onClose }) => {
               {Math.min(cursor + 1, beats.length)} / {beats.length}
             </span>
             <div className="scene-actions" onClick={(e) => e.stopPropagation()}>
+              {phase === 'error' && scene.canRetryEcho && (
+                <button
+                  className="scene-btn ghost"
+                  onClick={() => window.openScene({
+                    noteId: scene.noteId,
+                    agentId: persona?.id,
+                    provider: 'echo',
+                    message: scene.message || '',
+                  })}
+                >
+                  ลองด้วย Echo
+                </button>
+              )}
               <button className="scene-btn ghost" onClick={() => setAuto(a => !a)} title="Toggle auto-advance (A)">
-                {auto ? '◐ Auto' : '◯ Manual'}
+                {auto ? '◐ อัตโนมัติ' : '◯ กดเอง'}
               </button>
               {!allDone && (
                 <button className="scene-btn primary" onClick={advance} title="Space / Enter / Click">
-                  {typed < fullText.length ? '⏭ Skip' : '▶ Next'}
+                  {typed < fullText.length ? '⏭ ข้าม' : '▶ ต่อไป'}
                 </button>
               )}
               {allDone && (
                 <button className="scene-btn primary" onClick={onClose}>
-                  ✓ Close
+                  ✓ ปิดฉาก
                 </button>
               )}
             </div>
@@ -339,7 +371,7 @@ const SceneStage = ({ scene, phase, onClose }) => {
         {/* phase-specific overlays */}
         {phase === 'loading' && (
           <div className="scene-loading-strip">
-            <span>summoning {agentName}…</span>
+            <span>กำลังเรียก {agentName}...</span>
           </div>
         )}
         {phase === 'ready' && allDone && scene.ok && (

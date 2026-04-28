@@ -478,3 +478,131 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; letter-spac
 @media (max-width: 1180px) {
   .cmd-grid { grid-template-columns: 1fr; }
 }
+
+/* ===== Agent Shop ===== */
+.shop-wallet {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(251,191,36,0.38);
+  background: rgba(251,191,36,0.12);
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+.shop-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.95fr) minmax(420px, 1.05fr);
+  gap: 14px;
+  align-items: start;
+}
+.shop-agent-grid,
+.shop-loadout,
+.shop-slot-list,
+.shop-skill-catalog {
+  display: grid;
+  gap: 10px;
+}
+.shop-agent-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms, background 140ms, transform 140ms;
+}
+.shop-agent-card:hover,
+.shop-agent-card.active {
+  border-color: var(--purple);
+  background: var(--bg-3);
+}
+.shop-agent-card:hover {
+  transform: translateY(-1px);
+}
+.shop-agent-main {
+  min-width: 0;
+}
+.shop-agent-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+.shop-agent-role,
+.shop-agent-tags {
+  margin-top: 4px;
+}
+.shop-agent-role {
+  color: var(--text-3);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shop-agent-tags {
+  display: flex;
+  gap: 6px;
+}
+.shop-agent-buy {
+  display: flex;
+  justify-content: flex-end;
+}
+.shop-selected-agent {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+.shop-selected-agent h2 {
+  font-size: 22px;
+  margin-bottom: 3px;
+}
+.shop-slot {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.16);
+}
+.shop-install-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.shop-skill-card {
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  border-radius: 10px;
+  padding: 12px;
+}
+.shop-skill-card.installed {
+  border-color: rgba(52,211,153,0.45);
+  background: rgba(52,211,153,0.08);
+}
+.shop-skill-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+@media (max-width: 1180px) {
+  .shop-layout {
+    grid-template-columns: 1fr;
+  }
+}

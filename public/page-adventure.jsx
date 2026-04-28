@@ -199,10 +199,15 @@ const AdventurePage = ({ onOpenAgent }) => {
     if (bossHp === 0 && victoryKeyRef.current !== bossText) {
       victoryKeyRef.current = bossText;
       setShowVictory(true);
+      fetch('/api/shop/grant-victory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier: tier.name }),
+      }).then(() => window.fetchCOfficeShop?.()).catch(() => {});
       const t = setTimeout(() => setShowVictory(false), 2500);
       return () => clearTimeout(t);
     }
-  }, [bossHp, bossText]);
+  }, [bossHp, bossText, tier.name]);
 
   // ── 4. Boss hit flash (250ms after a new damage event) ───────────────────
   const [bossHit, setBossHit] = React.useState(false);
@@ -383,7 +388,7 @@ const AdventurePage = ({ onOpenAgent }) => {
     setQuickBusy(false);
   }
 
-  const questQueue = (window.DISPATCHES || []).slice(0, 5);
+  const questQueue = (window.NOTES || []).slice(0, 5);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -476,19 +481,19 @@ const AdventurePage = ({ onOpenAgent }) => {
         <div className="adv-quest-board panel">
           <div className="panel-head">
             <h3>Quest Queue</h3>
-            <div className="right">from dashboard notes</div>
+            <div className="right">จากโน้ตสั่งงาน</div>
           </div>
           <div className="adv-quest-list">
             {questQueue.map((q) => {
-              const ag = agents.find((a) => a.id === q.personaId);
+              const ag = agents.find((a) => a.id === (q.agentId || q.personaId));
               return (
                 <div key={q.id} className={'adv-quest-card state-' + q.status}>
                   <AgentDot agent={ag} size={30}/>
                   <div style={{flex:1, minWidth:0}}>
                     <div className="adv-quest-title">{q.title}</div>
-                    <div className="mono-s">{ag?.name || q.personaId} · {q.provider} · {q.status}</div>
+                    <div className="mono-s">{ag?.name || 'ยังไม่เลือก'} · {q.tag || 'task'} · {q.status}</div>
                   </div>
-                  <span className="badge gold">{(q.messages || []).length} chat</span>
+                  <span className="badge gold">{(q.messages || []).length} แชท</span>
                 </div>
               );
             })}

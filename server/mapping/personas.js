@@ -376,6 +376,12 @@ const PERSONA_RULES = [
 export function mapPersona(subagentType, sessionKind) {
   if (sessionKind === 'interactive' || !subagentType) return 'orchestra';
   const norm = String(subagentType).trim().toLowerCase().replace(/\s+/g, '-');
+  if (PERSONAS_BY_ID.has(norm)) return norm;
+  const direct = PERSONAS.find(p => {
+    const name = p.name.toLowerCase().replace(/\s+/g, '-');
+    return name === norm || p.avatarInitials?.toLowerCase() === norm;
+  });
+  if (direct) return direct.id;
   for (const r of PERSONA_RULES) if (r.match.test(norm)) return r.persona;
   return 'kai';
 }

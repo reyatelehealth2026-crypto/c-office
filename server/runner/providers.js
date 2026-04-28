@@ -16,15 +16,42 @@
 
 import { spawn } from 'node:child_process';
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
 
-function which(bin) {
+function commandCandidates(bin) {
   try {
-    const out = execFileSync('sh', ['-c', `command -v ${JSON.stringify(bin)} 2>/dev/null`], {
+    const cmd = process.platform === 'win32' ? 'where.exe' : 'sh';
+    const args = process.platform === 'win32'
+      ? [bin]
+      : ['-c', `command -v ${JSON.stringify(bin)} 2>/dev/null`];
+    const out = execFileSync(cmd, args, {
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 800,
     }).toString().trim();
-    return out || null;
-  } catch { return null; }
+    return out.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  } catch { return []; }
+}
+
+function which(bin) {
+  return commandCandidates(bin)[0] || null;
+}
+
+function resolveCodexArgv(prompt) {
+  if (process.env.C_OFFICE_CODEX_CMD) {
+    return buildCmd('C_OFFICE_CODEX_CMD', 'codex exec ${PROMPT}', prompt);
+  }
+  const candidates = commandCandidates('codex');
+  if (process.platform === 'win32') {
+    const cmdShim = candidates.find((file) => file.toLowerCase().endsWith('codex.cmd'));
+    if (cmdShim) {
+      const script = path.join(path.dirname(cmdShim), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+      if (existsSync(script)) return [process.execPath, script, 'exec', prompt];
+    }
+  }
+  const bin = candidates[0] || 'codex';
+  return [bin, 'exec', prompt];
 }
 
 function buildCmd(envName, fallback, prompt) {
@@ -37,18 +64,48 @@ function buildCmd(envName, fallback, prompt) {
   return replaced;
 }
 
+function timeoutForProvider(name, fallbackMs = 45_000) {
+  const raw = process.env[`C_OFFICE_${name.toUpperCase()}_TIMEOUT_MS`] || process.env.C_OFFICE_PROVIDER_TIMEOUT_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 5_000 ? parsed : fallbackMs;
+}
+
+function killProcessTree(child) {
+  if (!child?.pid) return;
+  try {
+    if (process.platform === 'win32') {
+      execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', timeout: 3000 });
+    } else {
+      child.kill('SIGTERM');
+    }
+  } catch {
+    try { child.kill('SIGKILL'); } catch {}
+  }
+}
+
 function runArgv(argv, onChunk, { timeoutMs = 60_000 } = {}) {
   return new Promise((resolve) => {
     let chunks = '';
     let killed = false;
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
     const child = spawn(argv[0], argv.slice(1), {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
+      windowsHide: true,
     });
     const timer = setTimeout(() => {
       killed = true;
-      try { child.kill('SIGTERM'); } catch {}
-      setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, 1000).unref?.();
+      const timeoutText = `\n[provider timeout] CLI did not finish within ${Math.round(timeoutMs / 1000)}s. It may be waiting for login, permission, or an interactive prompt.`;
+      try { onChunk?.(timeoutText); } catch {}
+      chunks += timeoutText;
+      killProcessTree(child);
+      setTimeout(() => finish({ ok: false, output: chunks, exitCode: -1, killed: true, timeout: true }), 1200).unref?.();
     }, timeoutMs).unref?.();
 
     child.stdout.on('data', (buf) => {
@@ -63,12 +120,10 @@ function runArgv(argv, onChunk, { timeoutMs = 60_000 } = {}) {
       try { onChunk?.(s); } catch {}
     });
     child.on('error', (e) => {
-      clearTimeout(timer);
-      resolve({ ok: false, output: chunks + `\n[provider error] ${e.message}`, exitCode: -1 });
+      finish({ ok: false, output: chunks + `\n[provider error] ${e.message}`, exitCode: -1 });
     });
     child.on('exit', (code) => {
-      clearTimeout(timer);
-      resolve({
+      finish({
         ok: !killed && code === 0,
         output: chunks || (killed ? '[timeout]' : ''),
         exitCode: code,
@@ -134,18 +189,14 @@ const echo = {
   description: 'Local echo provider — no external CLI required. Useful for testing the pipeline.',
   detect: () => true,
   async run({ prompt, agentName }, onChunk) {
-    // Build a reply that mirrors the prompt header (preserves the scene
-    // builder's "## Your reply" cut-point) but ends with an in-character line.
+    // Keep echo instant and bounded. It is a demo provider, not a transcript
+    // mirror; large note histories used to make the scene look stuck.
     const inCharacter = pickEchoLine(agentName);
     const reply =
-      `「${agentName || 'Agent'}」 received your task:\n  ${prompt}\n\n` +
+      `「${agentName || 'Agent'}」 received the task.\n\n` +
       `## Your reply (be concise, actionable, and stay in character):\n` +
-      inCharacter + '\n\n' +
-      `(echo provider — install Claude Code, Codex, or GPT CLI to dispatch real LLM responses.)`;
-    for (let i = 0; i < reply.length; i += 32) {
-      onChunk?.(reply.slice(i, i + 32));
-      await new Promise(r => setTimeout(r, 14));
-    }
+      inCharacter;
+    onChunk?.(reply);
     return { ok: true, output: reply, exitCode: 0 };
   },
 };
@@ -157,7 +208,7 @@ const claude = {
   detect: () => !!which('claude'),
   async run({ prompt }, onChunk) {
     const argv = buildCmd('C_OFFICE_CLAUDE_CMD', 'claude -p ${PROMPT}', prompt);
-    return runArgv(argv, onChunk, { timeoutMs: 120_000 });
+    return runArgv(argv, onChunk, { timeoutMs: timeoutForProvider('claude') });
   },
 };
 
@@ -167,8 +218,8 @@ const codex = {
   description: 'OpenAI Codex CLI (codex exec "...")',
   detect: () => !!which('codex'),
   async run({ prompt }, onChunk) {
-    const argv = buildCmd('C_OFFICE_CODEX_CMD', 'codex exec ${PROMPT}', prompt);
-    return runArgv(argv, onChunk, { timeoutMs: 120_000 });
+    const argv = resolveCodexArgv(prompt);
+    return runArgv(argv, onChunk, { timeoutMs: timeoutForProvider('codex') });
   },
 };
 
@@ -185,7 +236,7 @@ const gpt = {
             : 'sgpt';
     const fallback = bin ? `${bin} ${'${PROMPT}'}` : 'sgpt ${PROMPT}';
     const argv = buildCmd('C_OFFICE_GPT_CMD', fallback, prompt);
-    return runArgv(argv, onChunk, { timeoutMs: 120_000 });
+    return runArgv(argv, onChunk, { timeoutMs: timeoutForProvider('gpt') });
   },
 };
 
@@ -205,9 +256,7 @@ export function getProvider(name) {
 }
 
 export function defaultProvider() {
-  // Prefer a real LLM if installed; fall back to echo so the UI flow still works.
-  for (const n of ['claude', 'codex', 'gpt']) {
-    if (PROVIDERS[n].detect()) return n;
-  }
+  // UI dispatch defaults to echo so every persona can answer immediately.
+  // Users can still pick Claude/Codex explicitly for real CLI execution.
   return 'echo';
 }
