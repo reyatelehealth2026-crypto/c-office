@@ -11,6 +11,37 @@ const noteStatusLabel = (s) => NOTE_STATUS_TH[s] || s;
 
 const NoteTagPalette = ['idea', 'task', 'bug', 'research', 'design', 'ops'];
 
+/* ===== Agent activity indicator (thinking / using-tool / typing) ===== */
+const TOOL_LABEL = {
+  Bash: 'กำลังรันคำสั่ง',
+  Read: 'กำลังอ่านไฟล์',
+  Write: 'กำลังเขียนไฟล์',
+  Edit: 'กำลังแก้ไขไฟล์',
+  Grep: 'กำลังค้นหา',
+  WebSearch: 'กำลังค้นเว็บ',
+  WebFetch: 'กำลังดึงเว็บเพจ',
+  Task: 'กำลังเรียกซับเอเจนต์',
+};
+
+const AgentActivityIndicator = ({ stage, tool, agent }) => {
+  const label =
+    stage === 'using-tool' ? (TOOL_LABEL[tool] || `กำลังใช้ ${tool}`)
+    : stage === 'typing'   ? `${agent?.name || 'Agent'} กำลังพิมพ์`
+    : `${agent?.name || 'Agent'} กำลังคิด`;
+  return (
+    <div className={'agent-activity stage-' + stage}>
+      {stage === 'using-tool' ? (
+        <span className="agent-activity-tool" aria-hidden>⚙</span>
+      ) : (
+        <span className="agent-activity-dots" aria-hidden>
+          <i/><i/><i/>
+        </span>
+      )}
+      <span className="agent-activity-label">{label}</span>
+    </div>
+  );
+};
+
 const NotesPage = ({ onOpenAgent, presetAgentId }) => {
   window.useCOfficeRefresh();
   const notes = window.NOTES || [];
@@ -272,6 +303,8 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
   const [draft, setDraft] = React.useState('');
   const [provider, setProvider] = React.useState(defaultProvider);
   const [busy, setBusy] = React.useState(false);
+  const [agentState, setAgentState] = React.useState(null);  // { stage: 'thinking'|'using-tool'|'typing', tool?: string, since: number }
+  const [error, setError] = React.useState(null);
   const [editing, setEditing] = React.useState(false);
   const [editDraft, setEditDraft] = React.useState({ title: note.title, body: note.body });
 
@@ -280,21 +313,61 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
   const messagesEnd = React.useRef(null);
   React.useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [note.messages?.length]);
+  }, [note.messages?.length, agentState]);
 
-  function dispatch(autoMessage) {
+  // Subscribe to SSE events while a dispatch is in flight, so we can flip
+  // the indicator from "thinking" → "using-tool" → "typing" if the server
+  // emits tool-use markers for this persona.
+  React.useEffect(() => {
+    if (!busy) return;
+    const onSSE = (ev) => {
+      try {
+        const e = JSON.parse(ev.data);
+        if (e?.personaId !== (note.agentId || 'orchestra')) return;
+        if (e.verb === 'used' && e.toolName && e.toolName !== provider) {
+          setAgentState({ stage: 'using-tool', tool: e.toolName, since: Date.now() });
+        } else if (e.verb === 'used') {
+          // chunked output starting to arrive
+          setAgentState({ stage: 'typing', since: Date.now() });
+        }
+      } catch {}
+    };
+    const es = window._cofficeStream;
+    if (es && typeof es.addEventListener === 'function') {
+      es.addEventListener('event', onSSE);
+      return () => es.removeEventListener('event', onSSE);
+    }
+  }, [busy, note.agentId, provider]);
+
+  async function dispatch(autoMessage) {
     if (busy) return;
-    setBusy(true);
     const message = autoMessage !== undefined ? autoMessage : draft.trim();
-    window.openScene({
-      noteId: note.id,
-      agentId: note.agentId || 'orchestra',
-      provider,
-      message,
-    });
+    setError(null);
+    setBusy(true);
+    setAgentState({ stage: 'thinking', since: Date.now() });
     setDraft('');
-    setBusy(false);
     onChange?.();
+    try {
+      const r = await fetch('/api/notes/' + note.id + '/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          agentId: note.agentId || 'orchestra',
+          message: message || '',
+        }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        setError(j.error || 'Dispatch failed' + (j.exitCode != null ? ` (exit ${j.exitCode})` : ''));
+      }
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setAgentState(null);
+      setBusy(false);
+      window.refreshNotes && window.refreshNotes();
+    }
   }
 
   async function saveEdit() {
@@ -366,9 +439,9 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
       </div>
 
       <div className="note-chat">
-        {(note.messages || []).length === 0 && (
+        {(note.messages || []).length === 0 && !agentState && (
           <div className="muted" style={{fontSize: 12, padding: '20px 0', textAlign: 'center'}}>
-            ยังไม่มีบทสนทนา คุยกับ {agent?.name || 'เอเจนท์'} ก่อน หรือกด <b>เข้า Scene</b> เพื่อส่งโน้ตนี้ทันที
+            ยังไม่มีบทสนทนา · คุยกับ {agent?.name || 'เอเจนท์'} ได้เลย ผ่านช่องด้านล่าง
           </div>
         )}
         {(note.messages || []).map((m, i) => {
@@ -391,6 +464,30 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
             </div>
           );
         })}
+        {agentState && (
+          <div className="note-msg note-msg-agent">
+            <AgentDot agent={agent} size={28}/>
+            <div className="note-msg-bubble note-msg-pending">
+              <div className="note-msg-meta">
+                <b>{agent?.name || 'Agent'}</b>
+                <span className="mono-s">via {provider}</span>
+              </div>
+              <AgentActivityIndicator stage={agentState.stage} tool={agentState.tool} agent={agent}/>
+            </div>
+          </div>
+        )}
+        {error && (
+          <div className="note-msg note-msg-agent">
+            <AgentDot agent={agent} size={28}/>
+            <div className="note-msg-bubble" style={{borderColor:'var(--red)', background:'rgba(239,68,68,0.08)'}}>
+              <div className="note-msg-meta">
+                <b style={{color:'var(--red)'}}>Dispatch error</b>
+                <button className="btn ghost" style={{marginLeft:'auto', fontSize:11, padding:'2px 8px'}} onClick={() => setError(null)}>dismiss</button>
+              </div>
+              <div className="note-msg-content" style={{color:'var(--red)'}}>{error}</div>
+            </div>
+          </div>
+        )}
         <div ref={messagesEnd}/>
       </div>
 
@@ -400,6 +497,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
           rows={3}
           placeholder={`คุยกับ ${agent?.name || 'เอเจนท์'}...`}
           value={draft}
+          disabled={busy}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -412,11 +510,8 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
           <span className="mono-s" style={{marginRight: 'auto'}}>
             Ctrl/⌘+Enter เพื่อส่ง · ใช้ <b>{provider}</b>
           </span>
-          <button className="btn ghost" disabled={busy} onClick={() => dispatch('')}>
-            ออกเดินทาง
-          </button>
           <button className="btn primary" disabled={busy || !draft.trim()} onClick={() => dispatch()}>
-            {busy ? 'กำลังออกภารกิจ...' : 'มอบหมาย & ออกภารกิจ'}
+            {busy ? '⏳ กำลังประมวลผล…' : 'ส่ง'}
           </button>
         </div>
       </div>

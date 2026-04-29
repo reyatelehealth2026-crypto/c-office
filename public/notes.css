@@ -216,6 +216,76 @@
   border-top: 1px solid var(--border);
 }
 
+/* ─── pending agent reply (thinking / typing / using-tool) ─── */
+.note-msg-pending {
+  background: linear-gradient(120deg, rgba(157,92,255,0.10), rgba(34,211,238,0.06));
+  border-color: rgba(157,92,255,0.3);
+  position: relative;
+  overflow: hidden;
+}
+.note-msg-pending::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.agent-activity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  padding: 2px 0;
+}
+.agent-activity-label {
+  font-weight: 500;
+}
+.agent-activity-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.agent-activity-dots i {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--purple);
+  display: inline-block;
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+.agent-activity-dots i:nth-child(2) { animation-delay: 0.16s; }
+.agent-activity-dots i:nth-child(3) { animation-delay: 0.32s; }
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-3px); }
+}
+
+.agent-activity-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold), var(--purple));
+  color: #000;
+  font-size: 13px;
+  font-weight: 700;
+  animation: tool-spin 1.2s linear infinite;
+}
+@keyframes tool-spin {
+  to { transform: rotate(360deg); }
+}
+
+.agent-activity.stage-using-tool .agent-activity-label {
+  color: var(--gold);
+}
+
 /* ===== COMMAND BAR (Dashboard) ===== */
 .command-bar {
   display: flex;
