@@ -55,6 +55,17 @@ const App = () => {
 
   React.useEffect(() => { localStorage.setItem('c-office-page', page); }, [page]);
 
+  // Cross-page navigation requests (e.g. inline-dispatch helpers in page-scene.jsx
+  // that ship the user from Adventure / Guild straight to the notes chat panel).
+  React.useEffect(() => {
+    const onNav = (e) => {
+      const target = e.detail?.page;
+      if (target) { setPage(target); setActiveAgent(null); }
+    };
+    window.addEventListener('c-office:navigate', onNav);
+    return () => window.removeEventListener('c-office:navigate', onNav);
+  }, []);
+
   const openAgent = (id) => { setActiveAgent(id); setPage('agent-detail'); };
   const agent = AGENTS.find(a => a.id === activeAgent);
 

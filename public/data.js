@@ -137,6 +137,7 @@
     refreshShop();
     if (es) try { es.close(); } catch {}
     es = new EventSource('/api/stream');
+    window._cofficeStream = es;             // exposed so live UI (note chat indicator) can listen too
     es.addEventListener('event',          e => pushEvent(JSON.parse(e.data)));
     es.addEventListener('stats',          e => { window.STATS = { ...window.STATS, ...JSON.parse(e.data) }; stateVersion++; fire(); });
     es.addEventListener('persona.status', e => applyPersonaStatus(JSON.parse(e.data)));

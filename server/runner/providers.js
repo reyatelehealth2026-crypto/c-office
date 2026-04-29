@@ -64,7 +64,7 @@ function buildCmd(envName, fallback, prompt) {
   return replaced;
 }
 
-function timeoutForProvider(name, fallbackMs = 45_000) {
+function timeoutForProvider(name, fallbackMs = 180_000) {
   const raw = process.env[`C_OFFICE_${name.toUpperCase()}_TIMEOUT_MS`] || process.env.C_OFFICE_PROVIDER_TIMEOUT_MS;
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 5_000 ? parsed : fallbackMs;
@@ -101,7 +101,7 @@ function runArgv(argv, onChunk, { timeoutMs = 60_000 } = {}) {
     });
     const timer = setTimeout(() => {
       killed = true;
-      const timeoutText = `\n[provider timeout] CLI did not finish within ${Math.round(timeoutMs / 1000)}s. It may be waiting for login, permission, or an interactive prompt.`;
+      const timeoutText = `\n[provider timeout] CLI did not finish within ${Math.round(timeoutMs / 1000)}s. It may be waiting for login, permission, or an interactive prompt — or the model is just slow on this prompt. Override with C_OFFICE_PROVIDER_TIMEOUT_MS=300000 (or per-provider C_OFFICE_CLAUDE_TIMEOUT_MS).`;
       try { onChunk?.(timeoutText); } catch {}
       chunks += timeoutText;
       killProcessTree(child);
