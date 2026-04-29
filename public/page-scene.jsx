@@ -23,96 +23,55 @@
     return { scene, phase };
   };
 
+  // window.openScene — formerly opened a fullscreen JRPG scene. Now routes
+  // every dispatch through the inline Notes chat panel so the user stays in
+  // their context and sees thinking / typing / using-tool indicators in
+  // place. Adventure / Guild / scene-retry call sites still hit this and
+  // get the inline behaviour for free.
   window.openScene = async function openScene({ noteId, agentId, message, provider, title, body, tag = 'task' }) {
-    // If no noteId, create one inline so users can launch a scene from anywhere.
     let nid = noteId;
-    let inlineNote = null;
     if (!nid) {
       try {
         const r = await fetch('/api/notes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: (title || message || 'Untitled scene').slice(0, 80),
+            title: (title || message || 'Untitled').slice(0, 80),
             body:  body  || message || '',
             tag,
             agentId,
           }),
         });
-        inlineNote = await r.json();
-        nid = inlineNote.id;
+        nid = (await r.json()).id;
       } catch (e) {
-        scene = { error: 'Failed to create note: ' + e.message };
-        phase = 'error';
-        notify();
+        console.warn('[c-office] inline dispatch could not create note:', e.message);
         return;
       }
     }
 
-    const personaId = agentId || (inlineNote?.agentId) || 'orchestra';
-    const persona   = (window.AGENTS || []).find(a => a.id === personaId);
-    const def       = window.PROVIDERS?.default || 'echo';
-    const prov      = provider || def;
+    const personaId = agentId || 'orchestra';
+    const prov      = provider || (window.PROVIDERS?.default || 'echo');
 
-    scene = {
-      noteId: nid,
-      message: message || '',
-      provider: prov,
-      persona,
-      script: null,
-      // Pre-roll beats so the scene fades in immediately while we await the CLI.
-      previewBeats: [
-        { speaker: 'system',  text: 'กำลังเปิดฉาก — เรียก ' + (persona?.name || 'agent') + '...', mood: 'enter' },
-        { speaker: 'player',  text: 'เอเจนต์ ' + (persona?.name || 'Agent') + ', ภารกิจของคุณ:\n' + (message || ''), mood: null },
-        { speaker: 'system',  text: '(กำลังรันผ่าน ' + prov + '...)', mood: 'busy' },
-      ],
-    };
-    phase = 'loading';
-    notify();
-
-    let timeout = null;
+    // Navigate to /#/notes with this note opened so the user sees the chat.
     try {
-      if (activeAbort) activeAbort.abort();
-      const controller = new AbortController();
-      activeAbort = controller;
-      timeout = setTimeout(() => controller.abort(), 50_000);
-      const r = await fetch('/api/notes/' + nid + '/dispatch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: prov, agentId: personaId, message: message || '' }),
-        signal: controller.signal,
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'Provider run failed');
-      scene = {
-        ...scene,
-        script: j.scene || null,
-        rawOutput: j.output,
-        ok: j.ok,
-        persona: j.scene?.persona || persona,
-      };
-      phase = 'ready';
-      notify();
-      window.refreshNotes && window.refreshNotes();
-    } catch (e) {
-      const timedOut = e.name === 'AbortError';
-      scene = {
-        ...(scene || {}),
-        error: timedOut
-          ? 'Provider ใช้เวลานานเกินไปหรือกำลังรอหน้าต่าง/permission อยู่ ลองเปลี่ยนเป็น Echo หรือ Codex แล้วรันใหม่'
-          : e.message,
-        canRetryEcho: prov !== 'echo',
-      };
-      phase = 'error';
-      notify();
-    } finally {
-      if (timeout) clearTimeout(timeout);
-      activeAbort = null;
-    }
+      localStorage.setItem('c-office-page', 'notes');
+      localStorage.setItem('c-office-active-note', nid);
+    } catch {}
+    window.dispatchEvent(new CustomEvent('c-office:navigate', { detail: { page: 'notes' } }));
+    window.dispatchEvent(new CustomEvent('c-office:open-note',  { detail: { noteId: nid } }));
+    window.refreshNotes && window.refreshNotes();
+
+    // Fire-and-forget dispatch. Refresh notes when the run lands.
+    fetch('/api/notes/' + nid + '/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: prov, agentId: personaId, message: message || '' }),
+    })
+      .then(() => window.refreshNotes && window.refreshNotes())
+      .catch((e) => console.warn('[c-office] inline dispatch failed:', e.message));
   };
 
   window.closeScene = function closeScene() {
-    if (activeAbort) activeAbort.abort();
     scene = null;
     phase = null;
     notify();
@@ -120,8 +79,13 @@
 })();
 
 
-// ── SceneOverlay — fullscreen JRPG dialogue stage ────────────────────────
-const SceneOverlay = () => {
+// ── SceneOverlay — DEPRECATED. The fullscreen JRPG dialogue mode was retired
+// in favour of inline chat (notes panel) with thinking / typing / tool-use
+// indicators. We keep the stub so <SceneOverlay/> in App still renders, and
+// preserve the old implementation below behind an early-return null.
+const SceneOverlay = () => null;
+
+const _LegacySceneOverlay = () => {
   const { scene, phase } = window.useSceneStore();
 
   // Keyboard handler: ESC to close

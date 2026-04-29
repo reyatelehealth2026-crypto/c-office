@@ -49,14 +49,34 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
   const providers = (window.PROVIDERS?.providers) || [];
   const defaultProvider = window.PROVIDERS?.default || 'echo';
 
-  const [activeId, setActiveId] = React.useState(null);
+  const [activeId, setActiveId] = React.useState(() => {
+    try { return localStorage.getItem('c-office-active-note') || null; } catch { return null; }
+  });
   const [composerOpen, setComposerOpen] = React.useState(false);
   const [draft, setDraft] = React.useState({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'orchestra' });
 
-  // Auto-select first note when list arrives
+  // Auto-select first note when list arrives (only if we haven't been told otherwise)
   React.useEffect(() => {
     if (!activeId && notes.length > 0) setActiveId(notes[0].id);
   }, [notes.length]);
+
+  // Listen for cross-page open-note requests (e.g. from page-scene's inline dispatch)
+  React.useEffect(() => {
+    const onOpen = (e) => {
+      const id = e.detail?.noteId;
+      if (id) {
+        setActiveId(id);
+        try { localStorage.setItem('c-office-active-note', id); } catch {}
+      }
+    };
+    window.addEventListener('c-office:open-note', onOpen);
+    return () => window.removeEventListener('c-office:open-note', onOpen);
+  }, []);
+
+  // Persist the user's currently-selected note across reloads
+  React.useEffect(() => {
+    if (activeId) try { localStorage.setItem('c-office-active-note', activeId); } catch {}
+  }, [activeId]);
 
   const active = notes.find(n => n.id === activeId);
 
