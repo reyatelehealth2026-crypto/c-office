@@ -1,6 +1,6 @@
 # C-Office
 
-> แดชบอร์ดเรียลไทม์สไตล์ "ออฟฟิศเกมกาชา" สำหรับมอนิเตอร์ Claude Code CLI ทุกเซสชันของคุณ — เห็นได้ว่าเอเจนต์ไหนกำลังทำงาน ทำอะไรอยู่ ใช้ไปกี่ token แล้ว พร้อมเอฟเฟกต์แอนิเมชันเมื่อเอเจนต์กำลังลงมือทำงาน
+> ศูนย์สั่งงาน + แดชบอร์ดเรียลไทม์สำหรับทีมเอเจนต์ AI ทั้ง 9 ตัว — ดูได้ว่าใครกำลังทำงาน, สั่งงานผ่าน chat ในตัว, ใช้ CLI provider ไหนก็ได้ (Claude / Codex / GPT / Echo demo) และวัดผลแบบ JRPG (level up, gold, shop, boss fight)
 
 ![status: personal-project](https://img.shields.io/badge/status-personal-purple)
 ![stack: node+react+sse](https://img.shields.io/badge/stack-node%20%7C%20react%20%7C%20sse-9d5cff)
@@ -10,23 +10,37 @@
 
 ## ทำอะไรได้
 
-- **The Office** — แสดงการ์ดของ 9 เอเจนต์ทั้งหมด คลิกเพื่อดูรายละเอียด
-- **Live Animation** — การ์ดของเอเจนต์ที่กำลังทำงาน (busy) จะเรืองทอง + มี scan line ไหล + typing dots
-- **Live Activity Feed** — event stream แบบ real-time ของ tool calls ทุกตัว (Read, Edit, Bash, Agent, ...)
-- **Agent Roster** — หน้าแสดงโปรไฟล์เอเจนต์ครบถ้วน พร้อม radar chart บุคลิกภาพ + skill levels
-- **Multi-project aware** — Hook ติดตั้งแบบ global → Claude Code เปิดที่โปรเจคไหนก็ tracking ได้
-- **Smart persona mapping** — auto-map subagent_type (เช่น "UI Designer") → persona (Emi) ตาม regex rules
+**Live monitor**
+- **The Office** — การ์ด 9 เอเจนต์ พร้อมสถานะเรียลไทม์ (busy / active / idle / offline)
+- **Live Activity Feed** — event stream ของ tool calls ทุกตัว (Read, Edit, Bash, Agent, …)
+- **Adventure Mode** — boss fight ที่ HP ลดลงตามจำนวน token ที่ทีมใช้
+- **Adventurer's Guild** — หน้า dashboard ธีม guild hall (quests / live agents / loot)
+- **Multi-project aware** — Hook ติดตั้งแบบ global → Claude Code เปิดที่โปรเจคไหนก็เห็น
+
+**สั่งงานเอเจนต์ในตัว**
+- **Notes inbox** (`/#/notes`) — จดไอเดีย เลือกเอเจนต์ คุยใน chat ปกติ ได้ประวัติเก็บใน `~/.c-office/notes.json`
+- **Inline chat indicators** — เอเจนต์กำลัง **คิด / พิมพ์ / ใช้เครื่องมือ** มี dot animation + เฟืองหมุนพร้อม label เครื่องมือ (เช่น "กำลังรันคำสั่ง", "กำลังค้นเว็บ")
+- **CLI provider abstraction** — เลือก provider ได้: `echo` (built-in demo, ไม่ต้องลงอะไร), `claude` (Claude Code CLI), `codex` (OpenAI Codex CLI), `gpt` (sgpt/gpt/chatgpt)
+- **Send to Orchestra** — ปุ่มบน dashboard ยิง multi-agent run ผ่าน Anthropic Agent SDK; Orchestra จะ delegate ให้ Nana → Luna → Emi อัตโนมัติ
+- **`.claude/agents/*.md`** — persona definition ใช้ผ่าน Task tool ใน Claude Code CLI ปกติได้เลย
+
+**RPG progression**
+- **Levels** — เอเจนต์ +1 level ทุก task ที่สำเร็จ
+- **Gold + Shop** (`/#/shop`) — ซื้อ skill / item / unlock เอเจนต์ใหม่ ผ่าน reward จาก usage จริง
+- **Skills tree** — ดู skill mastery ของแต่ละเอเจนต์
+
+**Auth ที่ไม่ต้องตั้ง env var**
+- **OAuth-first credential store** (`~/.c-office/credentials.json`) AES-256-GCM ที่เครื่อง
+- **Settings → Connections** — connect Anthropic (อ่านจาก `~/.claude/.credentials.json` หลัง `claude login`), Google PKCE OAuth สำหรับ Gemini Imagen, paste token สำหรับ Replicate / OpenAI
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
-| Backend | Node 20+ · Express · chokidar (file watcher) · SSE |
-| Frontend | React 18 (UMD) · Babel Standalone (in-browser JSX) |
-| Data source | Hook payloads ที่ POST มาจาก Claude Code + JSONL transcripts |
-| Storage | In-memory (rolling buffer 2000 events) + no DB |
-
-ไม่มี build step — เปิด server ปุ๊บใช้ได้ปั๊บ
+| Backend | Node 20+ ESM · Express · chokidar · SSE · `@anthropic-ai/claude-agent-sdk` · `@google/genai` |
+| Frontend | React 18 (UMD) · Babel Standalone (in-browser JSX) · ไม่มี build step |
+| Data sources | Hook payloads + JSONL transcripts ของ Claude Code |
+| Storage | In-memory (rolling buffer 2000 events) + ไฟล์เล็กๆ ใน `~/.c-office/` |
 
 ---
 
@@ -38,121 +52,172 @@ git clone <this-repo>
 cd c-office
 npm install
 
-# 2. รัน dev server (node --watch จะ restart เมื่อแก้ server code)
+# 2. รัน dev server (auto-restart เมื่อแก้โค้ด server)
 npm run dev
 # → http://127.0.0.1:7878
 
 # 3. ติดตั้ง hooks เข้า ~/.claude/settings.json
 npm run install-hooks
 
-# 4. เปิด Claude Code ที่ไหนก็ได้ — แดชบอร์ดจะเห็นทันที
+# 4. เปิด Claude Code ที่ไหนก็ได้ — แดชบอร์ดเห็นทันที
 claude
 ```
 
-### Uninstall hooks
+### ใช้ Send to Orchestra (multi-agent run)
 
-```bash
-npm run uninstall-hooks
-```
+1. ไป **Settings → Connections** กด **Connect Anthropic** (ต้อง `claude login` มาก่อน)
+2. กลับไป Dashboard → ใส่ goal ในกล่อง "Send to Orchestra" → กด **Send**
+3. Orchestra จะ delegate ให้เอเจนต์ที่เกี่ยวข้องตามลำดับ; ดู progress ใน feed
 
-### Production start (ไม่มี auto-reload)
+### สั่งงานผ่าน Notes (inline chat)
 
-```bash
-npm start
-```
+1. ไป `/#/notes` → กด ➕ สร้าง note
+2. เลือก persona + provider (echo / claude / codex / gpt)
+3. พิมพ์ message → กด **ส่ง** → คำตอบโผล่ใน chat thread พร้อม indicator
 
 ---
 
 ## 9 Personas
 
-ทุกเซสชันของ Claude Code จะถูก map ไปยัง persona ตัวใดตัวหนึ่งจาก 9 ตัว โดยใช้ `subagent_type` ของ Task/Agent tool (สำหรับ subagent) หรือ interactive session (→ Orchestra เสมอ)
-
-| # | Persona | Role | Rarity | ดูดมาจากเอเจนต์ประเภทไหน |
+| # | Persona | id (อย่าสับสน) | Role | Rarity |
 |---|---|---|---|---|
-| 1 | **Orchestra** | Maestro · Lead Conductor | SSR | Interactive sessions + `Plan`, Product Manager |
-| 2 | **Aira** | Mentor · Knowledge Architect | SSR | Training, study-abroad, book author, developer advocate, ZK steward |
-| 3 | **Luna** | Scribe · Content Lead | SSR | Content Creator, Technical Writer, Narrative Designer, Proposal |
-| 4 | **Vivi** | Sentinel · Audit & Security | SSR | Security Engineer, Code Reviewer, Compliance Auditor, QA Testing |
-| 5 | **Kira** | Builder · Code Forge | SR | Backend/Frontend/Mobile/Firmware/Solidity/AI Engineer |
-| 6 | **Miku** | Growth · Multi-platform Strategist | SR | TikTok, Douyin, SEO, Paid Media, Sales, Growth Hacker |
-| 7 | **Emi** | Studio · Visual Craft | SR | UI Designer, Brand Guardian, Unity/Unreal/Godot, XR, Video Editor |
-| 8 | **Nana** | Intel · Insights Analyst | R | Trend Researcher, UX Researcher, Analytics, Benchmarking |
-| 9 | **Ori** | Operations · DevOps Lead | R | DevOps, SRE, Workflow, Project Manager, Incident Response |
+| 1 | **Orchestra** | `orchestra` | Maestro · Lead Conductor | SSR |
+| 2 | **Aira** | `astra` | Mentor · Knowledge Architect | SSR |
+| 3 | **Luna** | `lumen` | Scribe · Content Lead | SSR |
+| 4 | **Vivi** | `vex` | Sentinel · Audit & Security | SSR |
+| 5 | **Kira** | `kai` | Builder · Code Forge | SR |
+| 6 | **Miku** | `mira` | Growth · Multi-platform Strategist | SR |
+| 7 | **Emi** | `echo` | Studio · Visual Craft | SR |
+| 8 | **Nana** | `nyx` | Intel · Insights Analyst | R |
+| 9 | **Ori** | `orbit` | Operations · DevOps Lead | R |
 
-รายละเอียดเต็ม (personality matrix, skills, tagline): `server/mapping/personas.js`
+> ⚠️ **persona id ≠ display name** — ในโค้ดใช้ `id` (เช่น `nyx`, `lumen`) ในเอกสารใช้ `name` (เช่น Nana, Luna). routing rules อยู่ใน `server/mapping/personas.js`.
 
-### ตัวอย่าง Status ของการ์ด
+### Status ของการ์ด
 
 | State | ความหมาย | Visual |
 |---|---|---|
-| `busy` | กำลังรัน Task/Agent subagent หรือใช้ tool ภายใน 8 วิล่าสุด | กรอบทอง + scan line + typing dots + หายใจ |
-| `active` | มี session สด (Claude เปิดอยู่) | กรอบเขียวนุ่มๆ + shimmer ช้า |
+| `busy` | กำลังรัน Task/Agent หรือใช้ tool ภายใน 8 วิล่าสุด | กรอบทอง + scan line + dots + หายใจ |
+| `active` | มี session สด | กรอบเขียวนุ่มๆ + shimmer ช้า |
 | `idle` | ไม่มี session, ไม่ทำงาน | การ์ดเรียบๆ หรี่เล็กน้อย |
-| `offline` | ไม่ถูกเรียกใช้ | grayscale + หรี่ลงมาก |
+| `offline` | ไม่ถูกเรียกใช้ | grayscale |
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────┐   POST /hooks/event    ┌─────────────────────┐
-│  Claude Code CLI │ ─────────────────────► │                     │
-│  (any session,   │   (PreToolUse,         │   Express server    │
-│   any project)   │    PostToolUse,        │   (:7878)           │
-└──────────────────┘    SessionStart, ...)  │                     │
-                                            │   • state.js        │
-┌──────────────────┐   chokidar watches     │     - sessions      │
-│  ~/.claude/      │ ─────────────────────► │     - tasks         │
-│   projects/**/   │   (JSONL transcripts)  │     - events ring   │
-│   *.jsonl        │                        │     - personaStatus │
-└──────────────────┘                        │                     │
-                                            │   • SSE bus         │
-                                            └──────────┬──────────┘
-                                                       │ /api/stream
-                                                       ▼
-                                            ┌─────────────────────┐
-                                            │  React Dashboard    │
-                                            │  (gacha-style UI)   │
-                                            └─────────────────────┘
+┌──────────────────┐   POST /hooks/event   ┌─────────────────────────────┐
+│ Claude Code CLI  │ ────────────────────► │                             │
+│ (any session)    │                       │   Express :7878             │
+└──────────────────┘                       │                             │
+                                           │   • state.js (in-memory)    │
+┌──────────────────┐  chokidar watches     │     - sessions / tasks      │
+│ ~/.claude/       │ ────────────────────► │     - events RingBuffer     │
+│  projects/**/    │                       │     - runs (orchestrator)   │
+│  *.jsonl         │                       │     - notes inbox           │
+└──────────────────┘                       │     - inventory (gold/lvl)  │
+                                           │                             │
+┌──────────────────┐  POST /api/task       │   • SSE bus  → /api/stream  │
+│ Browser UI       │ ────────────────────► │   • OAuth creds store       │
+│ (Send to Orch.)  │                       │     ~/.c-office/            │
+└──────────────────┘                       │   • Provider runner         │
+                                           │     (echo / claude / codex) │
+                                           └──────────────┬──────────────┘
+                                                          │ SSE
+                                                          ▼
+                                           ┌─────────────────────────────┐
+                                           │   React Dashboard           │
+                                           │   - Guild Hall (default)    │
+                                           │   - Mission Control         │
+                                           │   - Notes inbox + chat      │
+                                           │   - Shop / Skills / Memory  │
+                                           │   - Adventure (boss fight)  │
+                                           └─────────────────────────────┘
 ```
 
-### ไฟล์สำคัญ
+### โครงไฟล์
 
 | Path | หน้าที่ |
 |---|---|
-| `server/index.js` | Express + SSE bootstrap |
-| `server/state.js` | In-memory state + event bus + busy-state decay logic |
-| `server/api/hooks.js` | รับ POST จาก Claude Code hooks → normalize → push event |
-| `server/api/stream.js` | SSE endpoint ส่ง event ให้ frontend |
-| `server/watchers/sessions.js` | Watch session files (start/end lifecycle) |
-| `server/watchers/transcripts.js` | Tail JSONL transcripts → replay tool events |
-| `server/mapping/personas.js` | **9 persona definitions + regex routing rules** |
-| `server/mapping/pricing.js` | Token pricing per model |
+| `server/index.js` | Express + SSE bootstrap, รวม route ทุกตัว |
+| `server/state.js` | In-memory state · event bus · busy decay · runs / dispatches / inventory |
+| `server/api/hooks.js` | POST /hooks/event — รับ Claude Code hook payload |
+| `server/api/stream.js` | SSE endpoint (`event`, `task`, `dispatch`, `run`, `auth.status`, `inventory`, …) |
+| `server/api/notes.js` | Notes inbox CRUD + dispatch |
+| `server/api/task.js` | `/api/task` — server-side multi-agent run (Send to Orchestra) |
+| `server/api/auth.js` | OAuth + paste-token endpoints (`/auth/*`, `/api/auth/*`) |
+| `server/api/shop.js` | Buy / equip / use / grant-victory |
+| `server/agents/runner.js` | Orchestra orchestrator loop (Anthropic Agent SDK + delegate tool) |
+| `server/agents/personas.js` | System prompts + tool allowlists ของแต่ละ persona |
+| `server/agents/image.js` | Image-gen adapter (Gemini / Replicate / OpenAI) |
+| `server/auth/credentials.js` | AES-256-GCM credential store (~/.c-office/) |
+| `server/auth/{anthropic,google,oauth}.js` | OAuth flows ต่อ provider |
+| `server/runner/notes.js` | Notes persistence (JSON file) |
+| `server/runner/providers.js` | CLI provider abstraction (echo / claude / codex / gpt) |
+| `server/runner/scene.js` | Scene script builder (legacy; ใช้ใน export ของ dispatch แต่ overlay ปิดแล้ว) |
+| `server/orchestration/shop.js` | Inventory + level + reward bookkeeping |
+| `server/watchers/sessions.js` | Watch session files |
+| `server/watchers/transcripts.js` | Tail JSONL transcripts |
+| `server/mapping/personas.js` | **9 personas + regex routing rules** |
+| `server/mapping/pricing.js` | Token pricing per Claude model |
 | `server/install-hooks.js` | แก้ `~/.claude/settings.json` ใส่ hook entries |
-| `hooks/post-event.sh` | Fire-and-forget shell script ที่ Claude Code เรียก (0.4s timeout) |
-| `public/` | Frontend — JSX transpiled ในเบราว์เซอร์ด้วย Babel Standalone |
+| `hooks/post-event.sh` | Fire-and-forget hook script (0.4s timeout) |
+| `.claude/agents/*.md` | Subagent definitions ใช้ผ่าน Task tool ใน Claude Code |
+| `public/` | Frontend — JSX transpile ในเบราว์เซอร์ผ่าน Babel Standalone |
 
 ### Busy State Decay
 
-เอเจนต์จะกลายเป็น `busy` เมื่อ:
+เอเจนต์เป็น `busy` เมื่อ:
 1. มี Task/Agent tool spawn subagent (จาก `startTask`)
-2. **หรือ** มี tool use ของเอเจนต์นั้นภายใน 8 วินาทีที่ผ่านมา (`lastToolActivity` map)
-3. clear ทันทีเมื่อ `Stop` hook ยิง (turn จบ)
+2. **หรือ** มี tool use ของ persona นั้นภายใน 8 วินาทีล่าสุด (`lastToolActivity`)
+3. **หรือ** มี run ของ orchestrator ที่ delegate มาให้ persona นี้กำลังทำงาน
+4. clear ทันทีเมื่อ `Stop` hook ยิง
 
-Background tick (ทุก 2 วิ) ทำหน้าที่ re-broadcast สถานะเมื่อ busy หมดอายุ → การ์ดบน UI เปลี่ยนกลับเป็น `active`/`idle` โดยอัตโนมัติ
+Background tick (ทุก 2 วิ) re-broadcast สถานะเมื่อ busy หมดอายุ.
 
 ---
 
 ## API
 
+### Read
+
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/` | GET | หน้า dashboard |
-| `/api/state` | GET | Snapshot ทั้งระบบ (personas, sessions, events, tasks, stats) |
-| `/api/stream` | GET (SSE) | Event stream (`event`, `stats`, `persona.status`, `task`) |
-| `/api/memory` | GET | Memory graph (nodes + edges) |
-| `/api/agents/:id/history?limit=N` | GET | ประวัติ event ของเอเจนต์ตัวเดียว |
-| `/hooks/event` | POST | รับ payload จาก Claude Code hook (internal) |
+| `/` | GET | Dashboard |
+| `/api/state` | GET | Snapshot ทั้งระบบ (personas, sessions, events, tasks, runs, dispatches, stats, inventory, edges) |
+| `/api/stream` | GET (SSE) | Live events: `event`, `session.start`, `session.end`, `task`, `dispatch`, `run`, `stats`, `persona.status`, `persona.levels`, `auth.status`, `inventory` |
+| `/api/agents/:id/history?limit=N` | GET | ประวัติ event ของ persona |
+| `/api/memory` | GET | Memory graph (cached 30s) |
+| `/api/notes` | GET | Notes inbox |
+| `/api/notes/:id` | GET | Note detail (พร้อม messages) |
+| `/api/notes/providers` | GET | Provider catalog (echo/claude/codex/gpt) + default + available |
+| `/api/auth/status` | GET | สถานะ connection ทุก provider |
+| `/api/settings` | GET | Safe view ของ ~/.claude/settings.json |
+| `/api/shop` | GET | Inventory + catalog |
+| `/api/tasks` | GET | Recent orchestrator runs |
+| `/api/task/:run_id` | GET | Run detail |
+
+### Write
+
+| Endpoint | Method | Body |
+|---|---|---|
+| `/hooks/event` | POST | hook payload (called by `post-event.sh`) |
+| `/api/state/reset` | POST | clear events / dispatches / runs / dedupe |
+| `/api/levels/reset` | POST | reset persona levels เป็น 1 |
+| `/api/notes` | POST | `{ title, body, tag, agentId }` |
+| `/api/notes/:id` | PATCH | partial update |
+| `/api/notes/:id` | DELETE | |
+| `/api/notes/:id/message` | POST | `{ content, role }` append |
+| `/api/notes/:id/dispatch` | POST | `{ provider, agentId, message }` รัน CLI provider |
+| `/api/task` | POST | `{ goal }` — Send to Orchestra (Anthropic Agent SDK) |
+| `/api/auth/token` | POST | `{ provider, token, clientId? }` paste credentials |
+| `/api/auth/disconnect` | POST | `{ provider }` |
+| `/auth/anthropic/connect` | GET | mirror `~/.claude/.credentials.json` เข้า store |
+| `/auth/google/start` | GET | PKCE OAuth flow |
+| `/auth/google/callback` | GET | OAuth callback |
+| `/api/shop/buy` | POST | ซื้อจาก catalog |
+| `/api/shop/unequip` / `/api/shop/use` / `/api/shop/grant-victory` | POST | management |
 
 ---
 
@@ -160,77 +225,118 @@ Background tick (ทุก 2 วิ) ทำหน้าที่ re-broadcast �
 
 ### เปลี่ยน persona mapping
 
-แก้ `server/mapping/personas.js`:
+แก้ `server/mapping/personas.js` — `PERSONA_RULES` ประเมินตามลำดับ first-match-wins:
 
 ```js
 const PERSONA_RULES = [
-  // เพิ่มกติกาใหม่ขึ้นก่อน (first match wins)
-  { match: /(my-special-agent|another-pattern)/i, persona: 'kai' },
+  { match: /(my-special-agent)/i, persona: 'kai' },  // ใส่ rule ใหม่ขึ้นบน
   // ...กติกาเดิม
 ];
 ```
 
-รูลจะเช็คทั้ง display name ("My Special Agent") และ slug form ("my-special-agent") เพราะ `mapPersona()` normalize input (lowercase + spaces → hyphens) ก่อน
+`mapPersona()` normalize input (lowercase + spaces → hyphens) ก่อน — รูลเดียวจัดการทั้ง display name ("UI Designer") และ slug ("ui-designer") ได้.
 
-### แทนที่ภาพ persona
+### เปลี่ยนภาพ persona
 
-1. วางไฟล์ PNG ลง `public/images/`
-2. แก้ `image` field ของ persona นั้นใน `personas.js` ให้ชี้ path ใหม่
-
-### เพิ่ม/แก้ skills, personality, tagline
-
-แก้ persona object ใน `personas.js` — frontend อ่านจาก API state ตรงๆ ไม่ต้อง rebuild
+วาง PNG ลง `public/images/` แล้วแก้ field `image` ของ persona นั้นใน `personas.js`.
 
 ### ปรับ busy-window
 
-`server/state.js`:
-
 ```js
-const BUSY_WINDOW_MS = 8000;  // ปรับจำนวนวินาทีที่ถือว่ายัง busy
+// server/state.js
+const BUSY_WINDOW_MS = 8000;
 ```
+
+### CLI provider override
+
+```bash
+# argv template, ${PROMPT} จะถูกแทนที่
+C_OFFICE_CLAUDE_CMD='claude -p ${PROMPT} --model sonnet'
+C_OFFICE_CODEX_CMD='codex exec ${PROMPT}'
+C_OFFICE_GPT_CMD='sgpt ${PROMPT}'
+
+# timeout (default 180s)
+C_OFFICE_PROVIDER_TIMEOUT_MS=300000              # ทุก provider
+C_OFFICE_CLAUDE_TIMEOUT_MS=120000                # เฉพาะ claude
+```
+
+### เพิ่มเอเจนต์ที่ใช้ใน Claude Code CLI
+
+วางไฟล์ markdown ใน `.claude/agents/<name>.md` พร้อม frontmatter:
+
+```markdown
+---
+name: my-agent
+description: ใช้สำหรับ ...
+tools: Read, Write, Bash
+model: sonnet
+---
+You are ... (system prompt)
+```
+
+แล้วเรียกผ่าน Task tool ใน session: `Task({ subagent_type: "my-agent", prompt: "..." })` — c-office จะเห็น activity ผ่าน hook events อัตโนมัติ.
+
+---
+
+## Environment variables
+
+| Name | Default | Purpose |
+|---|---|---|
+| `PORT` | `7878` | Server port (ถ้าเปลี่ยน ต้องแก้ URL ใน `hooks/post-event.sh` ด้วย) |
+| `HOST` | `127.0.0.1` | Bind address |
+| `C_OFFICE_REPLAY` | `0` | `=1` เพื่อ replay JSONL ทั้งหมดตอน boot |
+| `C_OFFICE_NOTES_PATH` | `~/.c-office/notes.json` | ไฟล์เก็บ notes inbox |
+| `C_OFFICE_CRED_DIR` | `~/.c-office` | โฟลเดอร์ credential store |
+| `C_OFFICE_PROVIDER_TIMEOUT_MS` | `180000` | CLI provider timeout (ทุก provider) |
+| `C_OFFICE_CLAUDE_TIMEOUT_MS` / `_CODEX_` / `_GPT_` | inherit | ต่อ provider |
+| `C_OFFICE_CLAUDE_CMD` / `_CODEX_` / `_GPT_` | `claude -p ${PROMPT}` | argv template |
+| `IMAGE_PROVIDER` | `gemini` | image gen provider (`gemini` / `replicate` / `openai`) |
+| `COFFICE_IMAGE_DIR` | `public/generated` | output dir สำหรับ generated images |
+
+> 💡 **ไม่ต้องตั้ง `ANTHROPIC_API_KEY` / `REPLICATE_API_TOKEN`** — credentials เก็บที่ `~/.c-office/credentials.json` (encrypted) ผ่าน Settings → Connections ใน UI.
 
 ---
 
 ## Troubleshooting
 
-### ไม่เห็นเอเจนต์ออนไลน์
+### Dashboard ไม่เห็น activity
 
 ```bash
-# 1. ยืนยัน hook ติดตั้งแล้ว
-grep -c 'c-office' ~/.claude/settings.json
-# ควรได้ ≥ 5 (SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse)
+# ยืนยัน hooks ติดตั้งครบ
+grep -c 'c-office' ~/.claude/settings.json   # ควรได้ ≥ 5
 
-# 2. ยืนยัน server รันอยู่
+# ยืนยัน server รันอยู่
 lsof -iTCP:7878 -sTCP:LISTEN
 
-# 3. ดู hook endpoint ยิงถึงไหม
-curl -i -X POST http://127.0.0.1:7878/hooks/event \
+# ทดสอบ hook endpoint
+curl -X POST http://127.0.0.1:7878/hooks/event \
   -H 'X-COffice-Event: SessionStart' \
   -H 'Content-Type: application/json' \
   --data '{"session_id":"test","pid":123}'
-# ควรได้ 200 {"ok":true}
+# → {"ok":true}
 ```
 
-### เอเจนต์แสดง `idle` ทั้งที่กำลังทำงาน
+### Persona idle ทั้งที่กำลังทำงาน
 
-ตรวจว่า persona routing ทำถูกต้อง:
+routing miss — ทดสอบ:
 
 ```bash
-node -e "
-import('./server/mapping/personas.js').then(m => {
-  console.log(m.mapPersona('Your Subagent Name', 'agent'));
-});"
+node -e "import('./server/mapping/personas.js').then(m => console.log(m.mapPersona('Your Subagent Name', 'agent')))"
 ```
 
-ถ้า map ผิด persona → ปรับ regex ใน `PERSONA_RULES`
+ถ้าผิด → เพิ่ม regex ใน `PERSONA_RULES` (ใส่ rule ใหม่ก่อน).
 
-### SSE disconnect หลัง restart server
+### Provider timeout
 
-Frontend มี auto-reconnect อยู่แล้ว (ทุก 2 วิ) — ถ้ายังไม่ update ให้ hard-reload หน้าเว็บ (`Cmd+Shift+R`)
+CLI ใช้เวลานานกว่า default 180s → set `C_OFFICE_PROVIDER_TIMEOUT_MS=300000` (5 นาที).
+
+### Send to Orchestra ใช้ไม่ได้
+
+ต้อง connect Anthropic ก่อน → Settings → Connections → Connect Anthropic (ต้อง `claude login` มาก่อน).
 
 ### Port 7878 ชน
 
-แก้ port ใน `server/index.js` (ตัวแปร `PORT`) + ใน `hooks/post-event.sh` (URL)
+แก้ `server/index.js` (`PORT`) + `hooks/post-event.sh` (URL).
 
 ---
 
@@ -240,10 +346,12 @@ Frontend มี auto-reconnect อยู่แล้ว (ทุก 2 วิ) —
 npm run dev              # node --watch (auto-restart on server changes)
 npm start                # production start
 npm run install-hooks    # write hook entries → ~/.claude/settings.json
-npm run uninstall-hooks  # remove them
+npm run uninstall-hooks  # remove c-office hook entries
 ```
 
-Frontend files (`public/*.jsx`) ไม่ต้อง restart — browser โหลดตรงๆ ผ่าน Babel Standalone
+Frontend (`public/*.jsx`) ไม่ต้อง restart — browser โหลดผ่าน Babel Standalone.
+
+ไม่มี test suite หรือ linter — ทดสอบการเปลี่ยนแปลงโดยรัน `npm run dev` แล้วยิง endpoint หรือคลิกใน UI.
 
 ---
 
@@ -257,4 +365,4 @@ Private / personal use. Not for redistribution.
 
 - Concept & persona art: custom illustrations
 - Framework: Claude Code CLI by Anthropic
-- UI inspiration: mobile gacha RPG collection screens
+- UI inspiration: mobile gacha RPG collection screens · adventurer's guild boards
