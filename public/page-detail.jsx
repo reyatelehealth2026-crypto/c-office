@@ -1,68 +1,248 @@
-/* ===== AGENT DETAIL PAGE ===== */
+/* ===== AGENT DETAIL PAGE — Chat-Style Interface ===== */
 const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
-  const [tab, setTab] = React.useState('personality');
-  const [flipped, setFlipped] = React.useState(false);
+  const [tab, setTab] = React.useState('chat');
+  const [chatInput, setChatInput] = React.useState('');
+  const [chatMessages, setChatMessages] = React.useState([]);
+  const [busy, setBusy] = React.useState(false);
 
   const tabs = [
-    { id: 'personality', label: 'Personality' },
-    { id: 'skills', label: 'Skills' },
-    { id: 'memory', label: 'Memory' },
-    { id: 'history', label: 'History' },
+    { id: 'chat',         label: 'Chat' },
+    { id: 'personality',  label: 'Profile' },
+    { id: 'skills',       label: 'Skills' },
+    { id: 'history',      label: 'History' },
   ];
+
+  // Quick action buttons based on agent role
+  const quickActions = React.useMemo(() => {
+    const id = agent.id;
+    const actions = [];
+    if (id === 'nana' || id === 'mira') {
+      actions.push({ label: 'Trending Content', prompt: 'Research trending content in our niche' });
+      actions.push({ label: 'Analytics', prompt: 'Analyze our recent marketing performance' });
+      actions.push({ label: 'Campaign', prompt: 'Draft a marketing campaign brief' });
+    } else if (id === 'emi' || id === 'vex' || id === 'kai') {
+      actions.push({ label: 'Bug Report', prompt: 'Investigate and fix the reported bug' });
+      actions.push({ label: 'Feature', prompt: 'Implement the new feature as described' });
+      actions.push({ label: 'Tests', prompt: 'Write tests for the specified module' });
+    } else if (id === 'luna' || id === 'lumen' || id === 'astra') {
+      actions.push({ label: 'Draft Post', prompt: 'Draft a blog post on the specified topic' });
+      actions.push({ label: 'Summary', prompt: 'Summarize the provided document' });
+      actions.push({ label: 'Email', prompt: 'Write a professional email' });
+    } else if (id === 'nyx') {
+      actions.push({ label: 'Research', prompt: 'Research the specified topic' });
+      actions.push({ label: 'Analysis', prompt: 'Analyze the provided data' });
+    } else if (id === 'echo') {
+      actions.push({ label: 'Design', prompt: 'Create a design concept' });
+      actions.push({ label: 'Visual', prompt: 'Generate a visual asset' });
+    } else if (id === 'orchestra') {
+      actions.push({ label: 'Orchestrate', prompt: 'Break down this goal and delegate to specialist agents' });
+      actions.push({ label: 'Status', prompt: 'Summarize current status of all active tasks' });
+    } else {
+      actions.push({ label: 'Task', prompt: 'Help me with this task' });
+    }
+    return actions;
+  }, [agent.id]);
+
+  const sendChat = (text) => {
+    const msg = text || chatInput.trim();
+    if (!msg || busy) return;
+    setBusy(true);
+    const userMsg = { id: Date.now(), role: 'user', content: msg, ts: Date.now() };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+
+    // Dispatch to the agent via the scene system
+    window.openScene({
+      agentId: agent.id,
+      message: msg,
+      provider: window.PROVIDERS?.default || 'echo',
+      title: msg.slice(0, 60),
+      body: msg,
+      tag: 'chat',
+    });
+    setBusy(false);
+  };
 
   return (
     <div>
-      <div style={{marginBottom: 18, display:'flex', alignItems:'center', gap:10}}>
-        <button className="btn ghost" onClick={onBack} style={{padding:'6px 10px'}}>← Roster</button>
+      {/* Back button */}
+      <div style={{marginBottom: 14, display:'flex', alignItems:'center', gap:10}}>
+        <button className="btn ghost" onClick={onBack} style={{padding:'6px 10px'}}>← Back</button>
         <span className="mono-s">/ agents / {agent.id}</span>
       </div>
 
-      <div className="grid" style={{gridTemplateColumns: '340px 1fr', gap: 24}}>
-        {/* LEFT: card + quick stats */}
-        <div className="stack" style={{gap: 16}}>
-          <div onClick={() => setFlipped(f => !f)} style={{cursor:'pointer'}}>
-            <GachaCard agent={agent} variant="foil"/>
+      <div className="grid" style={{gridTemplateColumns: '300px 1fr', gap: 20}}>
+        {/* LEFT: Agent Info Sidebar */}
+        <div className="stack" style={{gap: 14}}>
+          {/* Agent header card */}
+          <div className="panel" style={{padding: 20, textAlign: 'center'}}>
+            <div style={{
+              width: 72, height: 72, borderRadius: 14, overflow: 'hidden',
+              background: agent.gradient || 'var(--bg-3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 12px',
+              boxShadow: '0 8px 24px -8px rgba(0,0,0,0.4)',
+            }}>
+              {agent.image
+                ? <img src={agent.image} alt={agent.name} style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'center top'}}/>
+                : <span style={{fontFamily:'var(--font-display)', fontWeight:700, fontSize:28, color:'rgba(255,255,255,0.9)'}}>{agent.avatarInitials}</span>
+              }
+            </div>
+            <h2 style={{fontSize: 20, marginBottom: 4}}>{agent.name}</h2>
+            <div className="mono-s" style={{color:'var(--coral)', letterSpacing:'0.12em', marginBottom: 8}}>{agent.role}</div>
+            <div style={{fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 12}}>{agent.tagline}</div>
+            <div style={{display:'flex', gap:4, flexWrap:'wrap', justifyContent:'center'}}>
+              {agent.traits.map(t => <span key={t} className="badge" style={{fontSize:9}}>{t}</span>)}
+            </div>
           </div>
-          <div className="mono-s" style={{textAlign:'center', color:'var(--text-4)'}}>click card to inspect · tap tabs for full profile</div>
 
+          {/* Quick stats */}
           <div className="panel">
             <div className="panel-head"><h3>Performance</h3><div className="right">lifetime</div></div>
-            <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap:10}}>
-              <PerfStat label="Tasks completed" value={agent.stats.tasks}/>
-              <PerfStat label="Success rate" value={agent.stats.success + '%'}/>
+            <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap:8}}>
+              <PerfStat label="Tasks" value={agent.stats.tasks}/>
+              <PerfStat label="Success" value={agent.stats.success + '%'}/>
               <PerfStat label="Uptime" value={agent.stats.uptime}/>
-              <PerfStat label="Tokens used" value={agent.stats.tokens}/>
+              <PerfStat label="Tokens" value={agent.stats.tokens}/>
             </div>
           </div>
 
+          {/* Current task */}
           <div className="panel">
             <div className="panel-head"><h3>Current Task</h3><div className="right">{agent.status}</div></div>
-            <div style={{fontSize:13, lineHeight:1.5}}>{agent.currentTask}</div>
-            <div className="divider"/>
-            <div className="row" style={{gap:8, flexWrap:'wrap'}}>
-              {agent.traits.map(t => <span key={t} className="badge">{t}</span>)}
-            </div>
-            <div style={{marginTop:10}} className="mono-s">tone · {agent.tone}</div>
+            <div style={{fontSize:12, lineHeight:1.5}}>{agent.currentTask || 'No active task'}</div>
           </div>
         </div>
 
-        {/* RIGHT: tabbed content */}
+        {/* RIGHT: Tabbed content area */}
         <div>
-          <div style={{display:'flex', gap:4, background:'var(--panel)', border:'1px solid var(--border)', borderRadius: 12, padding: 4, marginBottom: 18, width:'fit-content'}}>
+          {/* Tab bar */}
+          <div style={{
+            display:'flex', gap:4, background:'var(--panel)', border:'1px solid var(--border)',
+            borderRadius: 10, padding: 3, marginBottom: 16, width:'fit-content',
+          }}>
             {tabs.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 style={{
-                  padding:'8px 16px', fontSize:12, borderRadius:8, border:'none', cursor:'pointer',
-                  fontFamily:'var(--font-mono)', letterSpacing:'0.1em', textTransform:'uppercase',
-                  background: tab === t.id ? 'linear-gradient(135deg, var(--purple), #7c3aed)' : 'transparent',
-                  color: tab === t.id ? '#fff' : 'var(--text-3)'
+                  padding:'7px 14px', fontSize:12, borderRadius:7, border:'none', cursor:'pointer',
+                  fontFamily:'var(--font-mono)', letterSpacing:'0.08em', textTransform:'uppercase',
+                  background: tab === t.id ? 'linear-gradient(135deg, var(--coral), var(--coral-2))' : 'transparent',
+                  color: tab === t.id ? '#fff' : 'var(--text-3)',
+                  transition: 'all 120ms',
                 }}>{t.label}</button>
             ))}
           </div>
 
+          {/* Chat tab */}
+          {tab === 'chat' && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              height: 'calc(100vh - 220px)',
+              background: 'var(--panel)',
+              border: '1px solid var(--border)',
+              borderRadius: 14,
+              overflow: 'hidden',
+            }}>
+              {/* Quick actions */}
+              <div style={{
+                padding: '12px 16px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}>
+                {quickActions.map((action, i) => (
+                  <button key={i} className="btn" onClick={() => sendChat(action.prompt)}
+                    style={{fontSize: 11, padding: '5px 10px'}}>
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Chat messages area */}
+              <div style={{
+                flex: 1,
+                overflow: 'auto',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+              }}>
+                {chatMessages.length === 0 && (
+                  <div className="muted" style={{textAlign:'center', padding:'40px 20px', fontSize:13}}>
+                    Send a message or use a quick action above to start working with {agent.name}
+                  </div>
+                )}
+                {chatMessages.map((m, i) => (
+                  <div key={m.id || i} style={{
+                    display: 'flex',
+                    gap: 10,
+                    alignItems: 'flex-start',
+                    flexDirection: m.role === 'user' ? 'row-reverse' : 'row',
+                  }}>
+                    {m.role === 'user' ? (
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 8,
+                        background: 'linear-gradient(135deg, var(--coral), var(--orange))',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 12, color: '#fff',
+                        flexShrink: 0,
+                      }}>P</div>
+                    ) : (
+                      <AgentDot agent={agent} size={28}/>
+                    )}
+                    <div style={{
+                      maxWidth: '70%',
+                      padding: '10px 14px',
+                      borderRadius: 12,
+                      background: m.role === 'user'
+                        ? 'linear-gradient(135deg, rgba(255,107,107,0.15), rgba(238,90,36,0.08))'
+                        : 'var(--bg-2)',
+                      border: `1px solid ${m.role === 'user' ? 'rgba(255,107,107,0.25)' : 'var(--border)'}`,
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      color: 'var(--text)',
+                    }}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Chat input */}
+              <div style={{
+                padding: '12px 16px',
+                borderTop: '1px solid var(--border)',
+                display: 'flex',
+                gap: 10,
+              }}>
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                  placeholder={`Message ${agent.name}...`}
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    background: 'var(--bg-2)',
+                    color: 'var(--text)',
+                    fontSize: 13,
+                    outline: 'none',
+                    fontFamily: 'var(--font-body)',
+                  }}
+                />
+                <button className="btn primary" onClick={() => sendChat()} disabled={!chatInput.trim() || busy}>
+                  Send
+                </button>
+              </div>
+            </div>
+          )}
+
           {tab === 'personality' && <PersonalityPanel agent={agent}/>}
           {tab === 'skills' && <SkillsPanel agent={agent}/>}
-          {tab === 'memory' && <MemoryPanel agent={agent} onOpenAgent={onOpenAgent} compact/>}
           {tab === 'history' && <HistoryPanel agent={agent}/>}
         </div>
       </div>
@@ -71,18 +251,18 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
 };
 
 const PerfStat = ({ label, value }) => (
-  <div style={{padding:'10px 12px', background:'var(--bg-2)', borderRadius: 10, border:'1px solid var(--border)'}}>
+  <div style={{padding:'8px 10px', background:'var(--bg-2)', borderRadius: 8, border:'1px solid var(--border)'}}>
     <div className="mono-s" style={{marginBottom:2}}>{label}</div>
-    <div style={{fontFamily:'var(--font-display)', fontSize: 18, fontWeight:700}}>{value}</div>
+    <div style={{fontFamily:'var(--font-display)', fontSize: 16, fontWeight:700}}>{value}</div>
   </div>
 );
 
 const PersonalityPanel = ({ agent }) => (
-  <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap: 18}}>
+  <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap: 16}}>
     <div className="panel">
       <div className="panel-head"><h3>Personality Matrix</h3><div className="right">radar</div></div>
       <div style={{display:'flex', justifyContent:'center'}}>
-        <Radar data={agent.personality} size={300} color={agent.rarity==='SSR'?'#fbbf24':'#9d5cff'}/>
+        <Radar data={agent.personality} size={300} color="var(--coral)"/>
       </div>
     </div>
     <div className="stack">
@@ -94,8 +274,8 @@ const PersonalityPanel = ({ agent }) => (
               <span style={{fontSize:12, textTransform:'capitalize'}}>{k}</span>
               <span className="mono-s">{v}/100</span>
             </div>
-            <div style={{height: 6, background:'var(--bg-2)', borderRadius:3, overflow:'hidden'}}>
-              <div style={{height:'100%', width: v + '%', background: agent.gradient, borderRadius:3}}/>
+            <div style={{height: 5, background:'var(--bg-2)', borderRadius:3, overflow:'hidden'}}>
+              <div style={{height:'100%', width: v + '%', background: 'linear-gradient(90deg, var(--coral), var(--orange))', borderRadius:3}}/>
             </div>
           </div>
         ))}
@@ -115,18 +295,18 @@ const SkillsPanel = ({ agent }) => {
       {cats.map(c => (
         <div key={c} className="panel">
           <div className="panel-head"><h3>{c}</h3><div className="right">{agent.skills.filter(s=>s.cat===c).length} skills</div></div>
-          <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:10}}>
+          <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:8}}>
             {agent.skills.filter(s => s.cat === c).map(s => (
-              <div key={s.name} style={{padding:12, background:'var(--bg-2)', borderRadius:10, border:'1px solid var(--border)'}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom: 8}}>
-                  <div style={{fontSize:13, fontWeight:600}}>{s.name}</div>
-                  <div className="mono" style={{fontSize:11, color:'var(--gold)'}}>Lv {s.level}</div>
+              <div key={s.name} style={{padding:10, background:'var(--bg-2)', borderRadius:8, border:'1px solid var(--border)'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom: 6}}>
+                  <div style={{fontSize:12, fontWeight:600}}>{s.name}</div>
+                  <div className="mono" style={{fontSize:11, color:'var(--coral)'}}>Lv {s.level}</div>
                 </div>
-                <div style={{display:'flex', gap:3}}>
+                <div style={{display:'flex', gap:2}}>
                   {Array.from({length:10}).map((_,i) => (
                     <div key={i} style={{
-                      flex:1, height:4, borderRadius:2,
-                      background: i < s.level ? agent.gradient : 'var(--bg-3)'
+                      flex:1, height:3, borderRadius:2,
+                      background: i < s.level ? 'linear-gradient(90deg, var(--coral), var(--orange))' : 'var(--bg-3)'
                     }}/>
                   ))}
                 </div>
@@ -152,7 +332,7 @@ const HistoryPanel = ({ agent }) => {
     return () => { cancelled = true; };
   }, [agent.id]);
   const fmt = (ts) => {
-    if (!ts) return '—';
+    if (!ts) return '-';
     const dt = Date.now() - ts;
     if (dt < 0) return 'now';
     const s = Math.floor(dt/1000);
@@ -165,7 +345,7 @@ const HistoryPanel = ({ agent }) => {
   };
   return (
     <div className="panel">
-      <div className="panel-head"><h3>Mission History</h3><div className="right">{loading ? 'loading…' : `${items.length} events`}</div></div>
+      <div className="panel-head"><h3>Activity History</h3><div className="right">{loading ? 'loading...' : `${items.length} events`}</div></div>
       <div className="stack" style={{gap:0}}>
         {!loading && items.length === 0 && <div className="muted" style={{fontSize:12, padding:'14px 4px'}}>No activity yet for {agent.name}.</div>}
         {items.map((r,i) => {

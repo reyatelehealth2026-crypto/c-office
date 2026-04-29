@@ -1,109 +1,101 @@
-/* ====== SIDEBAR / SHELL ====== */
-const NAV = [
-  { id: 'dashboard', label: 'หอกิลด์', icon: '⚜', group: 'กิลด์' },
-  { id: 'notes', label: 'เควสต์', icon: '📜', group: 'กิลด์' },
-  { id: 'shop', label: 'ตลาดสมาคม', icon: '$', group: 'กิลด์' },
-  { id: 'agents', label: 'สมาชิก', icon: '◆', group: 'กิลด์' },
-  { id: 'tasks', label: 'บันทึกภารกิจ', icon: '▷', group: 'ภารกิจ' },
-  { id: 'skills', label: 'สกิล', icon: '✦', group: 'ภารกิจ' },
-  { id: 'memory', label: 'ความจำ', icon: '◎', group: 'ภารกิจ' },
-  { id: 'adventure', label: 'บอสฮันต์', icon: '⚔', group: 'ภารกิจ' },
-  { id: 'settings', label: 'ตั้งค่า', icon: '⚙', group: 'ระบบ' },
-  // Hidden — accessible via URL/localStorage as legacy fallback for old Dashboard.
-  { id: 'mission-control', label: 'Mission Control', icon: '▤', group: 'ระบบ', hidden: true },
-];
+/* ====== AGENTS ROSTER PAGE — Professional Role Categories ====== */
 
-const Sidebar = ({ page, setPage }) => {
-  const visibleNav = NAV.filter(n => !n.hidden);
-  const groups = [...new Set(visibleNav.map(n => n.group))];
-  return (
-    <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-mark"/>
-        <div>
-          <div className="brand-name">C-OFFICE</div>
-          <div className="brand-sub">สมาคมเอเจนท์</div>
-        </div>
-      </div>
-      {groups.map(g => (
-        <React.Fragment key={g}>
-          <div className="nav-group-label">{g}</div>
-          {visibleNav.filter(n => n.group === g).map(n => (
-            <div key={n.id}
-              className={`nav-item ${page === n.id ? 'active' : ''}`}
-              onClick={() => setPage(n.id)}>
-              <span className="ico" style={{fontSize:14}}>{n.icon}</span>
-              <span>{n.label}</span>
-              {n.id === 'agents' && <span className="badge" style={{marginLeft:'auto', fontSize:9}}>{AGENTS.length}</span>}
-              {n.id === 'notes' && (window.NOTES?.length || 0) > 0 && (
-                <span className="badge cyan" style={{marginLeft:'auto', fontSize:9}}>{window.NOTES.length}</span>
-              )}
-              {n.id === 'shop' && <span className="badge gold" style={{marginLeft:'auto', fontSize:9}}>ใหม่</span>}
-              {n.id === 'tasks' && TASKS.filter(t=>t.status==='running').length > 0 && (
-                <span className="badge gold" style={{marginLeft:'auto', fontSize:9}}>{TASKS.filter(t=>t.status==='running').length}</span>
-              )}
-            </div>
-          ))}
-        </React.Fragment>
-      ))}
-      <div className="sidebar-foot">
-        <div className="pilot-avatar">P</div>
-        <div className="pilot-meta">
-          <b>ผู้ควบคุม</b><br/><span>Commander</span>
-        </div>
-      </div>
-    </aside>
-  );
+/* Agent role to professional category mapping */
+const AGENT_CATEGORIES = {
+  marketing:   { icon: '📊', label: 'Marketing',   ids: ['nana', 'mira'] },
+  development: { icon: '💻', label: 'Development',  ids: ['emi', 'vex', 'kai'] },
+  research:    { icon: '🔬', label: 'Research',     ids: ['nyx'] },
+  content:     { icon: '✍️', label: 'Content',      ids: ['luna', 'lumen', 'astra'] },
+  creative:    { icon: '🎨', label: 'Creative',     ids: ['echo'] },
+  ops:         { icon: '🛰️', label: 'Operations',   ids: ['orbit'] },
 };
 
-/* ====== AGENTS ROSTER PAGE ====== */
+const getCategoryForAgent = (agentId) => {
+  for (const [catKey, cat] of Object.entries(AGENT_CATEGORIES)) {
+    if (cat.ids.includes(agentId)) return catKey;
+  }
+  return 'ops';
+};
+
 const AgentsPage = ({ onOpenAgent, setPage }) => {
   const [filter, setFilter] = React.useState('ALL');
-  const filtered = filter === 'ALL' ? AGENTS : AGENTS.filter(a => a.rarity === filter);
-  const rarities = ['ALL', 'SSR', 'SR', 'R'];
+  const agents = window.AGENTS || [];
 
-  // maestro pinned at top
+  const categories = ['ALL', ...Object.keys(AGENT_CATEGORIES)];
+  const categoryLabels = { ALL: 'All' };
+  Object.entries(AGENT_CATEGORIES).forEach(([k, v]) => { categoryLabels[k] = v.label; });
+
+  // Filter agents
+  const filtered = filter === 'ALL' ? agents : agents.filter(a => getCategoryForAgent(a.id) === filter);
+
+  // Separate orchestra (lead) from the rest
   const maestro = filtered.find(a => a.id === 'orchestra');
   const crew = filtered.filter(a => a.id !== 'orchestra');
+
+  // Group crew by category
+  const grouped = {};
+  crew.forEach(a => {
+    const cat = getCategoryForAgent(a.id);
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(a);
+  });
 
   return (
     <div>
       <div className="topbar">
         <div>
-          <h1>คลัง <span className="accent">เอเจนท์</span></h1>
-          <div className="sub">{AGENTS.length} agents · ดูทีมที่พร้อมใช้งานและสถานะล่าสุด</div>
+          <h1>Agent <span className="accent">Hub</span></h1>
+          <div className="sub">{agents.length} agents · View your team by professional role</div>
         </div>
         <div className="topbar-actions">
-          <span className="chip"><span className="dot"/> {AGENTS.filter(a=>a.status!=='offline').length} online</span>
-          <button className="btn gold" onClick={() => setPage && setPage('shop')}>ไปที่ร้านค้า</button>
+          <span className="chip"><span className="dot"/> {agents.filter(a=>a.status!=='offline').length} online</span>
+          <button className="btn gold" onClick={() => setPage && setPage('shop')}>Shop</button>
         </div>
       </div>
 
-      {/* filters */}
-      <div style={{display:'flex', gap: 20, alignItems:'center', marginBottom: 20, flexWrap:'wrap'}}>
-        <div style={{display:'flex', gap:6}}>
-          {rarities.map(r => (
-            <button key={r} className="btn" onClick={() => setFilter(r)}
-              style={{
-                padding: '6px 12px', fontSize: 12,
-                borderColor: filter === r ? 'var(--purple)' : 'var(--border)',
-                background: filter === r ? 'rgba(157,92,255,0.12)' : 'var(--panel)',
-                color: filter === r ? '#fff' : 'var(--text-2)'
-              }}>{r}</button>
-          ))}
-        </div>
+      {/* Category filters */}
+      <div style={{display:'flex', gap: 6, alignItems:'center', marginBottom: 20, flexWrap:'wrap'}}>
+        {categories.map(c => (
+          <button key={c} className="btn" onClick={() => setFilter(c)}
+            style={{
+              padding: '6px 12px', fontSize: 12,
+              borderColor: filter === c ? 'var(--coral)' : 'var(--border)',
+              background: filter === c ? 'rgba(255,107,107,0.1)' : 'var(--panel)',
+              color: filter === c ? '#fff' : 'var(--text-2)',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+            {c !== 'ALL' && AGENT_CATEGORIES[c] && <span>{AGENT_CATEGORIES[c].icon}</span>}
+            {categoryLabels[c]}
+            {c !== 'ALL' && <span className="mono-s" style={{marginLeft: 2}}>{agents.filter(a => getCategoryForAgent(a.id) === c).length}</span>}
+          </button>
+        ))}
       </div>
 
+      {/* Lead Orchestrator */}
       {maestro && (
         <div style={{marginBottom: 26}}>
-          <div className="mono-s" style={{marginBottom: 10, letterSpacing:'0.2em', color:'var(--gold)'}}>★ MAESTRO — LEAD CONDUCTOR</div>
-          <div style={{display:'grid', gridTemplateColumns:'260px 1fr', gap:22, alignItems:'center', padding: 20, background:'linear-gradient(110deg, rgba(251,191,36,0.08), rgba(157,92,255,0.06))', border:'1px solid rgba(251,191,36,0.25)', borderRadius: 18}}>
-            <GachaCard agent={maestro} onClick={() => onOpenAgent(maestro.id)}/>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '280px 1fr',
+            gap: 22,
+            alignItems: 'center',
+            padding: 20,
+            background: 'linear-gradient(110deg, rgba(255,107,107,0.06), rgba(78,205,196,0.04))',
+            border: '1px solid rgba(255,107,107,0.2)',
+            borderRadius: 14,
+          }}>
+            <div onClick={() => onOpenAgent(maestro.id)} style={{cursor: 'pointer'}}>
+              <AgentCard agent={maestro} onClick={() => onOpenAgent(maestro.id)}/>
+            </div>
             <div>
-              <h2 style={{fontSize: 28, marginBottom: 6}}>{maestro.name}</h2>
-              <div className="mono-s" style={{letterSpacing:'0.18em', color:'var(--gold)', marginBottom: 12}}>{maestro.role}</div>
-              <div style={{fontSize: 14, lineHeight: 1.6, color:'var(--text-2)', maxWidth: 560, marginBottom: 14}}>{maestro.tagline}</div>
-              <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+              <h2 style={{fontSize: 24, marginBottom: 4}}>{maestro.name}</h2>
+              <div className="mono-s" style={{letterSpacing:'0.16em', color:'var(--coral)', marginBottom: 10}}>
+                {maestro.role} — Lead Orchestrator
+              </div>
+              <div style={{fontSize: 13, lineHeight: 1.6, color:'var(--text-2)', maxWidth: 560, marginBottom: 12}}>
+                {maestro.tagline}
+              </div>
+              <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
                 {maestro.traits.map(t => <span key={t} className="badge gold">{t}</span>)}
               </div>
             </div>
@@ -111,12 +103,29 @@ const AgentsPage = ({ onOpenAgent, setPage }) => {
         </div>
       )}
 
-      <div className="mono-s" style={{marginBottom: 10, letterSpacing:'0.2em'}}>ทีมเอเจนท์ · {crew.length}</div>
-      <div className="card-grid">
-        {crew.map(a => (
-          <GachaCard key={a.id} agent={a} onClick={() => onOpenAgent(a.id)}/>
-        ))}
-      </div>
+      {/* Grouped agent cards */}
+      {Object.entries(grouped).map(([catKey, catAgents]) => {
+        const cat = AGENT_CATEGORIES[catKey];
+        if (!cat || catAgents.length === 0) return null;
+        return (
+          <div key={catKey} className="category-section">
+            <div className="category-header">
+              <span className="cat-icon">{cat.icon}</span>
+              <span className="cat-name">{cat.label}</span>
+              <span className="cat-count">{catAgents.length} agents</span>
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: 10,
+            }}>
+              {catAgents.map(a => (
+                <AgentCard key={a.id} agent={a} onClick={() => onOpenAgent(a.id)}/>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };

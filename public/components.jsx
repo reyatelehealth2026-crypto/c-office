@@ -1,68 +1,132 @@
-/* Gacha card component: flexible — renders from agent data */
-const GachaCard = ({ agent, variant = 'default', onClick }) => {
-  const rarityStars = { SSR: '★★★★★', SR: '★★★★', R: '★★★', N: '★★' }[agent.rarity] || '★';
-  const statusClass = agent.status === 'busy' ? 'busy' : agent.status === 'idle' ? 'idle' : agent.status === 'offline' ? 'offline' : '';
-  const statusLabel = agent.status === 'busy' ? 'On Task' : agent.status === 'idle' ? 'Idle' : agent.status === 'offline' ? 'Offline' : 'Active';
+/* C-Office Components — Warm Professional Theme */
 
-  // random sparkle positions (stable per mount)
-  const sparkles = React.useMemo(() =>
-    Array.from({length: agent.rarity === 'SSR' ? 8 : agent.rarity === 'SR' ? 5 : 3}).map((_,i) => ({
-      l: Math.random()*90+5, t: Math.random()*60+5, d: Math.random()*3, s: Math.random()*2+1
-    }))
-  , [agent.id, agent.rarity]);
+/* ====== SIDEBAR — Clean Professional Navigation ====== */
+const NAV = [
+  { id: 'dashboard',  label: 'Dashboard',   icon: '📊' },
+  { id: 'agents',     label: 'Agents',      icon: '👥' },
+  { id: 'notes',      label: 'Tasks',       icon: '📋' },
+  { id: 'tasks',      label: 'Mission Log', icon: '📝' },
+  { id: 'shop',       label: 'Shop',        icon: '🛒' },
+  { id: 'skills',     label: 'Skills',      icon: '✨' },
+  { id: 'memory',     label: 'Memory',      icon: '🧠' },
+  { id: 'adventure',  label: 'Boss Hunt',   icon: '⚔️' },
+  { id: 'settings',   label: 'Settings',    icon: '⚙️' },
+  // Hidden legacy fallback
+  { id: 'mission-control', label: 'Mission Control', icon: '▤', hidden: true },
+];
 
+const Sidebar = ({ page, setPage }) => {
+  const visibleNav = NAV.filter(n => !n.hidden);
   return (
-    <div className="gacha-wrap" onClick={onClick}>
-      <div
-        className={`gacha rarity-${agent.rarity} variant-${variant}`}
-        data-rarity={agent.rarity}
-        style={{ '--art-gradient': agent.gradient }}
-      >
-        <div className="gacha-art">
-          {sparkles.map((s,i) => (
-            <span key={i} className="spark" style={{
-              left: s.l+'%', top: s.t+'%',
-              width: s.s+'px', height: s.s+'px',
-              animationDelay: s.d+'s'
-            }} />
-          ))}
-          {agent.image ? (
-            <img src={agent.image} alt={agent.name}
-              style={{
-                position:'absolute', inset:0, width:'100%', height:'100%',
-                objectFit:'cover', objectPosition:'center top',
-                zIndex:1, pointerEvents:'none',
-              }}/>
-          ) : (
-            <div className="art-placeholder">
-              <div className="ap-icon">{agent.avatarInitials}</div>
-              <div className="ap-label">Agent portrait · {agent.name}</div>
-            </div>
-          )}
-        </div>
-
-        <div className="gacha-head">
-          <span className="rarity-tag">
-            {agent.rarity} <span className="stars">{rarityStars}</span>
-          </span>
-          <span className="elem-badge" title={agent.elementName}>{agent.element}</span>
-        </div>
-
-        <div className={`status-ribbon ${statusClass}`}>{statusLabel}</div>
-        <div className="level-pip">Lv <b>{agent.level}</b></div>
-
-        <div className="gacha-foot">
-          <div>
-            <div className="agent-name">{agent.name}</div>
-            <div className="agent-role">{agent.role}</div>
-          </div>
-          <div className="gacha-stats">
-            <div className="gs"><div className="gs-label">PWR</div><div className="gs-value">{(agent.power/1000).toFixed(1)}k</div></div>
-            <div className="gs"><div className="gs-label">TASK</div><div className="gs-value">{agent.stats.tasks}</div></div>
-            <div className="gs"><div className="gs-label">SR</div><div className="gs-value">{agent.stats.success}%</div></div>
-          </div>
+    <aside className="sidebar">
+      <div className="brand">
+        <div className="brand-mark"/>
+        <div>
+          <div className="brand-name">C-OFFICE</div>
+          <div className="brand-sub">AI Agent Hub</div>
         </div>
       </div>
+      {visibleNav.map(n => (
+        <div key={n.id}
+          className={`nav-item ${page === n.id ? 'active' : ''}`}
+          onClick={() => setPage(n.id)}>
+          <span className="ico">{n.icon}</span>
+          <span>{n.label}</span>
+          {n.id === 'agents' && <span className="badge" style={{marginLeft:'auto', fontSize:9}}>{AGENTS.length}</span>}
+          {n.id === 'notes' && (window.NOTES?.length || 0) > 0 && (
+            <span className="badge cyan" style={{marginLeft:'auto', fontSize:9}}>{window.NOTES.length}</span>
+          )}
+          {n.id === 'shop' && <span className="badge gold" style={{marginLeft:'auto', fontSize:9}}>New</span>}
+          {n.id === 'tasks' && TASKS.filter(t=>t.status==='running').length > 0 && (
+            <span className="badge gold" style={{marginLeft:'auto', fontSize:9}}>{TASKS.filter(t=>t.status==='running').length}</span>
+          )}
+        </div>
+      ))}
+      <div className="sidebar-foot">
+        <div className="pilot-avatar">P</div>
+        <div className="pilot-meta">
+          <b>Commander</b><br/><span>Admin</span>
+        </div>
+      </div>
+    </aside>
+  );
+};
+
+/* ====== PROFESSIONAL AGENT CARD ====== */
+const AgentCard = ({ agent, onClick, compact }) => {
+  const statusMap = {
+    busy:    { label: 'Working',  color: 'var(--gold)' },
+    active:  { label: 'Online',   color: 'var(--green)' },
+    idle:    { label: 'Idle',     color: 'var(--text-3)' },
+    offline: { label: 'Offline',  color: 'var(--text-4)' },
+  };
+  const st = statusMap[agent.status] || statusMap.idle;
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        gap: 12,
+        alignItems: 'center',
+        padding: compact ? '8px 10px' : '12px 14px',
+        borderRadius: 10,
+        border: '1px solid var(--border)',
+        background: 'var(--bg-2)',
+        cursor: 'pointer',
+        transition: 'all 140ms ease',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = 'var(--border-2)';
+        e.currentTarget.style.background = 'var(--bg-3)';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = 'var(--border)';
+        e.currentTarget.style.background = 'var(--bg-2)';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
+    >
+      <AgentDot agent={agent} size={compact ? 32 : 40}/>
+      <div style={{flex: 1, minWidth: 0}}>
+        <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2}}>
+          <span style={{fontSize: 13, fontWeight: 600}}>{agent.name}</span>
+          <span style={{
+            fontSize: 9,
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: st.color,
+            padding: '1px 6px',
+            borderRadius: 999,
+            border: '1px solid currentColor',
+            opacity: 0.8,
+          }}>{st.label}</span>
+        </div>
+        <div style={{
+          fontSize: 11,
+          color: 'var(--text-3)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>{agent.role}</div>
+        {!compact && agent.currentTask && (
+          <div style={{
+            fontSize: 10,
+            color: 'var(--text-4)',
+            marginTop: 4,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>{agent.currentTask}</div>
+        )}
+      </div>
+      <div style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        color: 'var(--text-4)',
+        letterSpacing: '0.06em',
+      }}>Lv.{agent.level || 1}</div>
     </div>
   );
 };
@@ -97,7 +161,7 @@ const AgentDot = ({ agent, size = 28 }) => {
 };
 
 /* Sparkline SVG for dashboard mini-metrics */
-const Sparkline = ({ data, color = 'var(--purple)', h = 28 }) => {
+const Sparkline = ({ data, color = 'var(--coral)', h = 28 }) => {
   const max = Math.max(...data), min = Math.min(...data);
   const pts = data.map((v,i) => {
     const x = (i/(data.length-1))*100;
@@ -112,7 +176,7 @@ const Sparkline = ({ data, color = 'var(--purple)', h = 28 }) => {
 };
 
 /* Radar chart for personality */
-const Radar = ({ data, size = 220, color = 'var(--purple)' }) => {
+const Radar = ({ data, size = 220, color = 'var(--coral)' }) => {
   const keys = Object.keys(data);
   const n = keys.length;
   const cx = size/2, cy = size/2, r = size/2 - 30;
@@ -130,13 +194,13 @@ const Radar = ({ data, size = 220, color = 'var(--purple)' }) => {
           const p = [cx + Math.cos(angle(j))*r*rr, cy + Math.sin(angle(j))*r*rr];
           return p.join(',');
         }).join(' ');
-        return <polygon key={i} points={pts} fill="none" stroke="rgba(157,92,255,0.15)" strokeWidth="1"/>;
+        return <polygon key={i} points={pts} fill="none" stroke="rgba(255,107,107,0.12)" strokeWidth="1"/>;
       })}
       {keys.map((_,j) => {
         const p = [cx + Math.cos(angle(j))*r, cy + Math.sin(angle(j))*r];
-        return <line key={j} x1={cx} y1={cy} x2={p[0]} y2={p[1]} stroke="rgba(157,92,255,0.1)" />;
+        return <line key={j} x1={cx} y1={cy} x2={p[0]} y2={p[1]} stroke="rgba(255,107,107,0.08)" />;
       })}
-      <polygon points={poly} fill={color} fillOpacity="0.25" stroke={color} strokeWidth="2"/>
+      <polygon points={poly} fill={color} fillOpacity="0.2" stroke={color} strokeWidth="2"/>
       {keys.map((k,i) => {
         const p = [cx + Math.cos(angle(i))*(r+16), cy + Math.sin(angle(i))*(r+16)];
         return (
@@ -154,4 +218,4 @@ const Radar = ({ data, size = 220, color = 'var(--purple)' }) => {
   );
 };
 
-Object.assign(window, { GachaCard, AgentDot, Sparkline, Radar });
+Object.assign(window, { AgentCard, AgentDot, Sparkline, Radar });

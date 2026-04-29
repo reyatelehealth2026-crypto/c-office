@@ -1,4 +1,4 @@
-/* ===== DASHBOARD PAGE ===== */
+/* ===== DASHBOARD PAGE — Warm Professional AI Agent Hub ===== */
 function relTime(input) {
   if (input == null) return '';
   if (typeof input === 'string') return input;
@@ -42,9 +42,7 @@ async function writeClipboard(text) {
   }
 }
 
-/* Server-side multi-agent run — Orchestra decomposes the goal and
-   delegates to specialist personas. Requires Anthropic to be connected
-   in Settings. Run progress streams through the existing SSE bus. */
+/* Server-side multi-agent run */
 const SendToOrchestra = () => {
   const [goal, setGoal] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -86,71 +84,37 @@ const SendToOrchestra = () => {
   const liveRun = runs.find(r => r.status === 'running') || runs[0];
 
   return (
-    <div className="panel" style={{padding: 14}}>
-      <div style={{display:'flex', alignItems:'center', gap:10, marginBottom: liveRun ? 10 : 0}}>
-        <div style={{
-          width:34, height:34, borderRadius:8,
-          background:'linear-gradient(135deg, var(--gold), var(--purple))',
-          display:'flex', alignItems:'center', justifyContent:'center',
-          fontFamily:'var(--font-display)', fontWeight:700, color:'#000',
-        }}>OC</div>
-        <div style={{flex:1}}>
-          <div style={{fontSize:13, fontWeight:600}}>Send to Orchestra</div>
-          <div className="mono-s">Decomposes & delegates to Nana → Luna → Emi → others as needed</div>
-        </div>
-        {!connected && (
-          <a href="#/settings" onClick={() => { localStorage.setItem('c-office-page','settings'); window.location.reload(); }}
-            style={{fontSize:11, color:'var(--gold)', textDecoration:'underline', fontFamily:'var(--font-mono)'}}>
-            Connect Anthropic in Settings →
-          </a>
-        )}
-      </div>
-      <div style={{display:'flex', gap:8}}>
-        <input
-          type="text"
-          value={goal}
-          onChange={e => setGoal(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-          disabled={!connected || busy}
-          placeholder={connected ? 'e.g. Research 2026 ambient-AI wearable trends, draft a 200-word post, and generate a JRPG cover image' : 'Connect Anthropic first'}
-          style={{
-            flex:1, padding:'10px 14px',
-            border:'1px solid var(--border)', borderRadius:8,
-            background:'var(--bg-3)', color:'var(--text)',
-            fontSize:13,
-          }}
-        />
-        <button onClick={submit} disabled={!connected || busy || !goal.trim()}
-          style={{
-            padding:'10px 20px', borderRadius:8, border:'none',
-            background: connected && goal.trim() ? 'linear-gradient(135deg, var(--gold), var(--purple))' : 'var(--bg-3)',
-            color: connected && goal.trim() ? '#000' : 'var(--text-3)',
-            fontWeight:700, cursor: connected && goal.trim() ? 'pointer' : 'not-allowed',
-            fontSize:13,
-          }}>
-          {busy ? '...' : 'Send'}
-        </button>
-      </div>
+    <div className="task-bar">
+      <div className="task-bar-icon">⚡</div>
+      <input
+        type="text"
+        value={goal}
+        onChange={e => setGoal(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+        disabled={!connected || busy}
+        placeholder={connected ? 'สั่งงานเอเจนท์... เช่น Research 2026 AI trends and draft a post' : 'Connect Anthropic in Settings first'}
+      />
+      <button className="btn-primary-task"
+        onClick={submit} disabled={!connected || busy || !goal.trim()}>
+        {busy ? 'Sending...' : 'Send'}
+      </button>
       {liveRun && (
-        <div style={{marginTop:10, padding:'10px 12px', background:'var(--bg-2)', borderRadius:8, border:'1px solid var(--border)'}}>
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
-            <span className="mono-s">RUN {liveRun.id?.slice(-8)} · {liveRun.status}</span>
-            <span className="mono-s" style={{color:'var(--text-3)'}}>{liveRun.steps?.length || 0} steps</span>
-          </div>
-          <div style={{fontSize:12, color:'var(--text-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{liveRun.goal}</div>
-          {liveRun.steps?.length > 0 && (
-            <div style={{marginTop:6, display:'flex', gap:6, flexWrap:'wrap'}}>
-              {liveRun.steps.map((s,i) => {
-                const a = AGENTS.find(x => x.id === s.persona);
-                const ok = s.result?.ok;
-                return (
-                  <span key={i} className="badge" style={{background: ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: ok ? 'var(--green)' : 'var(--red)'}}>
-                    {a?.name || s.persona} · {ok ? 'done' : 'err'}
-                  </span>
-                );
-              })}
-            </div>
-          )}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '6px 12px',
+          background: 'var(--bg-2)',
+          borderRadius: 8,
+          border: '1px solid var(--border)',
+          fontSize: 11,
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--text-2)',
+          maxWidth: 300,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{color: liveRun.status === 'running' ? 'var(--gold)' : 'var(--green)'}}>●</span>
+          {liveRun.goal?.slice(0, 40)}...
         </div>
       )}
     </div>
@@ -158,18 +122,10 @@ const SendToOrchestra = () => {
 };
 
 const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
-  // live numbers come from the SSE-fed STATS object
   const totalTokens = (window.STATS?.tokensToday || 0);
   const totalCost   = (window.STATS?.spendToday || 0).toFixed(2);
   const activeTasks = (window.STATS?.tasksRunning || 0);
   const agentsOnline = (window.STATS?.agentsOnline || 0);
-
-  // sparklines: derive a synthetic ramp from recent activity (purely cosmetic)
-  const recent = ACTIVITY.slice(0, 28);
-  const sparkTokens  = recent.map(r => (r?.tokens || 50)).reverse();
-  const sparkSuccess = recent.map(r => r?.status === 'ok' ? 80 : 30).reverse();
-  while (sparkTokens.length < 28)  sparkTokens.unshift(40);
-  while (sparkSuccess.length < 28) sparkSuccess.unshift(70);
 
   return (
     <div>
@@ -179,38 +135,53 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
           <div className="sub">Live · {agentsOnline} online · {activeTasks} active tasks · {STATE_SESSIONS.filter(s=>!s.endedAt).length} sessions</div>
         </div>
         <div className="topbar-actions">
-          <div style={{display:'flex', gap:4, background:'var(--panel)', border:'1px solid var(--border)', borderRadius: 10, padding: 3}}>
-            {['overview', 'focus', 'compact'].map(l => (
-              <button key={l} onClick={() => setLayout(l)}
-                style={{
-                  padding:'6px 12px', fontSize:11, borderRadius:7, border:'none', cursor:'pointer',
-                  fontFamily:'var(--font-mono)', letterSpacing:'0.12em', textTransform:'uppercase',
-                  background: layout === l ? 'linear-gradient(135deg, var(--purple), #7c3aed)' : 'transparent',
-                  color: layout === l ? '#fff' : 'var(--text-3)'
-                }}>{l}</button>
-            ))}
-          </div>
           <span className="chip"><span className="dot"/> Live</span>
         </div>
       </div>
 
-      {/* SEND TO ORCHESTRA — server-side multi-agent orchestration */}
-      <div style={{marginBottom: 14}}>
-        <SendToOrchestra/>
+      {/* QUICK TASK BAR */}
+      <SendToOrchestra/>
+
+      {/* STATS STRIP */}
+      <div className="stats-strip">
+        <div className="stat-card">
+          <div className="stat-icon tokens">🔥</div>
+          <div>
+            <div className="stat-value">{totalTokens.toLocaleString()}</div>
+            <div className="stat-label">Tokens today</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon tasks">📋</div>
+          <div>
+            <div className="stat-value">{activeTasks}</div>
+            <div className="stat-label">Running tasks</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon agents">👥</div>
+          <div>
+            <div className="stat-value">{agentsOnline}</div>
+            <div className="stat-label">Agents online</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon spend">💰</div>
+          <div>
+            <div className="stat-value">${totalCost}</div>
+            <div className="stat-label">Spend today</div>
+          </div>
+        </div>
       </div>
 
-      {/* OFFICE FLOOR — every agent at a glance */}
+      {/* AGENT WORKSPACE */}
       <div style={{marginBottom: 18}}>
-        <OfficeFloor onOpenAgent={onOpenAgent}/>
+        <AgentWorkspace onOpenAgent={onOpenAgent}/>
       </div>
 
-      <div style={{marginBottom: 18}}>
-        <CommandCenter onOpenAgent={onOpenAgent}/>
-      </div>
-
-      <div className="grid" style={{gridTemplateColumns: layout === 'focus' ? '1fr 320px' : layout === 'compact' ? '1fr 1fr 1fr' : '2fr 1fr'}}>
+      <div className="grid" style={{gridTemplateColumns: '2fr 1fr'}}>
         {/* LIVE FEED */}
-        <div className="panel" style={layout === 'compact' ? {gridColumn: 'span 2'} : {}}>
+        <div className="panel">
           <div className="panel-head">
             <h3>Live Activity</h3>
             <div className="right"><span className="chip" style={{padding:'3px 8px', fontSize:10}}><span className="dot"/> real-time</span></div>
@@ -218,18 +189,15 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
           <div style={{display:'flex', flexDirection:'column', gap: 2, maxHeight: 460, overflowY:'auto'}}>
             {(() => {
               const visible = ACTIVITY.filter(r => {
-                // drop noise — the "used" row already shows what happened
                 if (r.verb === 'turn-end') return false;
                 if (r.verb === 'spoke' && !(r.text || '').trim()) return false;
-                // successful tool results with no meaningful text are redundant
-                // with the preceding "used" row (Read/Edit/Write/etc.)
                 if (r.verb === 'result' && r.status !== 'err' && !(r.text || '').trim()) return false;
                 return true;
               });
               if (visible.length === 0) {
                 return (
                   <div className="muted" style={{padding:'30px 12px', fontSize:12, textAlign:'center'}}>
-                    Waiting for activity… run <code>claude</code> in any terminal.
+                    Waiting for activity... run <code>claude</code> in any terminal.
                   </div>
                 );
               }
@@ -260,58 +228,171 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
           </div>
         </div>
 
-        {/* ACTIVE AGENTS RAIL */}
+        {/* ACTIVE AGENTS */}
         <div className="panel">
           <div className="panel-head">
-            <h3>Active Squad</h3>
-            <div className="right">{AGENTS.filter(a=>a.status==='active'||a.status==='busy').length} on mission</div>
+            <h3>Active Agents</h3>
+            <div className="right">{AGENTS.filter(a=>a.status==='active'||a.status==='busy').length} online</div>
           </div>
-          <div style={{display:'flex', flexDirection:'column', gap:10}}>
-            {AGENTS.filter(a => a.status === 'active' || a.status === 'busy').slice(0,5).map(a => (
-              <div key={a.id} onClick={() => onOpenAgent(a.id)} style={{
-                display:'flex', gap:12, padding: '10px 12px',
-                background:'var(--bg-2)', borderRadius: 10,
-                border:'1px solid var(--border)',
-                cursor:'pointer', transition:'all 120ms',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; e.currentTarget.style.background = 'var(--bg-3)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-2)'; }}
-              >
-                <AgentDot agent={a} size={40}/>
-                <div style={{flex:1, minWidth:0}}>
-                  <div style={{display:'flex', gap:6, alignItems:'center', marginBottom: 2}}>
-                    <b style={{fontSize:13}}>{a.name}</b>
-                    <span className={`badge ${a.rarity === 'SSR' ? 'gold' : a.rarity === 'SR' ? '' : 'cyan'}`} style={{fontSize:9, padding:'1px 5px'}}>{a.rarity}</span>
-                    <span style={{marginLeft:'auto', fontSize: 10, color: a.status==='busy'?'var(--gold)':'var(--green)', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.12em'}}>
-                      {a.status}
-                    </span>
-                  </div>
-                  <div style={{fontSize:11, color:'var(--text-3)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
-                    {a.currentTask}
-                  </div>
-                  <div style={{height: 3, background:'var(--bg-0)', borderRadius:2, marginTop: 6, overflow:'hidden'}}>
-                    <div style={{height:'100%', background: a.gradient, width: (a.status === 'busy' ? 80 : 45) + '%', transition: 'width 600ms ease'}}/>
-                  </div>
-                </div>
-              </div>
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            {AGENTS.filter(a => a.status === 'active' || a.status === 'busy').slice(0,6).map(a => (
+              <AgentCard key={a.id} agent={a} compact onClick={() => onOpenAgent(a.id)}/>
             ))}
+            {AGENTS.filter(a => a.status === 'active' || a.status === 'busy').length === 0 && (
+              <div className="muted" style={{fontSize:12, padding:'20px 4px', textAlign:'center'}}>
+                No active agents right now
+              </div>
+            )}
           </div>
         </div>
 
-        {layout !== 'focus' && (
-          <div className="panel" style={{gridColumn: layout === 'compact' ? 'span 3' : 'span 2'}}>
-            <div className="panel-head">
-              <h3>Agent Collaboration</h3>
-              <div className="right">last 1h</div>
-            </div>
-            <CollabGraph onOpenAgent={onOpenAgent}/>
+        {/* COLLABORATION GRAPH */}
+        <div className="panel" style={{gridColumn: 'span 2'}}>
+          <div className="panel-head">
+            <h3>Agent Collaboration</h3>
+            <div className="right">last 1h</div>
           </div>
-        )}
+          <CollabGraph onOpenAgent={onOpenAgent}/>
+        </div>
       </div>
     </div>
   );
 };
 
+/* ===== AGENT WORKSPACE — renamed OfficeFloor ===== */
+const AgentWorkspace = ({ onOpenAgent }) => {
+  const statusRank = { busy: 0, active: 1, idle: 2, offline: 3 };
+
+  const sorted = React.useMemo(() => {
+    return [...AGENTS].sort((a, b) => {
+      const sa = statusRank[a.status] ?? 9;
+      const sb = statusRank[b.status] ?? 9;
+      if (sa !== sb) return sa - sb;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [AGENTS]);
+
+  const working = AGENTS.filter(a => a.status === 'busy' || a.status === 'active').length;
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <h3>Agent <span className="accent">Workspace</span>
+          <span style={{color:'var(--text-3)', fontWeight:400, fontSize:11, marginLeft:8, fontFamily:'var(--font-mono)', letterSpacing:'0.1em'}}>
+            · {AGENTS.length} AGENTS
+          </span>
+        </h3>
+        <div className="right">
+          <span className="chip" style={{padding:'3px 8px', fontSize:10}}>
+            <span className="dot"/> {working} working
+          </span>
+        </div>
+      </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+        gap: 10,
+      }}>
+        {sorted.map(a => {
+          const state =
+            a.status === 'busy'    ? 'busy'    :
+            a.status === 'offline' ? 'offline' :
+            a.status === 'idle'    ? 'idle'    :
+            'active';
+          const label =
+            state === 'busy'    ? 'Working'  :
+            state === 'offline' ? 'Offline'  :
+            state === 'idle'    ? 'Idle'     :
+            'Online';
+          const statusColor = state === 'busy' ? 'var(--gold)' : state === 'active' ? 'var(--green)' : 'var(--text-4)';
+
+          return (
+            <div
+              key={a.id}
+              onClick={() => onOpenAgent(a.id)}
+              title={a.currentTask ? `${a.name} — ${a.currentTask}` : a.name}
+              style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                padding: '14px 8px 10px',
+                borderRadius: 10,
+                border: `1px solid ${state === 'active' ? 'rgba(46,204,113,0.3)' : state === 'busy' ? 'rgba(240,180,41,0.3)' : 'var(--border)'}`,
+                background: 'var(--bg-2)',
+                cursor: 'pointer',
+                transition: 'all 160ms ease',
+                opacity: state === 'offline' ? 0.4 : 1,
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = 'var(--border-2)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = state === 'active' ? 'rgba(46,204,113,0.3)' : state === 'busy' ? 'rgba(240,180,41,0.3)' : 'var(--border)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <div style={{
+                width: 44, height: 44, borderRadius: 10, overflow: 'hidden',
+                background: a.gradient || 'var(--bg-3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 8,
+                boxShadow: state === 'busy' ? '0 0 12px rgba(240,180,41,0.3)' : state === 'active' ? '0 0 10px rgba(46,204,113,0.2)' : 'none',
+              }}>
+                {a.image
+                  ? <img src={a.image} alt={a.name} style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'center top'}}/>
+                  : <span style={{fontFamily:'var(--font-display)', fontWeight:700, fontSize:16, color:'rgba(255,255,255,0.9)'}}>{a.avatarInitials}</span>
+                }
+              </div>
+              <div style={{fontSize:11, fontWeight:600, textAlign:'center', lineHeight:1.2, marginBottom:4}}>{a.name}</div>
+              <div style={{display:'flex', alignItems:'center', gap:4}}>
+                <span style={{width:5, height:5, borderRadius:'50%', background: statusColor, boxShadow: state === 'busy' || state === 'active' ? `0 0 6px ${statusColor}` : 'none'}}/>
+                <span style={{fontSize:9, fontFamily:'var(--font-mono)', letterSpacing:'0.1em', textTransform:'uppercase', color: statusColor}}>{label}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/* simple force-less collab graph */
+const CollabGraph = ({ onOpenAgent }) => {
+  const radius = 140;
+  const center = { x: 260, y: 160 };
+  const positions = AGENTS.map((a, i) => {
+    const ang = (i / AGENTS.length) * Math.PI * 2 - Math.PI/2;
+    return { ...a, x: center.x + Math.cos(ang)*radius, y: center.y + Math.sin(ang)*radius };
+  });
+  const edges = (window.STATE_EDGES && window.STATE_EDGES.length > 0)
+    ? window.STATE_EDGES
+    : [];
+  return (
+    <svg viewBox="0 0 520 320" width="100%" height="340" style={{display:'block'}}>
+      <defs>
+        <linearGradient id="edge" x1="0" x2="1"><stop offset="0" stopColor="#FF6B6B" stopOpacity="0.5"/><stop offset="1" stopColor="#4ECDC4" stopOpacity="0.25"/></linearGradient>
+      </defs>
+      {edges.map(([a,b],i) => {
+        const A = positions.find(p => p.id === a), B = positions.find(p => p.id === b);
+        if (!A || !B) return null;
+        return <line key={i} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="url(#edge)" strokeWidth="1.5" opacity="0.6"/>;
+      })}
+      {positions.map(p => (
+        <g key={p.id} style={{cursor:'pointer'}} onClick={() => onOpenAgent(p.id)}>
+          <circle cx={p.x} cy={p.y} r="22" fill="#FF6B6B" opacity="0.1"/>
+          <circle cx={p.x} cy={p.y} r="18" fill="var(--bg-2)" stroke="#4ECDC4" strokeWidth="1.5"/>
+          <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="central" style={{fontFamily:'var(--font-display)', fontSize: 11, fontWeight:700, fill:'#fff'}}>{p.avatarInitials}</text>
+          <text x={p.x} y={p.y+34} textAnchor="middle" style={{fontFamily:'var(--font-mono)', fontSize: 9, letterSpacing:'0.1em', fill: 'var(--text-3)', textTransform:'uppercase'}}>{p.name}</text>
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+/* Keep CommandCenter and KPI for legacy compatibility */
 const CommandCenter = ({ onOpenAgent }) => {
   window.useCOfficeRefresh();
   const [prompt, setPrompt] = React.useState('');
@@ -374,7 +455,7 @@ const CommandCenter = ({ onOpenAgent }) => {
   return (
     <div className="panel command-center">
       <div className="panel-head">
-        <h3>Agent Command Center</h3>
+        <h3>Command Center</h3>
         <div className="right">notes → agent → cli</div>
       </div>
       <div className="cmd-grid">
@@ -384,7 +465,7 @@ const CommandCenter = ({ onOpenAgent }) => {
             className="cmd-textarea"
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
-            placeholder="จดสิ่งที่อยากให้เอเจนท์ทำ เช่น ขยาย Adventure, ตรวจ bug, เขียน feature..."
+            placeholder="จดสิ่งที่อยากให้เอเจนท์ทำ..."
           />
           <div className="cmd-controls">
             <select className="cmd-select" value={personaId} onChange={e => setPersonaId(e.target.value)}>
@@ -484,115 +565,4 @@ const KPI = ({ label, value, delta, spark, color }) => (
   </div>
 );
 
-/* simple force-less collab graph */
-const CollabGraph = ({ onOpenAgent }) => {
-  const radius = 140;
-  const center = { x: 260, y: 160 };
-  const positions = AGENTS.map((a, i) => {
-    const ang = (i / AGENTS.length) * Math.PI * 2 - Math.PI/2;
-    return { ...a, x: center.x + Math.cos(ang)*radius, y: center.y + Math.sin(ang)*radius };
-  });
-  // edges from real session→subagent spawn relationships in last 1h
-  const edges = (window.STATE_EDGES && window.STATE_EDGES.length > 0)
-    ? window.STATE_EDGES
-    : [];
-  return (
-    <svg viewBox="0 0 520 320" width="100%" height="340" style={{display:'block'}}>
-      <defs>
-        <linearGradient id="edge" x1="0" x2="1"><stop offset="0" stopColor="#9d5cff" stopOpacity="0.6"/><stop offset="1" stopColor="#22d3ee" stopOpacity="0.3"/></linearGradient>
-      </defs>
-      {edges.map(([a,b],i) => {
-        const A = positions.find(p => p.id === a), B = positions.find(p => p.id === b);
-        if (!A || !B) return null;
-        return <line key={i} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke="url(#edge)" strokeWidth="1.5" opacity="0.6"/>;
-      })}
-      {positions.map(p => (
-        <g key={p.id} style={{cursor:'pointer'}} onClick={() => onOpenAgent(p.id)}>
-          <circle cx={p.x} cy={p.y} r="22" fill={p.rarity==='SSR'?'#fbbf24':p.rarity==='SR'?'#9d5cff':'#22d3ee'} opacity="0.15"/>
-          <circle cx={p.x} cy={p.y} r="18" fill="var(--bg-2)" stroke={p.rarity==='SSR'?'#fbbf24':p.rarity==='SR'?'#9d5cff':'#22d3ee'} strokeWidth="1.5"/>
-          <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="central" style={{fontFamily:'var(--font-display)', fontSize: 11, fontWeight:700, fill:'#fff'}}>{p.avatarInitials}</text>
-          <text x={p.x} y={p.y+34} textAnchor="middle" style={{fontFamily:'var(--font-mono)', fontSize: 9, letterSpacing:'0.1em', fill: 'var(--text-3)', textTransform:'uppercase'}}>{p.name}</text>
-        </g>
-      ))}
-    </svg>
-  );
-};
-
-/* ===== OFFICE FLOOR — every agent, compact, with live "working" animation ===== */
-const OfficeFloor = ({ onOpenAgent }) => {
-  const statusRank = { busy: 0, active: 1, idle: 2, offline: 3 };
-  const rarityRank = { SSR: 0, SR: 1, R: 2, N: 3 };
-
-  const sorted = React.useMemo(() => {
-    return [...AGENTS].sort((a, b) => {
-      const sa = statusRank[a.status] ?? 9;
-      const sb = statusRank[b.status] ?? 9;
-      if (sa !== sb) return sa - sb;
-      const ra = rarityRank[a.rarity] ?? 9;
-      const rb = rarityRank[b.rarity] ?? 9;
-      if (ra !== rb) return ra - rb;
-      return (a.name || '').localeCompare(b.name || '');
-    });
-  }, [AGENTS]);
-
-  const working = AGENTS.filter(a => a.status === 'busy' || a.status === 'active').length;
-
-  return (
-    <div className="panel">
-      <div className="panel-head">
-        <h3>The <span className="accent">Office</span>
-          <span style={{color:'var(--text-3)', fontWeight:400, fontSize:12, marginLeft:8, fontFamily:'var(--font-mono)', letterSpacing:'0.12em'}}>
-            · {AGENTS.length} AGENTS
-          </span>
-        </h3>
-        <div className="right">
-          <span className="chip" style={{padding:'3px 8px', fontSize:10}}>
-            <span className="dot"/> {working} working
-          </span>
-        </div>
-      </div>
-
-      <div className="office-floor">
-        {sorted.map(a => {
-          const state =
-            a.status === 'busy'    ? 'busy'    :
-            a.status === 'offline' ? 'offline' :
-            a.status === 'idle'    ? 'idle'    :
-            'active';
-          const label =
-            state === 'busy'    ? 'BUSY'    :
-            state === 'offline' ? 'OFFLINE' :
-            state === 'idle'    ? 'IDLE'    :
-            'ONLINE';
-          const tip = a.currentTask
-            ? `${a.name} — ${a.currentTask}`
-            : a.name;
-
-          return (
-            <div
-              key={a.id}
-              className={`office-card state-${state} rarity-${a.rarity}`}
-              style={{ '--art-gradient': a.gradient }}
-              onClick={() => onOpenAgent(a.id)}
-              title={tip}
-            >
-              <div className="of-art">
-                {a.image
-                  ? <img src={a.image} alt={a.name}/>
-                  : <div className="of-initials">{a.avatarInitials}</div>}
-              </div>
-              <div className="of-busy-dots"><span/><span/><span/></div>
-              <div className="of-name">{a.name}</div>
-              <div className="of-status">
-                <span className="of-status-dot"/>
-                <span>{label}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-Object.assign(window, { Dashboard, OfficeFloor, CommandCenter });
+Object.assign(window, { Dashboard, AgentWorkspace, CommandCenter, OfficeFloor: AgentWorkspace });
