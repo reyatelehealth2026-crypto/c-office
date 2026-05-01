@@ -30,12 +30,13 @@ import {
 } from '../state.js';
 import { getAgentSync, listAgentsSync, resolveAgentIdSync } from '../store/agents.js';
 import { costUsd } from '../mapping/pricing.js';
-import { recallSkills, persistSkill, degradeSkill } from './skills.js';
+import { recallSkills, persistSkill, degradeSkill, forkSkill, listSkills } from './skills.js';
 import { getWorkflow } from './workflows.js';
 import { getProject } from '../store/projects.js';
 import { appendAudit } from './audit.js';
 import { gradeRunAgainstEval } from './evals.js';
 import { registerGateResolver } from '../state.js';
+import { recordPersonaOutcome } from './persona-tune.js';
 
 const ORCHESTRA_PERSONA = 'orchestra';
 const CRITIC_PERSONA = 'vex';
@@ -1081,12 +1082,60 @@ async function runPipeline(runId, goal, opts = {}) {
     } catch {
       /* skill persistence is best-effort */
     }
+    // Fork degraded skills that were recalled for this goal — this successful
+    // run is evidence that the goal is still achievable, so we mint a v2.
+    try {
+      const finalRun = state.runs.get(runId);
+      if (Array.isArray(finalRun?.skillsRecalled)) {
+        for (const recalled of finalRun.skillsRecalled) {
+          const allSkills = listSkills();
+          const skill = allSkills.find((s) => s.id === recalled.id);
+          if (skill && (Number(skill.degradedCount) || 0) >= 3 && !skill.supersededBy) {
+            const forked = forkSkill(recalled.id, finalRun);
+            if (forked) {
+              appendScratchpad(runId, {
+                persona: ORCHESTRA_PERSONA,
+                kind: 'skill-forked',
+                text: `Skill ${recalled.id} forked to ${forked.id} after ${skill.degradedCount} degradation strikes`,
+              });
+            }
+          }
+        }
+      }
+    } catch {
+      /* fork is best-effort */
+    }
     // Grade the run against any matching eval — best-effort
     try {
       const finalRun = state.runs.get(runId);
       await gradeRunAgainstEval(finalRun);
     } catch {
       /* grading is best-effort */
+    }
+    // 5.2: record per-persona success outcomes for auto-tune stats
+    try {
+      const finalRun = state.runs.get(runId);
+      const projectId = finalRun?.projectId;
+      const personasSeen = new Set(
+        (finalRun?.steps || []).map((s) => s.persona).filter(Boolean),
+      );
+      for (const personaId of personasSeen) {
+        recordPersonaOutcome({ personaId, projectId, outcome: 'success' });
+      }
+      // Record critic-high if applicable
+      if (finalRun?.critique?.severity === 'high' || finalRun?.critique?.severity === 'critical') {
+        for (const personaId of personasSeen) {
+          recordPersonaOutcome({ personaId, projectId, outcome: 'critic-high' });
+        }
+      }
+      // Record verify-fail if applicable
+      if (finalRun?.verification && !finalRun.verification.passed) {
+        for (const personaId of personasSeen) {
+          recordPersonaOutcome({ personaId, projectId, outcome: 'verify-fail' });
+        }
+      }
+    } catch {
+      /* outcome recording is best-effort */
     }
     pushEvent({
       sessionId: runId,
@@ -1102,6 +1151,19 @@ async function runPipeline(runId, goal, opts = {}) {
       error: exec.error || 'Run failed without final answer.',
     });
     appendAudit(runId, 'run-failed', { error: (exec.error || 'no final answer').slice(0, 200) });
+    // 5.2: record per-persona failure outcomes for auto-tune stats
+    try {
+      const failedRun = state.runs.get(runId);
+      const projectId = failedRun?.projectId;
+      const personasSeen = new Set(
+        (failedRun?.steps || []).map((s) => s.persona).filter(Boolean),
+      );
+      for (const personaId of personasSeen) {
+        recordPersonaOutcome({ personaId, projectId, outcome: 'failure' });
+      }
+    } catch {
+      /* outcome recording is best-effort */
+    }
     pushEvent({
       sessionId: runId,
       personaId: ORCHESTRA_PERSONA,

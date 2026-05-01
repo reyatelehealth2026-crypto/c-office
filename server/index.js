@@ -26,6 +26,7 @@ import {
 import { startSessionsWatcher } from './watchers/sessions.js';
 import { startTranscriptsWatcher } from './watchers/transcripts.js';
 import { accessLoginRoute, accessStatus, requireAccessToken } from './security/access-token.js';
+import { listPendingSuggestions } from './agents/persona-tune.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '../public');
@@ -51,6 +52,8 @@ app.use (projectsRoute);                          // /api/projects (CRUD + scope
 app.use ('/api/task-board',     taskBoardRoute);
 app.use ('/api/theme',          themeRoute);
 app.get ('/api/settings',       getSettings);
+// 5.2: persona auto-tune suggestions
+app.get ('/api/persona-tuning', (_req, res) => res.json({ ok: true, suggestions: listPendingSuggestions() }));
 
 // Notes inbox + agent dispatch
 app.get   ('/api/notes',                   notesList);
