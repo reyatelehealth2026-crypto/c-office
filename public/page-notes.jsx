@@ -330,16 +330,6 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
     }
   }
 
-  function openScene(autoMessage) {
-    const message = autoMessage !== undefined ? autoMessage : draft.trim();
-    window.openScene?.({
-      noteId: note.id,
-      agentId: note.agentId || 'orchestra',
-      provider,
-      message,
-    });
-  }
-
   async function saveEdit() {
     await onPatch({ title: editDraft.title.trim() || 'Untitled note', body: editDraft.body });
     setEditing(false);
@@ -505,9 +495,6 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
             title={imageStatus?.connected ? `สร้างภาพจริงด้วย ${imageStatus.source || 'OpenAI'}` : 'login Codex หรือเชื่อม OpenAI ในหน้าตั้งค่าก่อน'}
           >
             {imageBusy ? 'กำลังสร้างภาพ...' : 'สร้างภาพจริง'}
-          </button>
-          <button className="btn ghost" disabled={busy} onClick={() => openScene('')}>
-            Open Scene
           </button>
           <button className="btn primary" disabled={busy || !draft.trim()} onClick={() => dispatch()}>
             {busy ? 'รอคำตอบจริง...' : 'ส่งคุยกับเอเจนท์'}

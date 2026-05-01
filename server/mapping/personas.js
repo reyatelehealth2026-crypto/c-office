@@ -315,7 +315,7 @@ export const PERSONAS_BY_ID = new Map(PERSONAS.map(p => [p.id, p]));
 const PERSONA_RULES = [
   // Vivi — security, audit, compliance, review, testing
   {
-    match: /(security|audit|compliance|threat-detect|code-review|review(?!er)|\breview\b|legal-compliance|evidence-collector|reality-checker|api-tester|accessibility-auditor|test-results-analyzer|vex|vivi)/i,
+    match: /(security|audit|compliance|threat-detect|code-review|review|legal-compliance|evidence-collector|reality-checker|api-tester|accessibility-auditor|test-results-analyzer|vex|vivi)/i,
     persona: 'vex',
   },
 

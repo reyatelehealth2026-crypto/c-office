@@ -10,9 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="cards.css"/>
-<link rel="stylesheet" href="adventure.css"/>
 <link rel="stylesheet" href="notes.css"/>
-<link rel="stylesheet" href="scene.css"/>
 <link rel="stylesheet" href="guild.css"/>
 <link rel="stylesheet" href="agent-office.css"/>
 <style>
@@ -43,9 +41,7 @@
 <script type="text/babel" src="page-detail.jsx"></script>
 <script type="text/babel" src="page-memory.jsx"></script>
 <script type="text/babel" src="page-misc.jsx"></script>
-<script type="text/babel" src="page-adventure.jsx"></script>
 <script type="text/babel" src="page-notes.jsx"></script>
-<script type="text/babel" src="page-scene.jsx"></script>
 
 <script type="text/babel">
 const App = () => {
@@ -56,8 +52,8 @@ const App = () => {
 
   React.useEffect(() => { localStorage.setItem('c-office-page', page); }, [page]);
 
-  // Cross-page navigation requests (e.g. inline-dispatch helpers in page-scene.jsx
-  // that ship the user from Adventure / Guild straight to the notes chat panel).
+  // Cross-page navigation requests fired by inline-dispatch helpers
+  // (e.g. Guild → notes chat panel hand-off).
   React.useEffect(() => {
     const onNav = (e) => {
       const target = e.detail?.page;
@@ -83,11 +79,8 @@ const App = () => {
         {page === 'skills' && <SkillsPage onOpenAgent={openAgent}/>}
         {page === 'memory' && <MemoryPanel onOpenAgent={openAgent}/>}
         {page === 'settings' && <SettingsPage/>}
-        {page === 'adventure' && <AdventurePage onOpenAgent={openAgent}/>}
         {page === 'notes' && <NotesPage onOpenAgent={openAgent}/>}
-        {page === 'scene' && <SceneLaunchPage onOpenAgent={openAgent}/>}
       </main>
-      <SceneOverlay/>
     </div>
   );
 };

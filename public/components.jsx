@@ -4,9 +4,7 @@
 const NAV = [
   { id: 'dashboard',  label: 'Dashboard',   icon: 'DB', color: 'var(--accent-violet)' },
   { id: 'agents',     label: 'Agents',      icon: 'AG', color: 'var(--accent-cyan)' },
-  { id: 'adventure',  label: 'Adventure',   icon: 'Q',  color: 'var(--accent-orange)' },
   { id: 'notes',      label: 'Notes',       icon: 'NT', color: 'var(--accent-gold)' },
-  { id: 'scene',      label: 'Scene',       icon: 'SC', color: 'var(--accent-lime)' },
   { id: 'tasks',      label: 'Tasks',       icon: 'TS', color: 'var(--accent-magenta)' },
   { id: 'shop',       label: 'Shop',        icon: 'SH', color: 'var(--accent-gold)' },
   { id: 'skills',     label: 'Skills',      icon: 'SK', color: 'var(--accent-cyan)' },
