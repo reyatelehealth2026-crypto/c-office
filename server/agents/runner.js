@@ -672,53 +672,131 @@ scratchpad reveals new context. When complete, return the final assembled
 deliverable as your last assistant message — no tool call.`;
 }
 
-async function executeRun(runId, goal, plan, critique) {
-  setRunPhase(runId, 'execute');
-  const orch = orchestratorAgent();
-  const model = orch.model || 'claude-sonnet-4-5';
-  let finalText = '';
-  let finalStatus = 'failed';
-  let finalError = '';
+// Direct sequential execution: iterate plan, call query() once per step.
+// Avoids the SDK Task-tool / nested-agents path which doesn't propagate the
+// OAuth beta header and hangs sub-agent calls indefinitely on OAuth tokens.
+async function executeStep(runId, goal, step, idx, prior) {
+  const personaId = step.persona;
+  const persona = getAgentSync(personaId) || { id: personaId, name: personaId, role: 'agent' };
+  const model = persona.model || 'claude-sonnet-4-6';
+  const toolUseId = `step_${runId}_${idx}_${crypto.randomBytes(3).toString('hex')}`;
 
-  const run = state.runs.get(runId);
-  const scratchpad = run?.scratchpad || [];
+  startTask({
+    tool_use_id: toolUseId,
+    sessionId: runId,
+    subagent_type: personaId,
+    description: summarize(step.instruction, 200),
+  });
+  pushEvent({
+    sessionId: runId,
+    personaId,
+    verb: 'used',
+    toolName: 'Task',
+    text: summarize(step.instruction, 200),
+    status: 'ok',
+    toolUseId,
+    dedupeKey: `tu:run:${runId}:${toolUseId}`,
+  });
+  appendScratchpad(runId, { persona: personaId, kind: 'delegation', text: step.instruction });
 
+  const priorBlock = prior.length
+    ? `\n\nContext from earlier steps:\n${prior.map((p) => `### ${p.persona}\n${p.text}`).join('\n\n')}`
+    : '';
+  const prompt = `Original goal: ${goal}\n\nYour assignment: ${step.instruction}${priorBlock}\n\nReturn the artifact only — no preface.`;
+  const systemPrompt = persona.systemPrompt
+    || `You are ${persona.name || personaId}. ${persona.role || ''}\nReturn a concise, self-contained artifact for the assigned task.`;
+
+  let outText = '';
+  let stepError = '';
   try {
     for await (const message of withPhaseTimeout(query({
-      prompt: buildExecutionPrompt(goal, plan, scratchpad, critique),
+      prompt,
       options: {
         model,
-        maxTurns: MAX_TURNS,
-        systemPrompt: orch.systemPrompt,
-        tools: ['Task'],
-        allowedTools: ['Task'],
+        maxTurns: 1,
+        systemPrompt,
         permissionMode: 'dontAsk',
-        agents: sdkAgentDefinitions(),
       },
     }), 'execute')) {
-      if (message.type === 'assistant') handleAssistantMessage(runId, message);
-      if (message.type === 'user') handleUserMessage(runId, message);
+      if (message.type === 'assistant') outText += textFromAssistant(message) + '\n';
       if (message.type === 'result') {
         recordPhaseCost(runId, 'execute', model, message.usage);
         recordUsage({
           model,
           usage: message.usage,
-          dedupeKey: `usage:run:${runId}:${message.uuid}`,
+          dedupeKey: `usage:run:${runId}:${toolUseId}:${message.uuid}`,
           sessionId: runId,
         });
-        if (!message.is_error && message.subtype === 'success') {
-          finalStatus = 'done';
-          finalText = message.result || finalText;
-        } else {
-          finalError = (message.errors || []).join('\n') || message.subtype || 'Claude Agent SDK run failed';
+        if (message.is_error || message.subtype !== 'success') {
+          stepError = (message.errors || []).join('\n') || message.subtype || 'step failed';
         }
       }
     }
   } catch (error) {
-    finalError = error.message || String(error);
+    stepError = error.message || String(error);
   }
 
-  return { status: finalStatus, final: finalText, error: finalError };
+  outText = outText.trim();
+  const ok = !stepError && !!outText;
+  const result = { ok, text: outText || stepError, error: stepError || null };
+
+  stepRun(runId, {
+    tool_use_id: toolUseId,
+    persona: personaId,
+    instruction: step.instruction,
+    result,
+  });
+  pushEvent({
+    sessionId: runId,
+    personaId,
+    verb: 'result',
+    toolName: 'Task',
+    text: summarize(outText || stepError, 200),
+    status: ok ? 'ok' : 'err',
+    toolUseId,
+    dedupeKey: `tr:run:${runId}:${toolUseId}`,
+  });
+  appendScratchpad(runId, {
+    persona: personaId,
+    kind: ok ? 'finding' : 'error',
+    text: outText || stepError,
+  });
+  finishTask({ tool_use_id: toolUseId, status: ok ? 'done' : 'failed' });
+
+  return { ok, persona: personaId, personaName: persona.name || personaId, text: outText, error: stepError };
+}
+
+async function executeRun(runId, goal, plan, critique) {
+  setRunPhase(runId, 'execute');
+  const prior = [];
+  let firstError = '';
+
+  if (critique?.text) {
+    appendScratchpad(runId, {
+      persona: ORCHESTRA_PERSONA,
+      kind: 'note',
+      text: `Revising based on critique: ${summarize(critique.text, 200)}`,
+    });
+  }
+
+  for (let i = 0; i < plan.length; i++) {
+    const step = plan[i];
+    const out = await executeStep(runId, goal, step, i, prior);
+    if (out.ok) {
+      prior.push({ persona: out.personaName, text: out.text });
+    } else if (!firstError) {
+      firstError = `Step ${i} (${out.persona}) failed: ${out.error || 'no output'}`;
+    }
+  }
+
+  if (prior.length === 0) {
+    return { status: 'failed', final: '', error: firstError || 'No step produced output.' };
+  }
+
+  const finalText = prior
+    .map((p) => `## ${p.personaName}\n${p.text}`)
+    .join('\n\n');
+  return { status: 'done', final: finalText, error: '' };
 }
 
 // ---------- Phase 3: Critique ----------
