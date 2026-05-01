@@ -46,20 +46,26 @@ test('probeAnthropic returns 401 hint when unauthorized', async () => {
   assert.match(r.hint, /sk-ant/);
 });
 
-test('probeAnthropic OAuth path posts to /v1/messages with the OAuth beta header', async () => {
+test('probeAnthropic OAuth path posts to /v1/messages/count_tokens with the OAuth beta header', async () => {
   const fetchImpl = fakeFetch((url, opts) => {
-    assert.match(url, /api\.anthropic\.com\/v1\/messages/);
+    assert.match(url, /api\.anthropic\.com\/v1\/messages\/count_tokens/);
     assert.equal(opts.method, 'POST');
     assert.equal(opts.headers['Authorization'], 'Bearer oauth-tok');
     assert.equal(opts.headers['anthropic-beta'], 'oauth-2025-04-20');
-    const body = JSON.parse(opts.body);
-    assert.equal(body.max_tokens, 1);
-    return jsonResponse({ model: 'claude-sonnet-4-6', content: [{ type: 'text', text: '.' }] });
+    return jsonResponse({ input_tokens: 9 });
   });
   const r = await probeAnthropic({ accessToken: 'oauth-tok' }, fetchImpl);
   assert.equal(r.ok, true);
   assert.equal(r.mode, 'oauth');
   assert.equal(r.model, 'claude-sonnet-4-6');
+  assert.equal(r.inputTokens, 9);
+});
+
+test('probeAnthropic OAuth path surfaces 429 with a friendlier hint', async () => {
+  const r = await probeAnthropic({ accessToken: 'oauth-tok' }, fakeFetch(() => jsonResponse({}, 429)));
+  assert.equal(r.ok, false);
+  assert.match(r.error, /rate-limited/);
+  assert.match(r.hint, /throttled|wait/);
 });
 
 test('probeAnthropic OAuth path returns refresh hint on 401', async () => {

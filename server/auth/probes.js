@@ -36,10 +36,12 @@ export async function probeAnthropic(creds, fetchImpl = globalThis.fetch) {
   if (!key && !access) return { ok: false, error: 'no credentials stored', latencyMs: 0 };
   return timed(async () => {
     if (access) {
-      // OAuth tokens (from `claude login`) require the Messages API plus the
-      // OAuth beta header — the public /v1/models endpoint rejects them.
-      // 1-token max keeps the probe cheap (~$0.000015 on Sonnet 4.6).
-      const r = await fetchWithTimeout(fetchImpl, 'https://api.anthropic.com/v1/messages', {
+      // OAuth tokens (from `claude login`) require the Messages API + OAuth
+      // beta header — the public /v1/models endpoint rejects them.
+      // Use /v1/messages/count_tokens which is FREE and not subject to the
+      // tighter Messages-API rate limits, while still exercising the same
+      // auth + model availability check.
+      const r = await fetchWithTimeout(fetchImpl, 'https://api.anthropic.com/v1/messages/count_tokens', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${access}`,
@@ -49,18 +51,18 @@ export async function probeAnthropic(creds, fetchImpl = globalThis.fetch) {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 1,
           messages: [{ role: 'user', content: 'ping' }],
         }),
       });
       if (r.status === 401) return { ok: false, error: 'unauthorized — OAuth token rejected', hint: 'run `claude login` again to refresh', mode: 'oauth' };
       if (r.status === 403) return { ok: false, error: 'forbidden — OAuth scope insufficient', hint: 'ensure the OAuth client allows Messages API', mode: 'oauth' };
+      if (r.status === 429) return { ok: false, error: 'rate-limited (429)', hint: 'wait a minute then retry — your key is healthy, just throttled', mode: 'oauth' };
       if (!r.ok) {
         const txt = await r.text().catch(() => '');
         return { ok: false, error: `HTTP ${r.status}`, hint: txt.slice(0, 160), mode: 'oauth' };
       }
       const j = await r.json().catch(() => ({}));
-      return { ok: true, model: j.model || 'claude-sonnet-4-6', mode: 'oauth' };
+      return { ok: true, model: 'claude-sonnet-4-6', inputTokens: j.input_tokens, mode: 'oauth' };
     }
     // API-key path — free /v1/models call.
     const r = await fetchWithTimeout(fetchImpl, 'https://api.anthropic.com/v1/models', {
