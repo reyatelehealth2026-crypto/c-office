@@ -55,7 +55,7 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
     window.openScene({
       agentId: agent.id,
       message: msg,
-      provider: window.PROVIDERS?.default || 'echo',
+      provider: window.PROVIDERS?.default || 'claude',
       title: msg.slice(0, 60),
       body: msg,
       tag: 'chat',

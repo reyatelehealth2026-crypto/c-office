@@ -34,8 +34,8 @@ const TasksPage = ({ onOpenAgent }) => {
           <button key={s} onClick={() => setFilter(s)}
             style={{
               padding:'6px 12px', fontSize:11, borderRadius:8,
-              border:'1px solid ' + (filter === s ? 'var(--purple)' : 'var(--border)'),
-              background: filter === s ? 'rgba(157,92,255,0.12)' : 'var(--panel)',
+              border:'1px solid ' + (filter === s ? 'var(--coral)' : 'var(--border)'),
+              background: filter === s ? 'rgba(255,107,107,0.12)' : 'var(--panel)',
               color: filter === s ? '#fff' : 'var(--text-2)',
               cursor:'pointer',
               fontFamily:'var(--font-mono)', letterSpacing:'0.1em', textTransform:'uppercase',
@@ -172,7 +172,7 @@ const ConnectionsPanel = () => {
         onChange={e => setTokenInputs(s => ({ ...s, [provider]: e.target.value }))}
         style={{padding:'6px 10px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-3)', color:'var(--text)', fontSize:12, fontFamily:'var(--font-mono)', width:200}}
       />
-      <button disabled={busy === provider} onClick={() => submitToken(provider)} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--purple)', color:'#fff', fontSize:12, cursor: 'pointer'}}>
+      <button disabled={busy === provider} onClick={() => submitToken(provider)} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--coral)', color:'#fff', fontSize:12, cursor: 'pointer'}}>
         Save
       </button>
     </div>
@@ -191,8 +191,8 @@ const ConnectionsPanel = () => {
           }/>
         {!status?.anthropic?.connected && <TokenField provider="anthropic" placeholder="…or paste sk-ant-… key"/>}
 
-        <Row label="Google (Gemini Imagen)" state={status?.google}
-          hint={status?.google?.hasClientId ? 'OAuth client_id set' : 'set client_id below before connecting'}
+        <Row label="Google (Nano Banana 2 Pro)" state={status?.google}
+          hint={status?.google?.connected ? 'ready for Gemini image generation' : 'connect OAuth or paste Gemini API key'}
           action={status?.google?.connected
             ? <button disabled={busy==='google'} onClick={()=>disconnect('google')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
             : <button disabled={!status?.google?.hasClientId} onClick={connectGoogle} style={{padding:'6px 14px', borderRadius:6, border:'none', background: status?.google?.hasClientId ? 'var(--gold)' : 'var(--bg-3)', color:'#000', fontSize:12, fontWeight:600, cursor: status?.google?.hasClientId ? 'pointer' : 'not-allowed'}}>Connect</button>
@@ -201,9 +201,10 @@ const ConnectionsPanel = () => {
           <div style={{display:'flex', gap:6, marginLeft:12}}>
             <input type="text" placeholder="Google OAuth client_id (Desktop or Web)" value={googleClientId} onChange={e=>setGoogleClientId(e.target.value)}
               style={{padding:'6px 10px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-3)', color:'var(--text)', fontSize:12, fontFamily:'var(--font-mono)', flex:1}}/>
-            <button disabled={busy==='google' || !googleClientId} onClick={() => submitToken('google', { clientId: googleClientId })} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--purple)', color:'#fff', fontSize:12, cursor:'pointer'}}>Save</button>
+            <button disabled={busy==='google' || !googleClientId} onClick={() => submitToken('google', { clientId: googleClientId })} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--coral)', color:'#fff', fontSize:12, cursor:'pointer'}}>Save</button>
           </div>
         )}
+        {!status?.google?.connected && <TokenField provider="google" placeholder="Gemini API key for Nano Banana 2 Pro"/>}
 
         <Row label="Replicate" state={status?.replicate} hint="paste an r8_… API token"
           action={status?.replicate?.connected
@@ -216,10 +217,37 @@ const ConnectionsPanel = () => {
             ? <button disabled={busy==='openai'} onClick={()=>disconnect('openai')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
             : <TokenField provider="openai" placeholder="sk-…"/>
           }/>
+        <Row label="Codex OAuth" state={status?.codex} hint="ใช้ login ของ Codex จาก ~/.codex/auth.json สำหรับสร้างภาพโดยไม่ต้องใส่ API key"
+          action={<span className={'badge ' + (status?.codex?.connected ? 'green' : 'slate')}>{status?.codex?.connected ? 'READY' : 'LOGIN CODEX'}</span>}/>
 
         <div className="mono-s" style={{marginTop:6}}>
           Tokens are stored locally encrypted in <span className="mono" style={{color:'var(--gold)'}}>~/.c-office/credentials.json</span>. Never committed.
         </div>
+      </div>
+    </div>
+  );
+};
+
+const ThemeEnginePanel = () => {
+  window.useCOfficeRefresh?.();
+  const state = window.THEME_STATE || { theme: 'game_guild', themes: [] };
+  const setTheme = async (theme) => {
+    await fetch('/api/theme', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme }),
+    });
+    await window.fetchCOfficeState?.();
+  };
+  return (
+    <div className="panel" style={{gridColumn:'span 2'}}>
+      <div className="panel-head"><h3>Theme Engine</h3><div className="right">event-driven progress · not locked to one game skin</div></div>
+      <div style={{display:'flex', flexWrap:'wrap', gap:8}}>
+        {(state.themes || []).map((theme) => (
+          <button key={theme} className={'btn ' + (state.theme === theme ? 'primary' : '')} onClick={() => setTheme(theme)}>
+            {theme}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -249,6 +277,7 @@ const SettingsPage = () => {
         </div>
       </div>
       <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap: 18}}>
+        <ThemeEnginePanel/>
         <ConnectionsPanel/>
         <div className="panel">
           <div className="panel-head"><h3>Hooks</h3>
@@ -322,11 +351,10 @@ const SettingsPage = () => {
           </div>
           <div className="divider"/>
           <div className="mono-s" style={{lineHeight: 1.6}}>
-            Default → <span className="mono" style={{color: 'var(--gold)'}}>{window.PROVIDERS?.default || 'echo'}</span>
+            Default → <span className="mono" style={{color: 'var(--gold)'}}>{window.PROVIDERS?.default || 'claude'}</span>
             &nbsp;·&nbsp; Override commands with env vars:
             <span className="mono" style={{marginLeft: 4}}>C_OFFICE_CLAUDE_CMD</span>,
-            <span className="mono" style={{marginLeft: 4}}>C_OFFICE_CODEX_CMD</span>,
-            <span className="mono" style={{marginLeft: 4}}>C_OFFICE_GPT_CMD</span>
+            <span className="mono" style={{marginLeft: 4}}>C_OFFICE_CODEX_CMD</span>
             &nbsp;(use <span className="mono">${'{PROMPT}'}</span> placeholder).
           </div>
         </div>
@@ -348,7 +376,7 @@ const SettingsPage = () => {
             </div>
             <div style={{padding:'14px 16px', background:'var(--bg-2)', borderRadius: 10, border:'1px solid var(--border)'}}>
               <div className="mono-s">RUNNING TASKS</div>
-              <div style={{fontFamily:'var(--font-display)', fontSize:24, fontWeight:700, color:'var(--purple)'}}>{STATS.tasksRunning || 0}</div>
+              <div style={{fontFamily:'var(--font-display)', fontSize:24, fontWeight:700, color:'var(--coral)'}}>{STATS.tasksRunning || 0}</div>
             </div>
           </div>
         </div>
@@ -372,7 +400,7 @@ const SettingRow = ({ label, hint, children }) => (
 const Switch = ({ value, onChange }) => (
   <div onClick={() => onChange(!value)} style={{
     width: 40, height: 22, borderRadius: 11,
-    background: value ? 'var(--purple)' : 'var(--bg-3)',
+    background: value ? 'var(--coral)' : 'var(--bg-3)',
     position: 'relative', cursor:'pointer',
     transition: 'background 200ms',
   }}>
@@ -385,4 +413,106 @@ const Switch = ({ value, onChange }) => (
   </div>
 );
 
-Object.assign(window, { TasksPage, SettingsPage });
+const DynamicTasksPage = ({ onOpenAgent }) => {
+  window.useCOfficeRefresh?.();
+  const board = window.TASK_BOARD || { statuses: ['backlog', 'running', 'review', 'done'], columns: {}, tasks: [] };
+  const [draft, setDraft] = React.useState({ title: '', agentId: AGENTS[0]?.id || '', provider: window.PROVIDERS?.default || 'claude' });
+  const [busy, setBusy] = React.useState(false);
+
+  const create = async () => {
+    if (!draft.title.trim()) return;
+    setBusy(true);
+    try {
+      await fetch('/api/task-board', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      });
+      setDraft((current) => ({ ...current, title: '' }));
+      await window.fetchCOfficeState?.();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const move = async (task, status) => {
+    if (String(task.id || '').startsWith('live:')) return;
+    await fetch(`/api/task-board/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, runStatus: status === 'running' ? 'running' : status }),
+    });
+    await window.fetchCOfficeState?.();
+  };
+
+  const labels = { backlog: 'Backlog', running: 'Running', review: 'Review', done: 'Done' };
+  const tones = { backlog: 'var(--text-3)', running: 'var(--cyan)', review: 'var(--gold)', done: 'var(--green)' };
+
+  return (
+    <div>
+      <div className="topbar">
+        <div>
+          <h1>Task <span className="accent">Board</span></h1>
+          <div className="sub">{(board.tasks || []).length} cards · {TASKS.filter(t=>t.status==='running').length} live running</div>
+        </div>
+      </div>
+
+      <div className="task-board-compose">
+        <input value={draft.title} onChange={(e)=>setDraft({...draft, title:e.target.value})} placeholder="Create task card"/>
+        <select value={draft.agentId} onChange={(e)=>setDraft({...draft, agentId:e.target.value})}>
+          {(AGENTS || []).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+        </select>
+        <select value={draft.provider} onChange={(e)=>setDraft({...draft, provider:e.target.value})}>
+          {((window.PROVIDERS?.providers || []).map((p)=>p.name).concat([draft.provider])).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).map((provider) => (
+            <option key={provider} value={provider}>{provider}</option>
+          ))}
+        </select>
+        <button className="btn primary" disabled={busy} onClick={create}>Add</button>
+      </div>
+
+      <div className="task-board-grid">
+        {(board.statuses || ['backlog', 'running', 'review', 'done']).map((status) => (
+          <section className="task-board-column" key={status} style={{ '--status-color': tones[status] || 'var(--cyan)' }}>
+            <div className="task-board-head">
+              <span>{labels[status] || status}</span>
+              <b>{(board.columns?.[status] || []).length}</b>
+            </div>
+            <div className="task-board-stack">
+              {(board.columns?.[status] || []).map((task) => {
+                const agent = AGENTS.find((a) => a.id === task.agentId || a.id === task.personaId);
+                const live = String(task.id || '').startsWith('live:');
+                return (
+                  <article className="task-board-card" key={task.id}>
+                    <div className="task-board-card-head">
+                      <strong>{task.title || task.description || 'Untitled task'}</strong>
+                      <span>{task.runStatus || status}</span>
+                    </div>
+                    <p>{task.description || (live ? 'Live runtime task from agent events' : 'Manual board task')}</p>
+                    <div className="row" style={{gap: 8}}>
+                      <AgentDot agent={agent} size={24}/>
+                      <button className="task-agent-link" onClick={() => agent && onOpenAgent(agent.id)}>{agent?.name || task.agentId || 'Unassigned'}</button>
+                    </div>
+                    <div className="task-board-events">
+                      {(task.events || []).slice(-3).map((event) => (
+                        <span key={event.id}>{event.text}</span>
+                      ))}
+                    </div>
+                    {!live && (
+                      <div className="task-board-actions">
+                        {['backlog', 'running', 'review', 'done'].filter((s) => s !== status).map((s) => (
+                          <button key={s} onClick={() => move(task, s)}>{labels[s]}</button>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+Object.assign(window, { TasksPage: DynamicTasksPage, SettingsPage });

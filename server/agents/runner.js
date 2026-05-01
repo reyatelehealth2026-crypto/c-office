@@ -1,85 +1,197 @@
 // Orchestrator runner.
 //
-// runOrchestrator(goal) — kicks off an Orchestra session, loops on tool_use
-// until end_turn, dispatches each `delegate(persona, instruction)` to the
-// appropriate child:
-//   - persona === 'echo'  → image adapter (no Claude call)
-//   - other personas      → child Claude messages.create with that persona's
-//                           system prompt + tool allowlist
-//
-// All step events go through the EXISTING pushEvent / startTask / finishTask
-// pipeline so the dashboard's busy animation, persona-status broadcast, and
-// level-ups light up with no frontend changes.
+// The installed Claude Agent SDK exposes the high-level query() API. C-Office
+// uses that API directly and wires SDK messages back into the existing state
+// pipeline so /api/task remains visible in the dashboard.
 
 import crypto from 'node:crypto';
-import { pushEvent, recordUsage, startTask, finishTask, startRun, stepRun, finishRun } from '../state.js';
-import { AGENT_REGISTRY, DELEGATE_TOOL, getPersonaConfig } from './personas.js';
-import { generateImage } from './image.js';
-import { getAnthropicAuth } from '../auth/anthropic.js';
+import { query } from '@anthropic-ai/claude-agent-sdk';
+import { pushEvent, recordUsage, startTask, finishTask, startRun, stepRun, finishRun, viewRun } from '../state.js';
+import { getAgentSync, listAgentsSync, resolveAgentIdSync } from '../store/agents.js';
 
 const ORCHESTRA_PERSONA = 'orchestra';
 const MAX_TURNS = 12;
-const MAX_DELEGATIONS = 16;
 
 function newId(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`;
 }
 
-async function makeClient() {
-  const auth = await getAnthropicAuth();
-  if (!auth.connected) throw new Error('Anthropic not connected. Connect in Settings.');
-  const sdk = await import('@anthropic-ai/claude-agent-sdk');
-  // SDK exports vary slightly by version; pick whichever client constructor exists.
-  const Ctor = sdk.Anthropic || sdk.default || sdk.Client;
-  if (!Ctor) throw new Error('Could not locate client constructor in @anthropic-ai/claude-agent-sdk');
-  return auth.mode === 'api-key'
-    ? new Ctor({ apiKey: auth.apiKey })
-    : new Ctor({ authToken: auth.accessToken });
+function summarize(value, max = 90) {
+  const text = String(typeof value === 'string' ? value : JSON.stringify(value ?? ''))
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > max ? text.slice(0, max - 1) + '...' : text;
 }
 
-function summarize(s, n = 90) {
-  if (typeof s !== 'string') s = JSON.stringify(s ?? '');
-  s = s.replace(/\s+/g, ' ').trim();
-  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+function sdkAgentDefinitions() {
+  const entries = listAgentsSync({ includeDisabled: false })
+    .filter((agent) => agent.id !== ORCHESTRA_PERSONA)
+    .map((agent) => [
+      agent.id,
+      {
+        description: `${agent.name} - ${agent.role}`,
+        prompt: agent.systemPrompt || `You are ${agent.name}. Return a concise answer for the assigned task.`,
+        tools: agent.toolsAllowed || [],
+        model: 'inherit',
+      },
+    ]);
+  return Object.fromEntries(entries);
 }
 
-function extractText(content) {
-  if (typeof content === 'string') return content;
+function orchestratorAgent() {
+  return getAgentSync(ORCHESTRA_PERSONA) || getAgentSync(resolveAgentIdSync(ORCHESTRA_PERSONA)) || {
+    id: ORCHESTRA_PERSONA,
+    name: 'Orchestra',
+    role: 'Lead agent',
+    model: 'claude-sonnet-4-5',
+    systemPrompt: 'You are the lead C-Office agent. Route work to available agents and return a concise final answer.',
+  };
+}
+
+function textFromAssistant(message) {
+  const content = message?.message?.content;
   if (!Array.isArray(content)) return '';
-  return content.filter(b => b?.type === 'text').map(b => b.text || '').join('\n').trim();
+  return content
+    .filter((block) => block?.type === 'text')
+    .map((block) => block.text || '')
+    .join('\n')
+    .trim();
 }
 
-// Run a single non-orchestra persona. Returns { ok, text }.
-async function runPersona(personaId, instruction, runId, client) {
-  const cfg = getPersonaConfig(personaId);
-  if (!cfg) return { ok: false, text: `Unknown persona: ${personaId}` };
+function taskDescription(input) {
+  if (!input || typeof input !== 'object') return '';
+  return input.description || input.prompt || input.instruction || input.task || JSON.stringify(input);
+}
 
-  if (personaId === 'echo') {
-    try {
-      const img = await generateImage({ prompt: instruction, persona: 'echo' });
-      return { ok: true, text: `Image generated: ${img.url} (provider: ${img.provider})`, image: img };
-    } catch (e) {
-      return { ok: false, text: `Image generation failed: ${e.message}` };
-    }
+function taskAgent(input) {
+  if (!input || typeof input !== 'object') return 'agent';
+  return input.subagent_type || input.persona || input.agent || 'agent';
+}
+
+function handleAssistantMessage(runId, message) {
+  const content = message?.message?.content;
+  if (!Array.isArray(content)) return;
+
+  const text = textFromAssistant(message);
+  if (text) {
+    pushEvent({
+      sessionId: runId,
+      personaId: ORCHESTRA_PERSONA,
+      verb: 'result',
+      text: summarize(text),
+      status: 'ok',
+      dedupeKey: `assistant:${runId}:${message.uuid}`,
+    });
   }
+
+  for (const block of content) {
+    if (block?.type !== 'tool_use') continue;
+    const persona = taskAgent(block.input);
+    const description = taskDescription(block.input);
+    startTask({
+      tool_use_id: block.id,
+      sessionId: runId,
+      subagent_type: persona,
+      description: summarize(description),
+    });
+    pushEvent({
+      sessionId: runId,
+      personaId: persona,
+      verb: 'used',
+      toolName: block.name || 'Task',
+      text: summarize(description),
+      status: 'ok',
+      toolUseId: block.id,
+      dedupeKey: `tu:run:${runId}:${block.id}`,
+    });
+  }
+}
+
+function handleUserMessage(runId, message) {
+  const content = message?.message?.content;
+  if (!Array.isArray(content)) return;
+  for (const block of content) {
+    if (block?.type !== 'tool_result') continue;
+    const text = Array.isArray(block.content)
+      ? block.content.map((part) => part?.text || '').filter(Boolean).join('\n')
+      : String(block.content || '');
+    const result = { ok: !block.is_error, text };
+    stepRun(runId, {
+      tool_use_id: block.tool_use_id,
+      result,
+    });
+    pushEvent({
+      sessionId: runId,
+      personaId: 'agent',
+      verb: 'result',
+      toolName: 'Task',
+      text: summarize(text),
+      status: result.ok ? 'ok' : 'err',
+      toolUseId: block.tool_use_id,
+      dedupeKey: `tr:run:${runId}:${block.tool_use_id}`,
+    });
+    finishTask({ tool_use_id: block.tool_use_id, status: result.ok ? 'done' : 'failed' });
+  }
+}
+
+async function executeRun(runId, goal) {
+  const orch = orchestratorAgent();
+  const model = orch.model || 'claude-sonnet-4-5';
+  let finalText = '';
+  let finalStatus = 'failed';
+  let finalError = '';
 
   try {
-    const resp = await client.messages.create({
-      model: cfg.model,
-      max_tokens: 1500,
-      system: cfg.systemPrompt,
-      messages: [{ role: 'user', content: instruction }],
-    });
-    recordUsage({ model: cfg.model, usage: resp.usage, dedupeKey: `usage:run:${runId}:${personaId}:${Date.now()}`, sessionId: runId });
-    return { ok: resp.stop_reason !== 'max_tokens', text: extractText(resp.content) };
-  } catch (e) {
-    return { ok: false, text: `${cfg.name} failed: ${e.message}` };
+    for await (const message of query({
+      prompt: goal,
+      options: {
+        model,
+        maxTurns: MAX_TURNS,
+        systemPrompt: orch.systemPrompt,
+        tools: ['Task'],
+        allowedTools: ['Task'],
+        permissionMode: 'dontAsk',
+        agents: sdkAgentDefinitions(),
+      },
+    })) {
+      if (message.type === 'assistant') handleAssistantMessage(runId, message);
+      if (message.type === 'user') handleUserMessage(runId, message);
+      if (message.type === 'result') {
+        recordUsage({
+          model,
+          usage: message.usage,
+          dedupeKey: `usage:run:${runId}:${message.uuid}`,
+          sessionId: runId,
+        });
+        if (!message.is_error && message.subtype === 'success') {
+          finalStatus = 'done';
+          finalText = message.result || finalText;
+        } else {
+          finalError = (message.errors || []).join('\n') || message.subtype || 'Claude Agent SDK run failed';
+        }
+      }
+    }
+  } catch (error) {
+    finalError = error.message || String(error);
   }
+
+  const outcome = finalStatus === 'done'
+    ? { status: 'done', final: finalText }
+    : { status: 'failed', error: finalError || 'Claude Agent SDK produced no final answer.' };
+  finishRun(runId, outcome);
+  pushEvent({
+    sessionId: runId,
+    personaId: ORCHESTRA_PERSONA,
+    verb: outcome.status === 'done' ? 'turn-end' : 'result',
+    text: outcome.status === 'done' ? '-- run complete' : outcome.error,
+    status: outcome.status === 'done' ? 'ok' : 'err',
+    dedupeKey: `end:run:${runId}`,
+  });
 }
 
 export async function runOrchestrator(goal) {
   const runId = newId('run');
-  startRun(runId, goal);
+  const run = startRun(runId, goal);
   pushEvent({
     sessionId: runId,
     personaId: ORCHESTRA_PERSONA,
@@ -89,116 +201,6 @@ export async function runOrchestrator(goal) {
     dedupeKey: `prompt:run:${runId}`,
   });
 
-  // Run in the background so callers get run_id immediately.
-  (async () => {
-    let client;
-    try {
-      client = await makeClient();
-    } catch (e) {
-      finishRun(runId, { status: 'failed', error: e.message });
-      pushEvent({
-        sessionId: runId,
-        personaId: ORCHESTRA_PERSONA,
-        verb: 'result',
-        text: e.message,
-        status: 'err',
-        dedupeKey: `runerr:${runId}`,
-      });
-      return;
-    }
-
-    const orch = AGENT_REGISTRY.orchestra;
-    const messages = [{ role: 'user', content: goal }];
-    let delegations = 0;
-    let lastFinal = '';
-
-    try {
-      for (let turn = 0; turn < MAX_TURNS; turn++) {
-        const resp = await client.messages.create({
-          model: orch.model,
-          max_tokens: 2000,
-          system: orch.systemPrompt,
-          tools: [DELEGATE_TOOL],
-          messages,
-        });
-        recordUsage({ model: orch.model, usage: resp.usage, dedupeKey: `usage:run:${runId}:orch:${turn}`, sessionId: runId });
-
-        if (resp.stop_reason !== 'tool_use') {
-          lastFinal = extractText(resp.content);
-          break;
-        }
-
-        const toolUses = (resp.content || []).filter(b => b?.type === 'tool_use');
-        if (toolUses.length === 0) break;
-
-        // Must echo the assistant turn before pushing tool_results.
-        messages.push({ role: 'assistant', content: resp.content });
-
-        const toolResults = [];
-        for (const tu of toolUses) {
-          if (++delegations > MAX_DELEGATIONS) {
-            toolResults.push({ type: 'tool_result', tool_use_id: tu.id, is_error: true, content: 'Delegation limit reached.' });
-            continue;
-          }
-          const { persona, instruction } = tu.input || {};
-          startTask({ tool_use_id: tu.id, sessionId: runId, subagent_type: persona, description: summarize(instruction) });
-          pushEvent({
-            sessionId: runId,
-            personaId: persona,
-            verb: 'used',
-            toolName: 'delegate',
-            text: summarize(instruction),
-            status: 'ok',
-            toolUseId: tu.id,
-            dedupeKey: `tu:run:${runId}:${tu.id}`,
-          });
-
-          const result = await runPersona(persona, instruction, runId, client);
-          stepRun(runId, { tool_use_id: tu.id, persona, instruction, result });
-
-          pushEvent({
-            sessionId: runId,
-            personaId: persona,
-            verb: 'result',
-            toolName: 'delegate',
-            text: summarize(result.text),
-            status: result.ok ? 'ok' : 'err',
-            toolUseId: tu.id,
-            dedupeKey: `tr:run:${runId}:${tu.id}`,
-          });
-          finishTask({ tool_use_id: tu.id, status: result.ok ? 'done' : 'failed' });
-
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: tu.id,
-            is_error: !result.ok,
-            content: result.text,
-          });
-        }
-        messages.push({ role: 'user', content: toolResults });
-      }
-
-      finishRun(runId, { status: 'done', final: lastFinal });
-      pushEvent({
-        sessionId: runId,
-        personaId: ORCHESTRA_PERSONA,
-        verb: 'turn-end',
-        text: '— run complete',
-        status: 'ok',
-        dedupeKey: `end:run:${runId}`,
-      });
-    } catch (e) {
-      finishRun(runId, { status: 'failed', error: e.message });
-      pushEvent({
-        sessionId: runId,
-        personaId: ORCHESTRA_PERSONA,
-        verb: 'result',
-        text: e.message,
-        status: 'err',
-        dedupeKey: `runerr:${runId}`,
-      });
-    }
-  })();
-
-  return { runId };
+  executeRun(runId, goal);
+  return { runId, run: viewRun(run) };
 }

@@ -5,6 +5,7 @@ public/generated/
 .env
 .env.local
 .env.*.local
+.codex/external-access-token.txt
 .vscode/
 .idea/
 dist/

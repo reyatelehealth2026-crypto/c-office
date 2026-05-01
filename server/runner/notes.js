@@ -156,12 +156,22 @@ export async function appendMessage(id, message) {
 
 // Build a single prompt string from a note + the user's latest reply, scoped
 // to the persona's role/persona + tagline so the agent stays in character.
-export function buildPromptForNote(note, userMessage, persona) {
+export function buildPromptForNote(note, userMessage, persona, options = {}) {
   const lines = [];
+  lines.push('You are replying inside C-Office chat. Return only a direct assistant reply for the user.');
+  lines.push('C-Office provider login and agent routing are already handled by the host app.');
+  lines.push('Do not tell the user to connect providers, tools, or agents unless a concrete runtime error is shown in this prompt.');
+  lines.push('Do not edit files, run shell commands, browse, open tools, or describe hidden chain-of-thought.');
+  lines.push('Give the best concrete work product you can inside this chat, not setup instructions.');
+  lines.push('');
   if (persona) {
     lines.push(`You are ${persona.name}, the ${persona.role}.`);
     if (persona.tagline) lines.push(persona.tagline);
     if (persona.tone)    lines.push(`Tone: ${persona.tone}.`);
+  }
+  if (options.handoffFrom) {
+    lines.push('');
+    lines.push(`This message was delegated from ${options.handoffFrom.name}. Act as the receiving specialist and complete your part directly.`);
   }
   lines.push('');
   lines.push(`## Note: ${note.title}`);

@@ -13,8 +13,53 @@ import {
 } from '../runner/notes.js';
 import { getProvider, defaultProvider, listProviders } from '../runner/providers.js';
 import { buildSceneScript } from '../runner/scene.js';
-import { PERSONAS_BY_ID } from '../mapping/personas.js';
+import { getAgentSync, listAgentsSync, resolveAgentIdSync } from '../store/agents.js';
 import { pushEvent, startTask, finishTask } from '../state.js';
+
+function hasHandoffIntent(text) {
+  return /@|handoff|delegate|assign|route|forward|send|ส่งต่อ|มอบหมาย|โยนงาน|ให้|ไป/.test(String(text || '').toLowerCase());
+}
+
+function slugAgentToken(value) {
+  return String(value || '').trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function findMentionedAgent(token, agents) {
+  const raw = String(token || '').trim();
+  const norm = slugAgentToken(raw);
+  return agents.find((agent) =>
+    agent.id === norm ||
+    agent.name.toLowerCase() === raw.toLowerCase() ||
+    slugAgentToken(agent.name) === norm ||
+    slugAgentToken(agent.avatarInitials) === norm
+  ) || null;
+}
+
+export function resolveHandoffAgentId(message, currentAgentId) {
+  const text = String(message || '').trim();
+  if (!text || !hasHandoffIntent(text)) return null;
+
+  const current = resolveAgentIdSync(currentAgentId || 'orchestra');
+  const agents = listAgentsSync({ includeDisabled: false });
+  for (const match of text.matchAll(/@([a-z0-9_-]+)/gi)) {
+    const agent = findMentionedAgent(match[1], agents);
+    if (agent && agent.id !== current) return agent.id;
+  }
+
+  const haystack = text.toLowerCase();
+  const candidates = agents
+    .filter((agent) => agent.id !== current)
+    .sort((a, b) => b.name.length - a.name.length);
+  for (const agent of candidates) {
+    const names = [agent.id, agent.name, agent.avatarInitials]
+      .filter(Boolean)
+      .map((value) => String(value).toLowerCase());
+    if (names.some((name) => haystack.includes(name))) return agent.id;
+  }
+  return null;
+}
 
 export async function listRoute(req, res) {
   res.json({ notes: await listNotes() });
@@ -79,14 +124,38 @@ export async function dispatchRoute(req, res) {
             agentId } = req.body || {};
 
     providerName = requestedProvider;
-    personaId = agentId || note.agentId || 'orchestra';
-    const persona   = PERSONAS_BY_ID.get(personaId);
+    const requestedPersonaId = resolveAgentIdSync(agentId || note.agentId || 'orchestra');
+    const handoffPersonaId = resolveHandoffAgentId(message, requestedPersonaId);
+    personaId = handoffPersonaId || requestedPersonaId;
+    const persona = getAgentSync(personaId);
+    const requestedPersona = getAgentSync(requestedPersonaId);
     const provider  = getProvider(providerName);
     if (!provider) return res.status(400).json({ error: 'unknown provider: ' + providerName });
 
     // Persist the user message (if provided) before dispatch — keeps the chat log honest.
     if (message && message.trim()) {
       await appendMessage(note.id, { role: 'user', content: message.trim() });
+    }
+
+    if (handoffPersonaId && handoffPersonaId !== requestedPersonaId) {
+      const targetName = persona?.name || handoffPersonaId;
+      const sourceName = requestedPersona?.name || requestedPersonaId;
+      pushEvent({
+        sessionId: `dispatch:${requestedPersonaId}`,
+        personaId: requestedPersonaId,
+        verb: 'handoff',
+        toolName: 'Notes',
+        text: `${sourceName} -> ${targetName}: ${String(message || note.title).slice(0, 100)}`,
+        status: 'ok',
+        dedupeKey: `dispatch-handoff:${note.id}:${Date.now()}`,
+      });
+      await appendMessage(note.id, {
+        role: 'agent',
+        agentId: requestedPersonaId,
+        provider: 'handoff',
+        content: `รับทราบ - ส่งต่อให้ ${targetName} ลงมือทำแล้ว`,
+        ok: true,
+      });
     }
 
     // Mark note as "running" while the CLI is in flight.
@@ -110,7 +179,9 @@ export async function dispatchRoute(req, res) {
       dedupeKey: `dispatch-prompt:${taskId}`,
     });
 
-    const prompt = buildPromptForNote(note, message, persona);
+    const prompt = buildPromptForNote(note, message, persona, {
+      handoffFrom: handoffPersonaId && handoffPersonaId !== requestedPersonaId ? requestedPersona : null,
+    });
 
     let collected = '';
     const result = await provider.run(
@@ -137,7 +208,7 @@ export async function dispatchRoute(req, res) {
       content: (result.output || '').trim() || '(empty response)',
       ok: result.ok,
     });
-    await updateNote(note.id, { status: result.ok ? 'done' : 'queued' });
+    await updateNote(note.id, { status: result.ok ? 'done' : 'queued', agentId: personaId });
     pushEvent({
       sessionId: `dispatch:${personaId}`,
       personaId,

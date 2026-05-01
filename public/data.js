@@ -16,7 +16,9 @@
   window.SHOP_CATALOG   = { skills: [], items: [], agents: [] };
   window.STATS = { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0 };
   window.NOTES          = [];
-  window.PROVIDERS      = { providers: [], default: 'echo' };
+  window.PROVIDERS      = { providers: [], default: 'claude' };
+  window.TASK_BOARD     = { statuses: ['backlog', 'running', 'review', 'done'], columns: {}, tasks: [] };
+  window.THEME_STATE    = { theme: 'game_guild', themes: ['anime_command', 'dark_ops', 'game_guild', 'rpg_guild'] };
 
   const Bus = window.COfficeBus = new EventTarget();
   const fire = () => Bus.dispatchEvent(new Event('refresh'));
@@ -25,7 +27,7 @@
   let stateVersion = 0;            // bumped on each snapshot/event so React re-renders
 
   function applySnapshot(s) {
-    window.AGENTS         = s.personas || [];
+    window.AGENTS         = s.agents || s.personas || [];
     window.ACTIVITY       = (s.events || []).slice(-50).reverse();
     window.TASKS          = s.tasks || [];
     window.RUNS           = s.runs || [];
@@ -33,6 +35,9 @@
     window.STATS          = s.stats || window.STATS;
     window.STATE_EDGES    = s.edges || [];
     window.STATE_SESSIONS = s.sessions || [];
+    window.TASK_BOARD     = s.taskBoard || window.TASK_BOARD;
+    window.THEME_STATE    = { theme: s.theme || window.THEME_STATE.theme, themes: s.themes || window.THEME_STATE.themes };
+    document.documentElement.dataset.theme = window.THEME_STATE.theme;
     stateVersion++;
     fire();
   }
@@ -47,6 +52,34 @@
   function applyPersonaLevels(map) {
     if (!map) return;
     window.AGENTS = window.AGENTS.map(a => ({ ...a, level: map[a.id] || 1 }));
+    stateVersion++;
+    fire();
+  }
+
+  function applyAgents(agents) {
+    if (!Array.isArray(agents)) return;
+    const statusById = Object.fromEntries((window.AGENTS || []).map((agent) => [agent.id, agent.status]));
+    window.AGENTS = agents.map((agent) => ({ ...agent, status: agent.status || statusById[agent.id] || 'idle' }));
+    fetch('/api/state').then(r => r.json()).then(applySnapshot).catch(() => {
+      stateVersion++;
+      fire();
+    });
+  }
+
+  function applyTaskBoard(board) {
+    if (!board || typeof board !== 'object') return;
+    window.TASK_BOARD = board;
+    stateVersion++;
+    fire();
+  }
+
+  function applyTheme(themeState) {
+    if (!themeState || typeof themeState !== 'object') return;
+    window.THEME_STATE = {
+      theme: themeState.theme || window.THEME_STATE.theme,
+      themes: themeState.themes || window.THEME_STATE.themes,
+    };
+    document.documentElement.dataset.theme = window.THEME_STATE.theme;
     stateVersion++;
     fire();
   }
@@ -142,6 +175,10 @@
     es.addEventListener('stats',          e => { window.STATS = { ...window.STATS, ...JSON.parse(e.data) }; stateVersion++; fire(); });
     es.addEventListener('persona.status', e => applyPersonaStatus(JSON.parse(e.data)));
     es.addEventListener('persona.levels', e => applyPersonaLevels(JSON.parse(e.data)));
+    es.addEventListener('agents',         e => applyAgents(JSON.parse(e.data)));
+    es.addEventListener('task-board',     e => applyTaskBoard(JSON.parse(e.data)));
+    es.addEventListener('theme',          e => applyTheme(JSON.parse(e.data)));
+    es.addEventListener('notes',          () => refreshNotes());
     window.COfficeApplyDispatch = function applyDispatch(dispatch) {
       window.DISPATCHES = [dispatch, ...window.DISPATCHES.filter(d => d.id !== dispatch.id)]
         .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
@@ -181,6 +218,7 @@
     fetchCOfficeShop: refreshShop,
     fetchCOfficeNotes: refreshNotes,
     fetchCOfficeProviders: refreshProviders,
+    fetchCOfficeState: () => fetch('/api/state').then(r => r.json()).then(applySnapshot),
   });
 
   bootstrap();

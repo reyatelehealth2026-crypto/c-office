@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { Dedupe, RingBuffer } from './util/dedupe.js';
-import { PERSONAS, PERSONAS_BY_ID, mapPersona } from './mapping/personas.js';
+import { listAgentsSync, getAgentSync, resolveAgentIdSync, mapAgentSync } from './store/agents.js';
+import { getTaskBoardSync } from './store/task-board.js';
+import { getThemeState, listThemes } from './store/theme.js';
 import { costUsd } from './mapping/pricing.js';
 
 export const bus = new EventEmitter();
@@ -18,8 +20,8 @@ export const state = {
   runs:     new Map(),               // run_id → orchestrator run record (server-side agent execution)
   dispatches: new Map(),             // dashboard-created mission notes / CLI dispatch drafts
   fileOffsets: new Map(),            // jsonlPath → byte offset
-  personaStatus: new Map(PERSONAS.map(p => [p.id, 'idle'])),
-  personaLevels: new Map(PERSONAS.map(p => [p.id, 1])),  // runtime progression; +1 per successful Task after reset/server start
+  personaStatus: new Map(listAgentsSync().map(p => [p.id, 'idle'])),
+  personaLevels: new Map(listAgentsSync().map(p => [p.id, p.level || 1])),  // runtime progression; +1 per successful Task after reset/server start
   stats: { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0, dayKey: today() },
   dedupe: new Dedupe(4096),
   lastToolActivity: new Map(),       // personaId → ts (mark busy while within window)
@@ -36,23 +38,73 @@ const nextDispatchId = () => `dispatch_${Date.now().toString(36)}_${(dispatchCou
 
 const DISPATCH_STATUSES = new Set(['draft', 'queued', 'chatting', 'done']);
 
-const hasPersona = (id) => PERSONAS_BY_ID.has(id);
 const resolvePersonaId = (value) => {
-  const raw = String(value || '').trim();
-  if (hasPersona(raw)) return raw;
-  const norm = raw.toLowerCase().replace(/\s+/g, '-');
-  const match = PERSONAS.find(p =>
-    p.id === norm ||
-    p.name.toLowerCase() === raw.toLowerCase() ||
-    p.name.toLowerCase().replace(/\s+/g, '-') === norm
-  );
-  return match?.id || 'orchestra';
+  return resolveAgentIdSync(value, 'orchestra');
 };
+
+function syncAgentRuntimeMaps() {
+  const ids = new Set(listAgentsSync().map((agent) => agent.id));
+  for (const id of ids) {
+    if (!state.personaStatus.has(id)) state.personaStatus.set(id, 'idle');
+    if (!state.personaLevels.has(id)) state.personaLevels.set(id, getAgentSync(id)?.level || 1);
+  }
+  for (const id of [...state.personaStatus.keys()]) if (!ids.has(id)) state.personaStatus.delete(id);
+  for (const id of [...state.personaLevels.keys()]) if (!ids.has(id)) state.personaLevels.delete(id);
+}
 
 const summarize = (s, n = 140) => {
   s = String(s ?? '').replace(/\s+/g, ' ').trim();
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 };
+
+const durationLabel = (ms) => {
+  if (!Number.isFinite(ms) || ms < 0) return '0s';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m < 60) return rem ? `${m}m ${rem}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+};
+
+const runProgress = (run) => {
+  const steps = Array.isArray(run?.steps) ? run.steps : [];
+  const failed = steps.filter(s => s.result?.ok === false).length;
+  const ok = steps.filter(s => s.result?.ok === true).length;
+  return { steps: steps.length, ok, failed };
+};
+
+const runSummary = (run) => {
+  if (!run) return '';
+  const progress = run.progress || runProgress(run);
+  if (run.status === 'running') {
+    return progress.steps
+      ? `${progress.steps} delegation${progress.steps === 1 ? '' : 's'} running or complete`
+      : 'Waiting for Orchestra to delegate';
+  }
+  if (run.status === 'failed') return summarize(run.error || run.result || 'Run failed', 180);
+  if (run.final) return summarize(run.final, 180);
+  if (run.result) return summarize(run.result, 180);
+  return progress.steps ? `${progress.steps} delegation${progress.steps === 1 ? '' : 's'} complete` : 'Run complete';
+};
+
+export function viewRun(run) {
+  if (!run) return null;
+  const durationMs = (run.endedAt || Date.now()) - run.startedAt;
+  const progress = run.progress || runProgress(run);
+  return {
+    ...run,
+    progress,
+    durationMs,
+    durationLabel: durationLabel(durationMs),
+    summary: run.summary || runSummary({ ...run, progress }),
+  };
+}
+
+function emitRun(run) {
+  bus.emit('run', viewRun(run));
+}
 
 function rolloverIfNewDay() {
   const k = today();
@@ -64,8 +116,9 @@ function rolloverIfNewDay() {
 }
 
 function recomputePersonaStatus() {
+  syncAgentRuntimeMaps();
   // base: idle for all
-  for (const p of PERSONAS) state.personaStatus.set(p.id, 'idle');
+  for (const p of listAgentsSync()) state.personaStatus.set(p.id, p.enabled === false ? 'offline' : 'idle');
   // active for any persona that owns a live session
   for (const s of state.sessions.values()) {
     if (s.endedAt) continue;
@@ -122,7 +175,7 @@ export function upsertSession(meta) {
   const { sessionId, pid, cwd, startedAt, kind, version, parentSessionId } = meta;
   if (!sessionId) return;
   const existing = state.sessions.get(sessionId);
-  const personaId = existing?.personaId || mapPersona(meta.subagent_type, kind);
+  const personaId = existing?.personaId || mapAgentSync(meta.subagent_type, kind);
   const session = {
     pid, sessionId, cwd, startedAt, kind, version, parentSessionId, personaId,
     endedAt: null,                                  // upsert always revives — file presence wins
@@ -202,7 +255,7 @@ export function recordUsage({ model, usage, dedupeKey, sessionId }) {
 
 export function startTask({ tool_use_id, sessionId, subagent_type, description }) {
   if (!tool_use_id) return;
-  const personaId = mapPersona(subagent_type, 'agent');
+  const personaId = mapAgentSync(subagent_type, 'agent');
   const task = {
     id: tool_use_id,
     sessionId,
@@ -250,40 +303,58 @@ export function startRun(runId, goal) {
     id: runId,
     goal: String(goal || '').slice(0, 4000),
     steps: [],
+    progress: { steps: 0, ok: 0, failed: 0 },
     status: 'running',
     result: null,
+    final: null,
+    error: null,
+    summary: 'Waiting for Orchestra to delegate',
     startedAt: Date.now(),
     endedAt: null,
   };
   state.runs.set(runId, run);
-  bus.emit('run', run);
+  emitRun(run);
   return run;
 }
 
 export function stepRun(runId, step) {
   const run = state.runs.get(runId);
   if (!run) return;
+  const personaId = resolvePersonaId(step.persona);
+  const persona = getAgentSync(personaId);
+  const ok = !!step.result?.ok;
   run.steps.push({
     tool_use_id: step.tool_use_id,
-    persona: step.persona,
+    persona: personaId,
+    personaName: persona?.name || String(step.persona || personaId),
     instruction: summarize(step.instruction || '', 220),
+    depends_on: step.depends_on || null,
     result: {
-      ok: !!step.result?.ok,
+      ok,
+      status: ok ? 'ok' : 'err',
       text: summarize(step.result?.text || '', 4000),
+      error: step.result?.error || (!ok ? summarize(step.result?.text || 'Delegation failed', 300) : null),
       image: step.result?.image || null,
     },
+    durationMs: Number.isFinite(step.durationMs) ? step.durationMs : null,
     ts: Date.now(),
   });
-  bus.emit('run', run);
+  run.progress = runProgress(run);
+  run.summary = runSummary(run);
+  emitRun(run);
 }
 
 export function finishRun(runId, outcome = {}) {
   const run = state.runs.get(runId);
   if (!run) return;
   run.status = outcome.status || 'done';
+  run.final = outcome.final || null;
+  run.error = outcome.error || null;
   run.result = outcome.final ?? outcome.error ?? null;
   run.endedAt = Date.now();
-  bus.emit('run', run);
+  run.progress = runProgress(run);
+  run.summary = runSummary(run);
+  emitRun(run);
 }
 
 // ---------- Dashboard dispatches / mission notes ----------
@@ -363,8 +434,8 @@ export function clearState() {
   state.stats.spendToday  = 0;
   state.dedupe = new Dedupe(4096);
   state.lastToolActivity.clear();
-  // Reset every persona to Lv.1 — fresh RPG progression starts here.
-  for (const p of PERSONAS) state.personaLevels.set(p.id, 1);
+  syncAgentRuntimeMaps();
+  for (const p of listAgentsSync()) state.personaLevels.set(p.id, 1);
   bus.emit('persona.levels', Object.fromEntries(state.personaLevels));
   recomputePersonaStatus();
   recomputeStats();
@@ -375,7 +446,8 @@ export function clearState() {
 
 // Reset only RPG levels. Keeps activity, sessions, tasks, stats, and notes.
 export function resetPersonaLevels() {
-  for (const p of PERSONAS) state.personaLevels.set(p.id, 1);
+  syncAgentRuntimeMaps();
+  for (const p of listAgentsSync()) state.personaLevels.set(p.id, 1);
   bus.emit('persona.levels', Object.fromEntries(state.personaLevels));
 }
 
@@ -384,23 +456,32 @@ export function resetPersonaLevels() {
 export function snapshot() {
   recomputeStats();
   recomputePersonaStatus();
-  const personas = PERSONAS.map(p => {
+  syncAgentRuntimeMaps();
+  const agents = listAgentsSync().map(p => {
     const status = state.personaStatus.get(p.id) || 'idle';
     // pick the most recent live session this persona owns for currentTask + stats
     const owned = [...state.sessions.values()].filter(s => s.personaId === p.id);
     const live  = owned.filter(s => !s.endedAt);
     const recent = (live[0] || owned[0]);
     const tasksDone = [...state.tasks.values()].filter(t => t.personaId === p.id && t.status !== 'running').length;
+    const doneCount = [...state.tasks.values()].filter(t => t.personaId === p.id && t.status === 'done').length;
     const success = tasksDone
-      ? Math.round(100 * [...state.tasks.values()].filter(t => t.personaId === p.id && t.status === 'done').length / tasksDone)
+      ? Math.round(100 * doneCount / tasksDone)
       : 100;
     const tokens = state.events.filter(e => e.personaId === p.id).reduce((acc, e) => {
       if (!e.usage) return acc;
       return acc + (e.usage.input_tokens||0) + (e.usage.output_tokens||0) + (e.usage.cache_read_input_tokens||0);
     }, 0);
+    const exp = (doneCount * 100) + Math.floor(tokens / 100);
+    const level = state.personaLevels.get(p.id) ?? p.level ?? 1;
+    const progress = exp % 500;
     return {
       ...p,
       level: state.personaLevels.get(p.id) ?? 1,    // dynamic — reset to 1 by clearState, +1 per task done
+      level,
+      exp,
+      reward: doneCount * 100,
+      progress: Math.round((progress / 500) * 100),
       status,
       currentTask: recent?.currentTask || (status === 'idle' ? '— idle' : 'awaiting work'),
       stats: {
@@ -425,15 +506,51 @@ export function snapshot() {
     .filter(Boolean)
     .filter(([a,b]) => a !== b);
 
+  const gameProgress = {
+    theme: getThemeState().theme,
+    exp: agents.reduce((sum, agent) => sum + (agent.exp || 0), 0),
+    reward: agents.reduce((sum, agent) => sum + (agent.reward || 0), 0),
+    progress: agents.length
+      ? Math.round(agents.reduce((sum, agent) => sum + (agent.progress || 0), 0) / agents.length)
+      : 0,
+    perAgent: Object.fromEntries(agents.map((agent) => [agent.id, {
+      level: agent.level,
+      exp: agent.exp || 0,
+      reward: agent.reward || 0,
+      progress: agent.progress || 0,
+      status: agent.status,
+    }])),
+  };
+  const liveBoardTasks = [...state.tasks.values()].slice(-100).map((task) => ({
+    id: `live:${task.id}`,
+    taskId: task.id,
+    title: task.description || task.subagent_type || 'Live agent task',
+    description: task.description || '',
+    agentId: task.personaId,
+    status: task.status === 'running' ? 'running' : task.status === 'done' ? 'done' : 'review',
+    runStatus: task.status,
+    createdAt: task.startedAt,
+    updatedAt: task.endedAt || task.startedAt,
+    events: [
+      { id: `live-start:${task.id}`, ts: task.startedAt, text: 'live task started', status: 'running' },
+      ...(task.endedAt ? [{ id: `live-end:${task.id}`, ts: task.endedAt, text: `live task ${task.status}`, status: task.status }] : []),
+    ],
+  }));
+
   return {
-    personas,
+    agents,
+    personas: agents,
     sessions: [...state.sessions.values()],
     events: state.events.toArray(),
     tasks: [...state.tasks.values()].sort((a,b) => b.startedAt - a.startedAt).slice(0, 100),
-    runs: [...state.runs.values()].sort((a,b) => b.startedAt - a.startedAt).slice(0, 50),
+    runs: [...state.runs.values()].sort((a,b) => b.startedAt - a.startedAt).slice(0, 50).map(viewRun),
     dispatches: [...state.dispatches.values()].sort((a,b) => b.updatedAt - a.updatedAt).slice(0, 100),
     stats: state.stats,
     edges,
+    taskBoard: getTaskBoardSync(liveBoardTasks),
+    theme: getThemeState().theme,
+    themes: listThemes(),
+    gameProgress,
     serverTime: Date.now(),
   };
 }

@@ -3,80 +3,29 @@
 const NOTE_STATUS_TH = {
   idea:     'ไอเดีย',
   queued:   'คิว',
-  running:  'ออกภารกิจ',
-  done:     'จบภารกิจ',
+  running:  'กำลังทำ',
+  done:     'เสร็จ',
   archived: 'เก็บ',
 };
 const noteStatusLabel = (s) => NOTE_STATUS_TH[s] || s;
 
 const NoteTagPalette = ['idea', 'task', 'bug', 'research', 'design', 'ops'];
 
-/* ===== Agent activity indicator (thinking / using-tool / typing) ===== */
-const TOOL_LABEL = {
-  Bash: 'กำลังรันคำสั่ง',
-  Read: 'กำลังอ่านไฟล์',
-  Write: 'กำลังเขียนไฟล์',
-  Edit: 'กำลังแก้ไขไฟล์',
-  Grep: 'กำลังค้นหา',
-  WebSearch: 'กำลังค้นเว็บ',
-  WebFetch: 'กำลังดึงเว็บเพจ',
-  Task: 'กำลังเรียกซับเอเจนต์',
-};
-
-const AgentActivityIndicator = ({ stage, tool, agent }) => {
-  const label =
-    stage === 'using-tool' ? (TOOL_LABEL[tool] || `กำลังใช้ ${tool}`)
-    : stage === 'typing'   ? `${agent?.name || 'Agent'} กำลังพิมพ์`
-    : `${agent?.name || 'Agent'} กำลังคิด`;
-  return (
-    <div className={'agent-activity stage-' + stage}>
-      {stage === 'using-tool' ? (
-        <span className="agent-activity-tool" aria-hidden>⚙</span>
-      ) : (
-        <span className="agent-activity-dots" aria-hidden>
-          <i/><i/><i/>
-        </span>
-      )}
-      <span className="agent-activity-label">{label}</span>
-    </div>
-  );
-};
-
 const NotesPage = ({ onOpenAgent, presetAgentId }) => {
   window.useCOfficeRefresh();
   const notes = window.NOTES || [];
   const agents = window.AGENTS || [];
   const providers = (window.PROVIDERS?.providers) || [];
-  const defaultProvider = window.PROVIDERS?.default || 'echo';
+  const defaultProvider = window.PROVIDERS?.default || 'claude';
 
-  const [activeId, setActiveId] = React.useState(() => {
-    try { return localStorage.getItem('c-office-active-note') || null; } catch { return null; }
-  });
+  const [activeId, setActiveId] = React.useState(null);
   const [composerOpen, setComposerOpen] = React.useState(false);
   const [draft, setDraft] = React.useState({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'orchestra' });
 
-  // Auto-select first note when list arrives (only if we haven't been told otherwise)
+  // Auto-select first note when list arrives
   React.useEffect(() => {
     if (!activeId && notes.length > 0) setActiveId(notes[0].id);
   }, [notes.length]);
-
-  // Listen for cross-page open-note requests (e.g. from page-scene's inline dispatch)
-  React.useEffect(() => {
-    const onOpen = (e) => {
-      const id = e.detail?.noteId;
-      if (id) {
-        setActiveId(id);
-        try { localStorage.setItem('c-office-active-note', id); } catch {}
-      }
-    };
-    window.addEventListener('c-office:open-note', onOpen);
-    return () => window.removeEventListener('c-office:open-note', onOpen);
-  }, []);
-
-  // Persist the user's currently-selected note across reloads
-  React.useEffect(() => {
-    if (activeId) try { localStorage.setItem('c-office-active-note', activeId); } catch {}
-  }, [activeId]);
 
   const active = notes.find(n => n.id === activeId);
 
@@ -118,8 +67,8 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>เควสต์ <span className="accent">ทั้งหมด</span></h1>
-          <div className="sub">รับเควสต์ · มอบหมายสมาชิก · คุยก่อน · ออกเดินทางเมื่อพร้อม</div>
+          <h1>Notes <span className="accent">All</span></h1>
+          <div className="sub">Capture ideas · Assign agents · Chat before dispatch</div>
         </div>
         <div className="topbar-actions">
           <span className="chip"><span className="dot"/> {notes.length} โน้ต</span>
@@ -323,76 +272,99 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
   const [draft, setDraft] = React.useState('');
   const [provider, setProvider] = React.useState(defaultProvider);
   const [busy, setBusy] = React.useState(false);
-  const [agentState, setAgentState] = React.useState(null);  // { stage: 'thinking'|'using-tool'|'typing', tool?: string, since: number }
-  const [error, setError] = React.useState(null);
+  const [optimisticMessages, setOptimisticMessages] = React.useState([]);
+  const [imageBusy, setImageBusy] = React.useState(false);
+  const [imageStatus, setImageStatus] = React.useState(null);
   const [editing, setEditing] = React.useState(false);
   const [editDraft, setEditDraft] = React.useState({ title: note.title, body: note.body });
 
   React.useEffect(() => { setEditDraft({ title: note.title, body: note.body }); setEditing(false); }, [note.id]);
+  React.useEffect(() => { setOptimisticMessages([]); }, [note.id, note.messages?.length]);
+  React.useEffect(() => {
+    fetch('/api/images/status')
+      .then(r => r.json())
+      .then(setImageStatus)
+      .catch(() => setImageStatus(null));
+  }, []);
 
+  const displayedMessages = React.useMemo(() => {
+    const saved = note.messages || [];
+    const savedUserKeys = new Set(saved.filter(m => m.role === 'user').map(m => `${m.content}:${m.ts}`));
+    const pending = optimisticMessages.filter(m => !savedUserKeys.has(`${m.content}:${m.ts}`));
+    return [...saved, ...pending];
+  }, [note.messages, optimisticMessages]);
+  const isAgentTyping = busy || note.status === 'running';
   const messagesEnd = React.useRef(null);
   React.useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [note.messages?.length, agentState]);
-
-  // Subscribe to SSE events while a dispatch is in flight, so we can flip
-  // the indicator from "thinking" → "using-tool" → "typing" if the server
-  // emits tool-use markers for this persona.
-  React.useEffect(() => {
-    if (!busy) return;
-    const onSSE = (ev) => {
-      try {
-        const e = JSON.parse(ev.data);
-        if (e?.personaId !== (note.agentId || 'orchestra')) return;
-        if (e.verb === 'used' && e.toolName && e.toolName !== provider) {
-          setAgentState({ stage: 'using-tool', tool: e.toolName, since: Date.now() });
-        } else if (e.verb === 'used') {
-          // chunked output starting to arrive
-          setAgentState({ stage: 'typing', since: Date.now() });
-        }
-      } catch {}
-    };
-    const es = window._cofficeStream;
-    if (es && typeof es.addEventListener === 'function') {
-      es.addEventListener('event', onSSE);
-      return () => es.removeEventListener('event', onSSE);
-    }
-  }, [busy, note.agentId, provider]);
+  }, [displayedMessages.length, isAgentTyping]);
 
   async function dispatch(autoMessage) {
     if (busy) return;
     const message = autoMessage !== undefined ? autoMessage : draft.trim();
-    setError(null);
-    setBusy(true);
-    setAgentState({ stage: 'thinking', since: Date.now() });
+    if (!message.trim()) return;
+    const pending = { role: 'user', content: message.trim(), ts: Date.now(), pending: true };
+    setOptimisticMessages(prev => [...prev, pending]);
     setDraft('');
-    onChange?.();
+    setBusy(true);
     try {
-      const r = await fetch('/api/notes/' + note.id + '/dispatch', {
+      const r = await fetch(`/api/notes/${note.id}/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider,
           agentId: note.agentId || 'orchestra',
-          message: message || '',
+          message: message.trim(),
         }),
       });
-      const j = await r.json();
-      if (!j.ok) {
-        setError(j.error || 'Dispatch failed' + (j.exitCode != null ? ` (exit ${j.exitCode})` : ''));
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) {
+        throw new Error(j.error || j.output || `Provider ${provider} failed`);
       }
+      await onChange?.();
     } catch (e) {
-      setError(e.message || String(e));
+      alert(e.message || String(e));
+      await onChange?.();
     } finally {
-      setAgentState(null);
       setBusy(false);
-      window.refreshNotes && window.refreshNotes();
     }
+  }
+
+  function openScene(autoMessage) {
+    const message = autoMessage !== undefined ? autoMessage : draft.trim();
+    window.openScene?.({
+      noteId: note.id,
+      agentId: note.agentId || 'orchestra',
+      provider,
+      message,
+    });
   }
 
   async function saveEdit() {
     await onPatch({ title: editDraft.title.trim() || 'Untitled note', body: editDraft.body });
     setEditing(false);
+  }
+
+  async function generateImage() {
+    if (imageBusy) return;
+    const prompt = (draft.trim() || note.body || note.title || '').trim();
+    if (!prompt) return;
+    setImageBusy(true);
+    try {
+      const r = await fetch('/api/images/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId: note.id, prompt }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'สร้างภาพไม่สำเร็จ');
+      setDraft('');
+      onChange?.();
+    } catch (e) {
+      alert(e.message || String(e));
+    } finally {
+      setImageBusy(false);
+    }
   }
 
   return (
@@ -459,15 +431,15 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
       </div>
 
       <div className="note-chat">
-        {(note.messages || []).length === 0 && !agentState && (
+        {displayedMessages.length === 0 && (
           <div className="muted" style={{fontSize: 12, padding: '20px 0', textAlign: 'center'}}>
-            ยังไม่มีบทสนทนา · คุยกับ {agent?.name || 'เอเจนท์'} ได้เลย ผ่านช่องด้านล่าง
+            ยังไม่มีบทสนทนา คุยกับ {agent?.name || 'เอเจนท์'} ได้โดยตรง ระบบจะรอคำตอบจริงจาก provider แล้วบันทึกในแชตนี้
           </div>
         )}
-        {(note.messages || []).map((m, i) => {
+        {displayedMessages.map((m, i) => {
           const who = m.role === 'agent' ? (agents.find(a => a.id === m.agentId) || agent) : null;
           return (
-            <div key={i} className={'note-msg note-msg-' + m.role}>
+            <div key={m.ts || i} className={'note-msg note-msg-' + m.role + (m.pending ? ' is-pending' : '')}>
               {m.role === 'agent' ? (
                 <AgentDot agent={who} size={28}/>
               ) : (
@@ -477,34 +449,31 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
                 <div className="note-msg-meta">
                   <b>{m.role === 'user' ? 'คุณ' : (who?.name || m.role)}</b>
                   {m.provider && <span className="mono-s">via {m.provider}</span>}
+                  {m.pending && <span className="mono-s">sending</span>}
                   <span className="mono-s" style={{marginLeft: 'auto'}}>{fmtDate(m.ts)}</span>
                 </div>
                 <div className="note-msg-content">{m.content}</div>
+                {m.imageUrl && (
+                  <a className="generated-image-card" href={m.imageUrl} target="_blank" rel="noreferrer">
+                    <img src={m.imageUrl} alt={m.prompt || m.content || 'generated image'}/>
+                    <span>เปิดภาพเต็ม</span>
+                  </a>
+                )}
               </div>
             </div>
           );
         })}
-        {agentState && (
-          <div className="note-msg note-msg-agent">
+        {isAgentTyping && (
+          <div className="note-msg note-msg-agent note-msg-typing">
             <AgentDot agent={agent} size={28}/>
-            <div className="note-msg-bubble note-msg-pending">
+            <div className="note-msg-bubble">
               <div className="note-msg-meta">
                 <b>{agent?.name || 'Agent'}</b>
-                <span className="mono-s">via {provider}</span>
+                <span className="mono-s">typing</span>
               </div>
-              <AgentActivityIndicator stage={agentState.stage} tool={agentState.tool} agent={agent}/>
-            </div>
-          </div>
-        )}
-        {error && (
-          <div className="note-msg note-msg-agent">
-            <AgentDot agent={agent} size={28}/>
-            <div className="note-msg-bubble" style={{borderColor:'var(--red)', background:'rgba(239,68,68,0.08)'}}>
-              <div className="note-msg-meta">
-                <b style={{color:'var(--red)'}}>Dispatch error</b>
-                <button className="btn ghost" style={{marginLeft:'auto', fontSize:11, padding:'2px 8px'}} onClick={() => setError(null)}>dismiss</button>
+              <div className="note-msg-content">
+                กำลังพิมพ์<span className="typing-dots">...</span>
               </div>
-              <div className="note-msg-content" style={{color:'var(--red)'}}>{error}</div>
             </div>
           </div>
         )}
@@ -517,7 +486,6 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
           rows={3}
           placeholder={`คุยกับ ${agent?.name || 'เอเจนท์'}...`}
           value={draft}
-          disabled={busy}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -530,8 +498,19 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
           <span className="mono-s" style={{marginRight: 'auto'}}>
             Ctrl/⌘+Enter เพื่อส่ง · ใช้ <b>{provider}</b>
           </span>
+          <button
+            className="btn gold"
+            disabled={imageBusy || !imageStatus?.connected || !(draft.trim() || note.body || note.title)}
+            onClick={generateImage}
+            title={imageStatus?.connected ? `สร้างภาพจริงด้วย ${imageStatus.source || 'OpenAI'}` : 'login Codex หรือเชื่อม OpenAI ในหน้าตั้งค่าก่อน'}
+          >
+            {imageBusy ? 'กำลังสร้างภาพ...' : 'สร้างภาพจริง'}
+          </button>
+          <button className="btn ghost" disabled={busy} onClick={() => openScene('')}>
+            Open Scene
+          </button>
           <button className="btn primary" disabled={busy || !draft.trim()} onClick={() => dispatch()}>
-            {busy ? '⏳ กำลังประมวลผล…' : 'ส่ง'}
+            {busy ? 'รอคำตอบจริง...' : 'ส่งคุยกับเอเจนท์'}
           </button>
         </div>
       </div>

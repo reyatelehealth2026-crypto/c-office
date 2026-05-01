@@ -49,8 +49,8 @@
     transparent 20%,
     rgba(255,255,255,0.0) 30%,
     rgba(255,255,255,0.15) 45%,
-    rgba(157, 92, 255, 0.25) 55%,
-    rgba(34, 211, 238, 0.15) 62%,
+    rgba(255, 107, 107, 0.25) 55%,
+    rgba(78, 205, 196, 0.15) 62%,
     transparent 80%);
   background-size: 300% 300%;
   background-position: 0% 50%;
@@ -64,9 +64,9 @@
 /* SSR rainbow border pulse */
 .gacha[data-rarity="SSR"] { box-shadow: 0 14px 40px -10px rgba(251,191,36,0.35), 0 0 0 1px rgba(251,191,36,0.15); }
 .gacha-wrap:hover .gacha[data-rarity="SSR"] { box-shadow: 0 16px 60px -10px rgba(251,191,36,0.6), 0 0 0 1px rgba(251,191,36,0.3); }
-.gacha[data-rarity="SR"] { box-shadow: 0 14px 40px -12px rgba(157,92,255,0.4), 0 0 0 1px rgba(157,92,255,0.15); }
-.gacha-wrap:hover .gacha[data-rarity="SR"] { box-shadow: 0 16px 60px -10px rgba(157,92,255,0.6); }
-.gacha[data-rarity="R"] { box-shadow: 0 12px 32px -12px rgba(34,211,238,0.35); }
+.gacha[data-rarity="SR"] { box-shadow: 0 14px 40px -12px rgba(255,107,107,0.4), 0 0 0 1px rgba(255,107,107,0.15); }
+.gacha-wrap:hover .gacha[data-rarity="SR"] { box-shadow: 0 16px 60px -10px rgba(255,107,107,0.6); }
+.gacha[data-rarity="R"] { box-shadow: 0 12px 32px -12px rgba(78,205,196,0.35); }
 .gacha[data-rarity="N"] { box-shadow: 0 8px 24px -12px rgba(0,0,0,0.6); }
 
 /* background art (placeholder gradient) */
@@ -74,7 +74,7 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: var(--art-gradient, linear-gradient(160deg, #5b21b6, #1e1b4b 60%, #06b6d4));
+  background: var(--art-gradient, linear-gradient(160deg, #8B3A3A, #2a1a1a 60%, #3AA899));
   overflow: hidden;
 }
 /* art grain */
@@ -305,7 +305,7 @@
 
 .office-card .of-art {
   position: absolute; inset: 0;
-  background: var(--art-gradient, linear-gradient(160deg, #5b21b6, #06b6d4));
+  background: var(--art-gradient, linear-gradient(160deg, #8B3A3A, #3AA899));
   z-index: 0;
 }
 .office-card .of-art img {
@@ -360,8 +360,8 @@
 
 /* rarity-tinted frame hint */
 .office-card.rarity-SSR { border-color: rgba(251,191,36,0.28); }
-.office-card.rarity-SR  { border-color: rgba(157,92,255,0.28); }
-.office-card.rarity-R   { border-color: rgba(34,211,238,0.28); }
+.office-card.rarity-SR  { border-color: rgba(255,107,107,0.28); }
+.office-card.rarity-R   { border-color: rgba(78,205,196,0.28); }
 
 /* ----- STATES ----- */
 

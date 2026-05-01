@@ -96,11 +96,11 @@
   min-height: 320px;
   padding: 24px 28px;
   border-radius: var(--radius-lg);
-  border: 2px solid rgba(157, 92, 255, 0.3);
-  background: linear-gradient(160deg, #1a0e3a 0%, #0c0625 60%, #200a4a 100%);
+  border: 2px solid rgba(255, 107, 107, 0.3);
+  background: linear-gradient(160deg, #1a1210 0%, #0c0a10 60%, #201010 100%);
   box-shadow:
     0 24px 70px -24px rgba(0, 0, 0, 0.85),
-    inset 0 0 80px rgba(157, 92, 255, 0.08);
+    inset 0 0 80px rgba(255, 107, 107, 0.08);
   overflow: hidden;
 }
 
@@ -326,7 +326,7 @@
   border-radius: 6px;
   transition: background 120ms ease;
   font-size: 13px;
-  border-bottom: 1px solid rgba(157, 92, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 107, 107, 0.08);
 }
 
 .adv-log-row:last-child {
@@ -334,7 +334,7 @@
 }
 
 .adv-log-row:hover {
-  background: rgba(157, 92, 255, 0.06);
+  background: rgba(255, 107, 107, 0.06);
 }
 
 .adv-log-actor {
@@ -722,8 +722,8 @@
   margin-top: 4px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: rgba(157, 92, 255, 0.08);
-  border: 1px dashed rgba(157, 92, 255, 0.35);
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px dashed rgba(255, 107, 107, 0.35);
   font-family: var(--font-mono);
   font-size: 11px;
 }

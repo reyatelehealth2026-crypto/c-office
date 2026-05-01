@@ -10,8 +10,8 @@
 const QUEST_STATUS_LABEL_TH = {
   idea:     'ไอเดีย',
   queued:   'คิว',
-  running:  'ออกภารกิจ',
-  done:     'จบภารกิจ',
+  running:  'กำลังทำ',
+  done:     'เสร็จ',
   archived: 'เก็บ',
 };
 
@@ -113,10 +113,10 @@ const QuestCard = ({ note, onSortie, onPick, onAfterAction }) => {
           <span className={`note-status status-${status}`} style={{ padding: '2px 6px', borderRadius: 4 }}>
             {statusLabel}
           </span>
-          {agent && <span style={{ color: 'var(--text-3)' }}>· มอบหมาย: {agent.name}</span>}
+          {agent && <span style={{ color: 'var(--text-3)' }}>· assigned: {agent.name}</span>}
           <span style={{ color: 'var(--text-4)' }}>· {provider}</span>
         </div>
-        <div className="quest-scroll-title">{note.title || 'เควสต์ไม่มีชื่อ'}</div>
+        <div className="quest-scroll-title">{note.title || 'Untitled task'}</div>
         {(note.body || note.description) && (
           <div className="quest-scroll-desc">{note.body || note.description}</div>
         )}
@@ -127,7 +127,7 @@ const QuestCard = ({ note, onSortie, onPick, onAfterAction }) => {
           disabled={isDone}
           onClick={() => onSortie && onSortie(note)}
         >
-          ⚔ ออกเดินทาง
+          ▶ Run
         </button>
         {(note.runHistory || note.dispatches || []).length > 0 && (
           <button
@@ -135,7 +135,7 @@ const QuestCard = ({ note, onSortie, onPick, onAfterAction }) => {
             style={{ padding: '4px 10px', fontSize: 11 }}
             onClick={() => onAfterAction && onAfterAction(note.id)}
           >
-            📜 รายงาน
+            📄 Report
           </button>
         )}
       </div>
@@ -159,7 +159,7 @@ const AfterActionPanel = ({ note, onClose }) => {
     <div className="aar-panel">
       <div className="aar-head">
         <span style={{ color: 'var(--gold)' }}><Banner size={18}/></span>
-        <div className="aar-head-title">รายงานผล · {note.title}</div>
+        <div className="aar-head-title">Report · {note.title}</div>
         <button
           className="btn ghost"
           style={{ marginLeft: 'auto', padding: '4px 10px', fontSize: 11 }}
@@ -169,7 +169,7 @@ const AfterActionPanel = ({ note, onClose }) => {
         </button>
       </div>
       {history.length === 0 && (
-        <div className="aar-empty">— ยังไม่มีบันทึกภารกิจ —</div>
+        <div className="aar-empty">— No run history yet —</div>
       )}
       {history.slice(0, 12).map((row, i) => {
         const status = row.status || row.state || '—';
@@ -232,16 +232,16 @@ const GuildHall = ({ onOpenAgent }) => {
           <Sigil size={36} color="var(--gold)"/>
         </div>
         <div className="guild-hero-meta">
-          <h1 className="guild-hero-name">หอ<span className="accent">กิลด์</span></h1>
+          <h1 className="guild-hero-name">Command<span className="accent">Center</span></h1>
           <div className="guild-hero-sub">
-            สมาชิก {agents.length} คน · ออนไลน์ {stats.agentsOnline || liveAgents.length} · เควสต์เปิด {openQuests.length}
+            {agents.length} agents · {stats.agentsOnline || liveAgents.length} online · {openQuests.length} open tasks
           </div>
         </div>
         <div className="guild-hero-stats">
           <span className="guild-gold-pip">
             <span style={{ fontSize: 16 }}>⛁</span>
             <span className="num">{(inventory.gold || 0).toLocaleString()}</span>
-            <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>ทองกิลด์</span>
+            <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>Credits</span>
           </span>
           <span className="chip">
             <span className="dot"/> live
@@ -252,13 +252,13 @@ const GuildHall = ({ onOpenAgent }) => {
       {/* ─── Quest Board ─── */}
       <div className="guild-section-head">
         <span className="glyph"><Scroll size={20}/></span>
-        <h2>กระดานเควสต์</h2>
-        <span className="right-meta">{openQuests.length} เปิด · {notes.length} ทั้งหมด</span>
+        <h2>Open Tasks</h2>
+        <span className="right-meta">{openQuests.length} open · {notes.length} total</span>
       </div>
       <div className="quest-board">
         {openQuests.length === 0 && (
           <div className="quest-board-empty">
-            ไม่มีเควสต์เปิดในตอนนี้ — สร้างเควสต์ใหม่ที่หน้า "เควสต์"
+            No open tasks right now — create a new note to get started
           </div>
         )}
         {openQuests.slice(0, 6).map((note) => (
@@ -278,9 +278,9 @@ const GuildHall = ({ onOpenAgent }) => {
       {/* ─── Roster ─── */}
       <div className="guild-section-head">
         <span className="glyph"><Crossed size={20}/></span>
-        <h2>สมาชิกกิลด์</h2>
+        <h2>Team</h2>
         <span className="right-meta">
-          ทำงาน {liveAgents.length} · พร้อม {agents.filter((a) => a.status === 'active' || a.status === 'idle').length}
+          {liveAgents.length} working · {agents.filter((a) => a.status === "active" || a.status === "idle").length} ready
         </span>
       </div>
       <div className="roster-grid">

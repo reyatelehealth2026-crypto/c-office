@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="notes.css"/>
 <link rel="stylesheet" href="scene.css"/>
 <link rel="stylesheet" href="guild.css"/>
+<link rel="stylesheet" href="agent-office.css"/>
 <style>
 .feed-row {
   display:flex; gap:12px; align-items:center;
@@ -73,8 +74,8 @@ const App = () => {
     <div className="app" data-screen-label={page}>
       <Sidebar page={page} setPage={(p) => { setPage(p); setActiveAgent(null); }}/>
       <main className="main">
-        {page === 'dashboard' && <GuildHall onOpenAgent={openAgent}/>}
-        {page === 'mission-control' && <Dashboard layout={dashLayout} setLayout={setDashLayout} onOpenAgent={openAgent}/>}
+        {page === 'dashboard' && <Dashboard layout={dashLayout} setLayout={setDashLayout} onOpenAgent={openAgent}/>}
+        {page === 'guild' && <GuildHall onOpenAgent={openAgent}/>}
         {page === 'agents' && <AgentsPage onOpenAgent={openAgent} setPage={setPage}/>}
         {page === 'shop' && <AgentShopPage onOpenAgent={openAgent}/>}
         {page === 'agent-detail' && agent && <AgentDetail agent={agent} onBack={() => setPage('agents')} onOpenAgent={openAgent}/>}
@@ -84,6 +85,7 @@ const App = () => {
         {page === 'settings' && <SettingsPage/>}
         {page === 'adventure' && <AdventurePage onOpenAgent={openAgent}/>}
         {page === 'notes' && <NotesPage onOpenAgent={openAgent}/>}
+        {page === 'scene' && <SceneLaunchPage onOpenAgent={openAgent}/>}
       </main>
       <SceneOverlay/>
     </div>

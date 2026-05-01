@@ -49,6 +49,23 @@ const SendToOrchestra = () => {
   const [authStatus, setAuthStatus] = React.useState(null);
   const [runs, setRuns] = React.useState(window.RUNS || []);
 
+  const placeholders = [
+    'Summarize TikTok trends for 2026...',
+    'Write a marketing article about our product...',
+    'Research competitor pricing strategies...',
+    'Analyze social media engagement data...',
+    'Draft a weekly progress report...',
+    'Find market opportunities in Southeast Asia...',
+    'Create a content calendar for next month...',
+    'Generate user personas from analytics...',
+  ];
+  const [placeholderIdx, setPlaceholderIdx] = React.useState(0);
+
+  React.useEffect(() => {
+    const id = setInterval(() => setPlaceholderIdx(i => (i + 1) % placeholders.length), 3000);
+    return () => clearInterval(id);
+  }, []);
+
   React.useEffect(() => {
     fetch('/api/auth/status').then(r => r.json()).then(setAuthStatus).catch(()=>{});
     fetch('/api/tasks').then(r => r.json()).then(j => setRuns(j.runs || [])).catch(()=>{});
@@ -84,7 +101,7 @@ const SendToOrchestra = () => {
   const liveRun = runs.find(r => r.status === 'running') || runs[0];
 
   return (
-    <div className="task-bar">
+    <div className="task-bar task-bar-premium">
       <div className="task-bar-icon">⚡</div>
       <input
         type="text"
@@ -92,7 +109,7 @@ const SendToOrchestra = () => {
         onChange={e => setGoal(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') submit(); }}
         disabled={!connected || busy}
-        placeholder={connected ? 'สั่งงานเอเจนท์... เช่น Research 2026 AI trends and draft a post' : 'Connect Anthropic in Settings first'}
+        placeholder={connected ? placeholders[placeholderIdx] : 'Connect Anthropic in Settings first'}
       />
       <button className="btn-primary-task"
         onClick={submit} disabled={!connected || busy || !goal.trim()}>
@@ -131,7 +148,7 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>Mission <span className="accent">Control</span></h1>
+          <h1>Agent <span className="accent">Workspace</span></h1>
           <div className="sub">Live · {agentsOnline} online · {activeTasks} active tasks · {STATE_SESSIONS.filter(s=>!s.endedAt).length} sessions</div>
         </div>
         <div className="topbar-actions">
@@ -179,7 +196,7 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
         <AgentWorkspace onOpenAgent={onOpenAgent}/>
       </div>
 
-      <div className="grid" style={{gridTemplateColumns: '2fr 1fr'}}>
+      <div className="grid dashboard-grid">
         {/* LIVE FEED */}
         <div className="panel">
           <div className="panel-head">
@@ -247,7 +264,7 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
         </div>
 
         {/* COLLABORATION GRAPH */}
-        <div className="panel" style={{gridColumn: 'span 2'}}>
+        <div className="panel dashboard-grid-wide">
           <div className="panel-head">
             <h3>Agent Collaboration</h3>
             <div className="right">last 1h</div>

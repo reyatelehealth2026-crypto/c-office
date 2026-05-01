@@ -1,4 +1,5 @@
 import { bus } from '../state.js';
+import { notesBus } from '../runner/notes.js';
 
 const HEARTBEAT_MS = 25_000;
 const EVENT_TYPES = [
@@ -11,6 +12,9 @@ const EVENT_TYPES = [
   'stats',
   'persona.status',
   'persona.levels',
+  'agents',
+  'task-board',
+  'theme',
   'auth.status',
   'inventory',
 ];
@@ -34,11 +38,14 @@ export default function streamRoute(req, res) {
     handlers[t] = (payload) => send(t, payload);
     bus.on(t, handlers[t]);
   }
+  const notesHandler = (payload) => send('notes', payload);
+  notesBus.on('change', notesHandler);
 
   const hb = setInterval(() => res.write(`: hb\n\n`), HEARTBEAT_MS);
 
   req.on('close', () => {
     clearInterval(hb);
     for (const t of EVENT_TYPES) bus.off(t, handlers[t]);
+    notesBus.off('change', notesHandler);
   });
 }

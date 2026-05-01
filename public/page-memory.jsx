@@ -1,6 +1,6 @@
 /* ===== MEMORY GRAPH PAGE ===== */
 const catColor = {
-  project: '#fbbf24', topic: '#9d5cff', fact: '#22d3ee',
+  project: '#fbbf24', topic: '#FF6B6B', fact: '#4ECDC4',
   design: '#f472b6', pref: '#34d399', idea: '#fb923c',
   insight: '#60a5fa', intel: '#ef4444', rule: '#94a3b8', persona: '#c084fc',
 };
@@ -36,7 +36,7 @@ const MemoryPanel = ({ agent, onOpenAgent, compact }) => {
       )}
 
       <div className="grid" style={{gridTemplateColumns: compact ? '1fr' : '1fr 300px', gap:14}}>
-        <div className="panel" style={{padding:0, overflow:'hidden', minHeight: 500, background:'radial-gradient(circle at 50% 50%, rgba(157,92,255,0.08), transparent 70%), var(--panel)'}}>
+        <div className="panel" style={{padding:0, overflow:'hidden', minHeight: 500, background:'radial-gradient(circle at 50% 50%, rgba(255,107,107,0.08), transparent 70%), var(--panel)'}}>
           <div style={{position:'absolute', top:14, left:14, zIndex:2}}>
             <div className="mono-s" style={{letterSpacing:'0.2em'}}>KNOWLEDGE NODES</div>
             <div style={{fontFamily:'var(--font-display)', fontSize:18, fontWeight:700}}>{filteredNodes.length} <span style={{color:'var(--text-3)', fontSize:12, fontWeight:400}}>nodes</span></div>
@@ -54,12 +54,12 @@ const MemoryPanel = ({ agent, onOpenAgent, compact }) => {
               if (!A || !B) return null;
               const active = selected && (selected === a || selected === b);
               return <line key={i} x1={A.x} y1={A.y} x2={B.x} y2={B.y}
-                stroke={active ? '#fbbf24' : 'rgba(157,92,255,0.35)'}
+                stroke={active ? '#fbbf24' : 'rgba(255,107,107,0.35)'}
                 strokeWidth={active ? 0.35 : 0.2}
                 />;
             })}
             {filteredNodes.map(n => {
-              const col = catColor[n.cat] || '#9d5cff';
+              const col = catColor[n.cat] || '#FF6B6B';
               const r = n.size/4;
               const active = selected === n.id;
               return (

@@ -1,5 +1,5 @@
 import { bus } from '../state.js';
-import { PERSONAS } from '../mapping/personas.js';
+import { getAgentSync, listAgentsSync } from '../store/agents.js';
 import { readInventory, writeInventory } from '../store/inventory.js';
 
 // ── Static catalogs ──────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ const SKILL_BY_ID = new Map(SKILL_CATALOG.map((s) => [s.id, s]));
 const ITEM_BY_ID  = new Map(ITEM_CATALOG.map((i)  => [i.id, i]));
 
 const AGENT_PRICE_BY_RARITY = { SSR: 900, SR: 620, R: 360, N: 180 };
-const AGENT_BY_ID = new Map(PERSONAS.map((p) => [p.id, p]));
+const agentCost = (agent) => AGENT_PRICE_BY_RARITY[agent?.rarity] || 300;
 
 const TIER_VICTORY_GOLD = {
   'Whisper Imp':      200,
@@ -104,12 +104,12 @@ export function getCatalog() {
   return {
     skills: SKILL_CATALOG,
     items: ITEM_CATALOG,
-    agents: PERSONAS.map((p) => ({
+    agents: listAgentsSync().map((p) => ({
       id: p.id,
       name: p.name,
       role: p.role,
       rarity: p.rarity,
-      cost: AGENT_PRICE_BY_RARITY[p.rarity] || 300,
+      cost: agentCost(p),
     })),
   };
 }
@@ -141,11 +141,11 @@ export async function grantVictory(tierName) {
 export async function buy({ type, id, personaId } = {}) {
   await load();
   if (type === 'agent') {
-    const agent = AGENT_BY_ID.get(id || personaId);
+    const agent = getAgentSync(id || personaId);
     if (!agent) throw badRequest(`Unknown agent: ${id || personaId}`);
     cache.ownedAgents = Array.isArray(cache.ownedAgents) ? cache.ownedAgents : ['orchestra'];
     if (cache.ownedAgents.includes(agent.id)) throw badRequest(`${agent.name} is already owned`);
-    const cost = AGENT_PRICE_BY_RARITY[agent.rarity] || 300;
+    const cost = agentCost(agent);
     if (cache.gold < cost) throw badRequest(`Not enough gold (need ${cost}, have ${cache.gold})`);
     cache.gold -= cost;
     cache.ownedAgents = [...cache.ownedAgents, agent.id];

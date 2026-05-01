@@ -33,9 +33,9 @@
 }
 .note-row:hover { border-color: var(--border-2); background: var(--bg-3); }
 .note-row.is-active {
-  border-color: var(--purple);
-  background: linear-gradient(120deg, rgba(157,92,255,0.18), rgba(34,211,238,0.06));
-  box-shadow: 0 0 0 1px var(--border-soft), 0 6px 20px -10px var(--purple-glow);
+  border-color: var(--coral);
+  background: linear-gradient(120deg, rgba(255,107,107,0.18), rgba(78,205,196,0.06));
+  box-shadow: 0 0 0 1px var(--border-soft), 0 6px 20px -10px var(--coral-glow);
 }
 
 .note-row-head {
@@ -72,8 +72,8 @@
   background: var(--bg-3);
   color: var(--text-3);
 }
-.note-status.status-idea    { color: var(--purple); border-color: rgba(157,92,255,0.35); background: rgba(157,92,255,0.1); }
-.note-status.status-queued  { color: var(--cyan);   border-color: rgba(34,211,238,0.35); background: rgba(34,211,238,0.1); }
+.note-status.status-idea    { color: var(--coral); border-color: rgba(255,107,107,0.35); background: rgba(255,107,107,0.1); }
+.note-status.status-queued  { color: var(--teal);   border-color: rgba(78,205,196,0.35); background: rgba(78,205,196,0.1); }
 .note-status.status-running { color: var(--gold);   border-color: rgba(251,191,36,0.4);  background: rgba(251,191,36,0.12);
   animation: pulse 1.6s ease-in-out infinite;
 }
@@ -95,8 +95,8 @@
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 .note-input:focus {
-  border-color: var(--purple);
-  box-shadow: 0 0 0 3px rgba(157,92,255,0.18);
+  border-color: var(--coral);
+  box-shadow: 0 0 0 3px rgba(255,107,107,0.18);
 }
 
 .provider-select {
@@ -110,7 +110,7 @@
   cursor: pointer;
   outline: none;
 }
-.provider-select:focus { border-color: var(--purple); }
+.provider-select:focus { border-color: var(--coral); }
 
 /* ─── agent picker dropdown ─── */
 .agent-picker { position: relative; display: inline-block; }
@@ -176,7 +176,7 @@
 .note-msg-pilot {
   width: 28px; height: 28px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #f472b6, #9d5cff);
+  background: linear-gradient(135deg, var(--coral), var(--orange));
   color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-display); font-weight: 700; font-size: 13px;
@@ -192,8 +192,26 @@
   padding: 8px 12px;
 }
 .note-msg-user .note-msg-bubble {
-  background: linear-gradient(135deg, rgba(157,92,255,0.18), rgba(124,58,237,0.1));
-  border-color: rgba(157,92,255,0.35);
+  background: linear-gradient(135deg, rgba(255,107,107,0.18), rgba(238,90,36,0.1));
+  border-color: rgba(255,107,107,0.35);
+}
+.note-msg.is-pending .note-msg-bubble {
+  opacity: 0.78;
+}
+.note-msg-typing .note-msg-bubble {
+  max-width: 260px;
+  background: linear-gradient(135deg, rgba(0,240,255,0.12), rgba(139,92,246,0.08));
+  border-color: rgba(0,240,255,0.28);
+}
+.typing-dots {
+  display: inline-block;
+  min-width: 18px;
+  animation: typingPulse 1s steps(4, end) infinite;
+}
+@keyframes typingPulse {
+  0% { opacity: 0.25; }
+  50% { opacity: 1; }
+  100% { opacity: 0.25; }
 }
 
 .note-msg-meta {
@@ -208,6 +226,32 @@
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text);
+}
+
+.generated-image-card {
+  display: block;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-1);
+  color: var(--teal);
+  text-decoration: none;
+}
+.generated-image-card img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  background: #05020f;
+}
+.generated-image-card span {
+  display: block;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--teal);
+  border-top: 1px solid var(--border);
 }
 
 .note-composer {

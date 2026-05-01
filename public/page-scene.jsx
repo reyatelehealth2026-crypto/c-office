@@ -1,4 +1,4 @@
-/* ===== SCENE MODE — JRPG-style dialogue scene ===========================
+/* ===== SCENE MODE — sim office dialogue room ============================
    Triggered by: window.openScene({ noteId, agentId, message, provider })
    On close:     window.closeScene()
    Renders fullscreen on top of the dashboard via <SceneOverlay/> in App.
@@ -23,55 +23,95 @@
     return { scene, phase };
   };
 
-  // window.openScene — formerly opened a fullscreen JRPG scene. Now routes
-  // every dispatch through the inline Notes chat panel so the user stays in
-  // their context and sees thinking / typing / using-tool indicators in
-  // place. Adventure / Guild / scene-retry call sites still hit this and
-  // get the inline behaviour for free.
   window.openScene = async function openScene({ noteId, agentId, message, provider, title, body, tag = 'task' }) {
+    // If no noteId, create one inline so users can launch a scene from anywhere.
     let nid = noteId;
+    let inlineNote = null;
     if (!nid) {
       try {
         const r = await fetch('/api/notes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: (title || message || 'Untitled').slice(0, 80),
+            title: (title || message || 'Untitled scene').slice(0, 80),
             body:  body  || message || '',
             tag,
             agentId,
           }),
         });
-        nid = (await r.json()).id;
+        inlineNote = await r.json();
+        nid = inlineNote.id;
       } catch (e) {
-        console.warn('[c-office] inline dispatch could not create note:', e.message);
+        scene = { error: 'Failed to create note: ' + e.message };
+        phase = 'error';
+        notify();
         return;
       }
     }
 
-    const personaId = agentId || 'orchestra';
-    const prov      = provider || (window.PROVIDERS?.default || 'echo');
+    const personaId = agentId || (inlineNote?.agentId) || 'orchestra';
+    const persona   = (window.AGENTS || []).find(a => a.id === personaId);
+    const def       = window.PROVIDERS?.default || 'claude';
+    const prov      = provider || def;
 
-    // Navigate to /#/notes with this note opened so the user sees the chat.
+    scene = {
+      noteId: nid,
+      message: message || '',
+      provider: prov,
+      persona,
+      script: null,
+      // Pre-roll beats so the scene fades in immediately while we await the CLI.
+      previewBeats: [
+        { speaker: 'system',  text: 'Opening sim office desk — calling ' + (persona?.name || 'agent') + '...', mood: 'enter' },
+        { speaker: 'player',  text: 'Brief for ' + (persona?.name || 'Agent') + ':\n' + (message || ''), mood: null },
+        { speaker: 'system',  text: '(Workstation running via ' + prov + '...)', mood: 'busy' },
+      ],
+    };
+    phase = 'loading';
+    notify();
+
+    let timeout = null;
     try {
-      localStorage.setItem('c-office-page', 'notes');
-      localStorage.setItem('c-office-active-note', nid);
-    } catch {}
-    window.dispatchEvent(new CustomEvent('c-office:navigate', { detail: { page: 'notes' } }));
-    window.dispatchEvent(new CustomEvent('c-office:open-note',  { detail: { noteId: nid } }));
-    window.refreshNotes && window.refreshNotes();
-
-    // Fire-and-forget dispatch. Refresh notes when the run lands.
-    fetch('/api/notes/' + nid + '/dispatch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: prov, agentId: personaId, message: message || '' }),
-    })
-      .then(() => window.refreshNotes && window.refreshNotes())
-      .catch((e) => console.warn('[c-office] inline dispatch failed:', e.message));
+      if (activeAbort) activeAbort.abort();
+      const controller = new AbortController();
+      activeAbort = controller;
+      timeout = setTimeout(() => controller.abort(), 50_000);
+      const r = await fetch('/api/notes/' + nid + '/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: prov, agentId: personaId, message: message || '' }),
+        signal: controller.signal,
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Provider run failed');
+      scene = {
+        ...scene,
+        script: j.scene || null,
+        rawOutput: j.output,
+        ok: j.ok,
+        persona: j.scene?.persona || persona,
+      };
+      phase = 'ready';
+      notify();
+      window.refreshNotes && window.refreshNotes();
+    } catch (e) {
+      const timedOut = e.name === 'AbortError';
+      scene = {
+        ...(scene || {}),
+        error: timedOut
+          ? 'Provider timed out or is waiting for a window/permission. Try Claude or Codex again after checking login.'
+          : e.message,
+      };
+      phase = 'error';
+      notify();
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      activeAbort = null;
+    }
   };
 
   window.closeScene = function closeScene() {
+    if (activeAbort) activeAbort.abort();
     scene = null;
     phase = null;
     notify();
@@ -79,13 +119,8 @@
 })();
 
 
-// ── SceneOverlay — DEPRECATED. The fullscreen JRPG dialogue mode was retired
-// in favour of inline chat (notes panel) with thinking / typing / tool-use
-// indicators. We keep the stub so <SceneOverlay/> in App still renders, and
-// preserve the old implementation below behind an early-return null.
-const SceneOverlay = () => null;
-
-const _LegacySceneOverlay = () => {
+// ── SceneOverlay — fullscreen sim office workroom ────────────────────────
+const SceneOverlay = () => {
   const { scene, phase } = window.useSceneStore();
 
   // Keyboard handler: ESC to close
@@ -127,7 +162,7 @@ const SceneStage = ({ scene, phase, onClose }) => {
   // Index of current dialogue line, plus typewriter progress for that line.
   const [cursor, setCursor] = React.useState(0);
   const [typed, setTyped]   = React.useState(0);   // chars revealed in current beat
-  // Default to manual mode — JRPG convention is "press to continue". Toggle
+  // Default to manual mode so operators can read each handoff beat. Toggle
   // to auto-advance with the [A] key or the Auto button.
   const [auto, setAuto]     = React.useState(false);
 
@@ -233,10 +268,25 @@ const SceneStage = ({ scene, phase, onClose }) => {
         <div className="scene-bg-far"/>
         <div className="scene-bg-mid"/>
         <div className="scene-bg-near"/>
+        <div className="scene-office-room" aria-hidden="true">
+          <div className="scene-office-window">
+            <span/><span/><span/><span/>
+          </div>
+          <div className="scene-office-board">
+            <b>QUEUE</b>
+            <em>{phase}</em>
+            <i>{agentName}</i>
+          </div>
+          <div className="scene-office-shelf">
+            <span/><span/><span/>
+          </div>
+          <div className="scene-office-clock"/>
+          <div className="scene-office-plant"/>
+        </div>
 
         {/* mission card top */}
         <div className="scene-mission-card">
-          <div className="scene-mission-tier">⚔ MISSION</div>
+          <div className="scene-mission-tier">▣ WORK ORDER</div>
           <div className="scene-mission-title">{note.title}</div>
           {note.body && <div className="scene-mission-body">{note.body}</div>}
           <div className="scene-mission-meta">
@@ -250,7 +300,7 @@ const SceneStage = ({ scene, phase, onClose }) => {
 
         {/* close button */}
         <button className="scene-close" onClick={(e) => { e.stopPropagation(); onClose(); }} title="Close (Esc)">
-          ✕ ออกจากฉาก
+          Close
         </button>
 
         {/* characters layer */}
@@ -258,9 +308,13 @@ const SceneStage = ({ scene, phase, onClose }) => {
           {/* Player (left) */}
           <div className={'scene-actor scene-player' + (current?.speaker === 'player' ? ' is-speaking' : '')}>
             <div className="scene-actor-portrait scene-player-portrait">
-            <div className="scene-player-avatar">คุณ</div>
+            <div className="scene-player-avatar">You</div>
             </div>
-            <div className="scene-actor-name">ผู้ใช้</div>
+            <div className="scene-desk-line">
+              <span className="scene-keyboard"/>
+              <span className="scene-mug"/>
+            </div>
+            <div className="scene-actor-name">You <span className="role">Operator desk</span></div>
           </div>
 
           {/* Agent (right) */}
@@ -283,15 +337,19 @@ const SceneStage = ({ scene, phase, onClose }) => {
               {persona?.name || 'Agent'}
               <span className="role">{persona?.role || ''}</span>
             </div>
+            <div className="scene-desk-line">
+              <span className="scene-keyboard"/>
+              <span className="scene-mug"/>
+            </div>
           </div>
         </div>
 
         {/* dialogue box bottom */}
         <div className={'scene-dialogue speaker-' + (current?.speaker || 'system') + (current?.mood ? ' mood-' + current.mood : '')}>
           <div className="scene-dialogue-name">
-            {current?.speaker === 'player' ? 'คุณ' :
+            {current?.speaker === 'player' ? 'You' :
              current?.speaker === 'agent'  ? (persona?.name || 'Agent') :
-             '— ฉาก'}
+             'System'}
           </div>
           <div className="scene-dialogue-text">
             {fullText.slice(0, typed)}
@@ -302,30 +360,17 @@ const SceneStage = ({ scene, phase, onClose }) => {
               {Math.min(cursor + 1, beats.length)} / {beats.length}
             </span>
             <div className="scene-actions" onClick={(e) => e.stopPropagation()}>
-              {phase === 'error' && scene.canRetryEcho && (
-                <button
-                  className="scene-btn ghost"
-                  onClick={() => window.openScene({
-                    noteId: scene.noteId,
-                    agentId: persona?.id,
-                    provider: 'echo',
-                    message: scene.message || '',
-                  })}
-                >
-                  ลองด้วย Echo
-                </button>
-              )}
               <button className="scene-btn ghost" onClick={() => setAuto(a => !a)} title="Toggle auto-advance (A)">
-                {auto ? '◐ อัตโนมัติ' : '◯ กดเอง'}
+                {auto ? 'Auto' : 'Manual'}
               </button>
               {!allDone && (
                 <button className="scene-btn primary" onClick={advance} title="Space / Enter / Click">
-                  {typed < fullText.length ? '⏭ ข้าม' : '▶ ต่อไป'}
+                  {typed < fullText.length ? 'Skip' : 'Next'}
                 </button>
               )}
               {allDone && (
                 <button className="scene-btn primary" onClick={onClose}>
-                  ✓ ปิดฉาก
+                  Close
                 </button>
               )}
             </div>
@@ -335,7 +380,7 @@ const SceneStage = ({ scene, phase, onClose }) => {
         {/* phase-specific overlays */}
         {phase === 'loading' && (
           <div className="scene-loading-strip">
-            <span>กำลังเรียก {agentName}...</span>
+            <span>Desk ping: {agentName}</span>
           </div>
         )}
         {phase === 'ready' && allDone && scene.ok && (
@@ -346,4 +391,89 @@ const SceneStage = ({ scene, phase, onClose }) => {
   );
 };
 
-Object.assign(window, { SceneOverlay });
+const SceneLaunchPage = ({ onOpenAgent }) => {
+  window.useCOfficeRefresh?.();
+  const [message, setMessage] = React.useState('');
+  const [agentId, setAgentId] = React.useState('orchestra');
+  const agent = (window.AGENTS || []).find(a => a.id === agentId) || (window.AGENTS || [])[0];
+  const recentNotes = (window.NOTES || []).slice(0, 4);
+
+  const launch = (payload = {}) => {
+    const text = (payload.message || message || 'Open a workroom review for the current task.').trim();
+    window.openScene?.({
+      agentId: payload.agentId || agent?.id || 'orchestra',
+      message: text,
+      title: text.slice(0, 80),
+      tag: 'scene',
+    });
+  };
+
+  return (
+    <div className="scene-launch">
+      <div className="scene-launch-hero">
+        <div>
+          <div className="mono-s">SIM OFFICE MODE</div>
+          <h1>Workroom <span className="accent">Scene</span></h1>
+          <p>Turn any note or agent handoff into a live office desk review.</p>
+        </div>
+        <button className="btn primary" onClick={() => launch()}>Start Scene</button>
+      </div>
+
+      <div className="scene-launch-grid">
+        <div className="panel scene-launch-compose">
+          <div className="panel-head">
+            <h3>Direct Scene</h3>
+            <div className="right">agent prompt</div>
+          </div>
+          <select className="cmd-select" value={agentId} onChange={e => setAgentId(e.target.value)}>
+            {(window.AGENTS || []).map(a => <option key={a.id} value={a.id}>{a.name} - {a.role}</option>)}
+          </select>
+          <textarea
+            className="cmd-textarea"
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            placeholder="Describe what you want this agent to stage, review, or explain..."
+          />
+          <div className="scene-launch-agent" onClick={() => agent && onOpenAgent?.(agent.id)}>
+            <AgentDot agent={agent} size={42}/>
+            <div>
+              <b>{agent?.name || 'Agent'}</b>
+              <span>{agent?.role || 'Scene partner'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-head">
+            <h3>Recent Notes</h3>
+            <div className="right">{recentNotes.length} ready</div>
+          </div>
+          <div className="scene-note-list">
+            {recentNotes.length === 0 && (
+              <div className="muted" style={{fontSize:12, padding:'20px 0'}}>
+                No notes yet. Start a direct scene instead.
+              </div>
+            )}
+            {recentNotes.map(n => (
+              <button
+                key={n.id}
+                className="scene-note-card"
+                onClick={() => window.openScene?.({
+                  noteId: n.id,
+                  agentId: n.agentId || agent?.id || 'orchestra',
+                  message: n.body || n.title,
+                  title: n.title,
+                })}
+              >
+                <span>{n.title || 'Untitled note'}</span>
+                <em>{n.tag || 'note'}</em>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+Object.assign(window, { SceneOverlay, SceneLaunchPage });

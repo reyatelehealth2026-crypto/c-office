@@ -1,17 +1,15 @@
 // Provider abstraction layer for outbound CLI calls.
 //
-// We support 4 providers out of the box:
-//   - echo    : zero-dependency demo provider (always available)
+// C-Office exposes only real chat providers in the UI:
 //   - claude  : Anthropic's Claude Code CLI ("claude -p ...")
 //   - codex   : OpenAI Codex CLI            ("codex exec ...")
-//   - gpt     : Generic GPT CLI fallback    ("sgpt"/"gpt"/"chatgpt")
 //
 // Each provider exposes:
 //   detect()                       → boolean (binary on PATH)
 //   run({ prompt, system }, onChunk) → Promise<{ ok, output, exitCode? }>
 //
 // Override commands via env vars:
-//   C_OFFICE_CLAUDE_CMD, C_OFFICE_CODEX_CMD, C_OFFICE_GPT_CMD
+//   C_OFFICE_CLAUDE_CMD, C_OFFICE_CODEX_CMD
 // (space-separated argv template, ${PROMPT} placeholder is replaced)
 
 import { spawn } from 'node:child_process';
@@ -240,7 +238,7 @@ const gpt = {
   },
 };
 
-export const PROVIDERS = { echo, claude, codex, gpt };
+export const PROVIDERS = { claude, codex };
 
 export function listProviders() {
   return Object.values(PROVIDERS).map(p => ({
@@ -256,7 +254,7 @@ export function getProvider(name) {
 }
 
 export function defaultProvider() {
-  // UI dispatch defaults to echo so every persona can answer immediately.
-  // Users can still pick Claude/Codex explicitly for real CLI execution.
-  return 'echo';
+  if (claude.detect()) return 'claude';
+  if (codex.detect()) return 'codex';
+  return 'claude';
 }

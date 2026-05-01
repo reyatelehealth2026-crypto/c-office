@@ -1,7 +1,6 @@
 // POST /hooks/event — receives JSON bodies from Claude Code hooks (post-event.sh).
 // Body shape mirrors Claude's hook payload; we normalize to internal events/tasks.
 import { upsertSession, endSession, pushEvent, startTask, finishTask } from '../state.js';
-import { mapPersona } from '../mapping/personas.js';
 
 const SUMM = (s, n=90) => {
   if (typeof s !== 'string') s = JSON.stringify(s ?? '');

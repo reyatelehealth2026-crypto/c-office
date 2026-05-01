@@ -68,10 +68,8 @@ const PERSONA_VOICE = {
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-// Strip the echo provider's templated header so the user sees pure "reply".
-// Echo output begins with: 「Name」 received your task: ...
-// followed by the prompt we built. We extract everything AFTER the section
-// titled "## Your reply ..." OR — if absent — keep only the last paragraph.
+// Extract readable assistant text from provider output. JSON event streams are
+// collapsed to message text; plain text is kept as-is.
 function normalizeProviderOutput(raw) {
   const text = String(raw || '');
   const rows = text.split(/\r?\n/).filter(Boolean);
@@ -113,10 +111,6 @@ function extractReply(raw /*, providerName */) {
     last = { index: m.index, end: re.lastIndex };
   }
   if (last) t = t.slice(last.end).trim();
-  // Drop the echo footer reminder
-  t = t.replace(/\(echo provider —[^)]*\)\s*$/i, '').trim();
-  // Drop the "received your task" preamble if it slipped through
-  t = t.replace(/^「[^」]+」\s*received your task:[\s\S]*?\n\n/, '').trim();
   return t;
 }
 

@@ -32,7 +32,7 @@ const AgentShopPage = ({ onOpenAgent }) => {
         body: JSON.stringify(body),
       });
       const j = await r.json();
-      if (!r.ok) alert(j.error || 'ทำรายการไม่สำเร็จ');
+      if (!r.ok) alert(j.error || 'Transaction failed');
       await refreshShop();
       return j;
     } finally {
@@ -60,19 +60,19 @@ const AgentShopPage = ({ onOpenAgent }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>ตลาด <span className="accent">สมาคม</span></h1>
-          <div className="sub">เกณฑ์สมาชิก · ฝึกความสามารถ · ใช้ทองจากรางวัลภารกิจและงานจริง</div>
+          <h1>Agent <span className="accent">Shop</span></h1>
+          <div className="sub">Recruit agents · Train skills · Earn credits from real work</div>
         </div>
         <div className="topbar-actions">
-          <span className="shop-wallet">{Number(inventory.gold || 0).toLocaleString()} ทอง</span>
-          <button className="btn ghost" onClick={refreshShop}>รีเฟรช</button>
+          <span className="shop-wallet">{Number(inventory.gold || 0).toLocaleString()} credits</span>
+          <button className="btn ghost" onClick={refreshShop}>Refresh</button>
         </div>
       </div>
 
       <div className="shop-layout">
         <section className="panel">
           <div className="panel-head">
-            <h3>ตลาดสมาชิก</h3>
+            <h3>Agent Market</h3>
             <div className="right">{ownedAgents.size}/{agents.length} owned</div>
           </div>
           <div className="shop-agent-grid">
@@ -100,14 +100,14 @@ const AgentShopPage = ({ onOpenAgent }) => {
                   </div>
                   <div className="shop-agent-buy">
                     {isOwned ? (
-                      <span className="badge green">มีแล้ว</span>
+                      <span className="badge green">Owned</span>
                     ) : (
                       <button
                         className="btn gold"
                         disabled={!canBuy || !!busy}
                         onClick={(e) => { e.stopPropagation(); buyAgent(agent); }}
                       >
-                        {price} ทอง
+                        {price} credits
                       </button>
                     )}
                   </div>
@@ -119,8 +119,8 @@ const AgentShopPage = ({ onOpenAgent }) => {
 
         <section className="panel">
           <div className="panel-head">
-            <h3>ติดตั้งความสามารถ</h3>
-            <div className="right">{selected?.name || 'เลือกเอเจนท์'}</div>
+            <h3>Install Skills</h3>
+            <div className="right">{selected?.name || 'Select agent'}</div>
           </div>
           {selected && (
             <div className="shop-loadout">
@@ -137,7 +137,7 @@ const AgentShopPage = ({ onOpenAgent }) => {
 
               {!ownedAgents.has(selected.id) && (
                 <button className="btn gold" disabled={inventory.gold < (SHOP_AGENT_PRICES[selected.rarity] || 300) || !!busy} onClick={() => buyAgent(selected)}>
-                  ซื้อ {selected.name} - {(SHOP_AGENT_PRICES[selected.rarity] || 300).toLocaleString()} ทอง
+                  Buy {selected.name} - {(SHOP_AGENT_PRICES[selected.rarity] || 300).toLocaleString()} credits
                 </button>
               )}
 
@@ -148,13 +148,13 @@ const AgentShopPage = ({ onOpenAgent }) => {
                       const skill = skills.find((s) => s.id === installed[slot]);
                       return (
                         <div key={slot} className="shop-slot">
-                          <span className="mono-s">ช่อง {slot + 1}</span>
+                          <span className="mono-s">Slot {slot + 1}</span>
                           {skill ? (
                             <>
                               <b>{skill.name}</b>
-                              <button className="btn ghost" disabled={!!busy} onClick={() => removeSkill(skill.id)}>ถอด</button>
+                              <button className="btn ghost" disabled={!!busy} onClick={() => removeSkill(skill.id)}>Remove</button>
                             </>
-                          ) : <span className="muted">ว่าง</span>}
+                          ) : <span className="muted">Empty</span>}
                         </div>
                       );
                     })}
@@ -164,12 +164,12 @@ const AgentShopPage = ({ onOpenAgent }) => {
                     <select className="cmd-select" value={selectedSkill} onChange={(e) => setSelectedSkill(e.target.value)}>
                       {skills.map((skill) => (
                         <option key={skill.id} value={skill.id} disabled={installed.includes(skill.id)}>
-                          {skill.name} - {skill.cost} ทอง
+                          {skill.name} - {skill.cost} credits
                         </option>
                       ))}
                     </select>
                     <button className="btn primary" disabled={installed.length >= 3 || !selectedSkill || !!busy} onClick={installSkill}>
-                      ติดตั้ง
+                      Install
                     </button>
                   </div>
 
@@ -181,7 +181,7 @@ const AgentShopPage = ({ onOpenAgent }) => {
                           <span className="badge cyan">{skill.tier}</span>
                         </div>
                         <div className="muted" style={{fontSize:12}}>{skill.desc}</div>
-                        <div className="mono-s">{skill.cost} ทอง</div>
+                        <div className="mono-s">{skill.cost} credits</div>
                       </div>
                     ))}
                   </div>

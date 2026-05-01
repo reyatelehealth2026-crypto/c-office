@@ -1,27 +1,34 @@
-/* C-Office Components — Warm Professional Theme */
+/* C-Office Components — Neon Command Theme */
 
 /* ====== SIDEBAR — Clean Professional Navigation ====== */
 const NAV = [
-  { id: 'dashboard',  label: 'Dashboard',   icon: '📊' },
-  { id: 'agents',     label: 'Agents',      icon: '👥' },
-  { id: 'notes',      label: 'Tasks',       icon: '📋' },
-  { id: 'tasks',      label: 'Mission Log', icon: '📝' },
-  { id: 'shop',       label: 'Shop',        icon: '🛒' },
-  { id: 'skills',     label: 'Skills',      icon: '✨' },
-  { id: 'memory',     label: 'Memory',      icon: '🧠' },
-  { id: 'adventure',  label: 'Boss Hunt',   icon: '⚔️' },
-  { id: 'settings',   label: 'Settings',    icon: '⚙️' },
+  { id: 'dashboard',  label: 'Dashboard',   icon: 'DB', color: 'var(--accent-violet)' },
+  { id: 'agents',     label: 'Agents',      icon: 'AG', color: 'var(--accent-cyan)' },
+  { id: 'adventure',  label: 'Adventure',   icon: 'Q',  color: 'var(--accent-orange)' },
+  { id: 'notes',      label: 'Notes',       icon: 'NT', color: 'var(--accent-gold)' },
+  { id: 'scene',      label: 'Scene',       icon: 'SC', color: 'var(--accent-lime)' },
+  { id: 'tasks',      label: 'Tasks',       icon: 'TS', color: 'var(--accent-magenta)' },
+  { id: 'shop',       label: 'Shop',        icon: 'SH', color: 'var(--accent-gold)' },
+  { id: 'skills',     label: 'Skills',      icon: 'SK', color: 'var(--accent-cyan)' },
+  { id: 'memory',     label: 'Memory',      icon: 'MM', color: 'var(--accent-violet)' },
+  { id: 'settings',   label: 'Settings',    icon: 'ST', color: 'var(--text-secondary)' },
   // Hidden legacy fallback
   { id: 'mission-control', label: 'Mission Control', icon: '▤', hidden: true },
+  { id: 'guild', label: 'Guild', icon: '🏰', hidden: true },
 ];
 
 const Sidebar = ({ page, setPage }) => {
+  const [expanded, setExpanded] = React.useState(false);
   const visibleNav = NAV.filter(n => !n.hidden);
   return (
-    <aside className="sidebar">
+    <aside
+      className={'sidebar ' + (expanded ? 'expanded' : 'collapsed')}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+    >
       <div className="brand">
         <div className="brand-mark"/>
-        <div>
+        <div className="brand-copy">
           <div className="brand-name">C-OFFICE</div>
           <div className="brand-sub">AI Agent Hub</div>
         </div>
@@ -29,9 +36,10 @@ const Sidebar = ({ page, setPage }) => {
       {visibleNav.map(n => (
         <div key={n.id}
           className={`nav-item ${page === n.id ? 'active' : ''}`}
+          style={{ '--nav-color': n.color }}
           onClick={() => setPage(n.id)}>
           <span className="ico">{n.icon}</span>
-          <span>{n.label}</span>
+          <span className="nav-label">{n.label}</span>
           {n.id === 'agents' && <span className="badge" style={{marginLeft:'auto', fontSize:9}}>{AGENTS.length}</span>}
           {n.id === 'notes' && (window.NOTES?.length || 0) > 0 && (
             <span className="badge cyan" style={{marginLeft:'auto', fontSize:9}}>{window.NOTES.length}</span>

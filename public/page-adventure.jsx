@@ -375,7 +375,7 @@ const AdventurePage = ({ onOpenAgent }) => {
   function quickStrike() {
     if (quickBusy) return;
     setQuickBusy(true);
-    const def = window.PROVIDERS?.default || 'echo';
+    const def = window.PROVIDERS?.default || 'claude';
     const targetAgent = weakness.weak[0] || 'orchestra';
     window.openScene({
       title: bossDisplayName,
@@ -397,13 +397,13 @@ const AdventurePage = ({ onOpenAgent }) => {
       {/* ── Topbar ── */}
       <div className="topbar">
         <div>
-          <h1>บอสฮันต์ <span className="accent">โจมตี</span></h1>
+          <h1>Adventure <span className="accent">Mode</span></h1>
           <div className="sub">
-            ภารกิจ &middot; ระดับ {tier.name} &middot; {liveAgents} สมาชิกพร้อมรบ
+            Mission &middot; ระดับ {tier.name} &middot; {liveAgents} agents ready
           </div>
         </div>
         <div className="topbar-actions">
-          <span className="chip"><span className="dot"/> สู้สด</span>
+          <span className="chip"><span className="dot"/> LIVE</span>
           <button
             className="btn primary"
             onClick={quickStrike}

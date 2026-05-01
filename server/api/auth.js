@@ -16,6 +16,7 @@ import { bus } from '../state.js';
 import { getCreds, setCreds, clearCreds } from '../auth/credentials.js';
 import * as anthropic from '../auth/anthropic.js';
 import * as google from '../auth/google.js';
+import * as codex from '../auth/codex.js';
 
 const PASTE_PROVIDERS = new Set(['replicate', 'openai']);
 
@@ -29,6 +30,7 @@ async function statusSnapshot() {
   return {
     anthropic: await anthropic.statusOf(),
     google: await google.statusOf(),
+    codex: await codex.statusOf(),
     replicate: { connected: !!replicate?.apiKey, mode: 'api-key' },
     openai: { connected: !!openai?.apiKey, mode: 'api-key' },
   };
