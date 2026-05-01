@@ -183,3 +183,31 @@ export function recallSkills(goal, opts = {}) {
 export function skillsDir() {
   return SKILLS_DIR;
 }
+
+// Mark a skill as degraded by bumping a failure counter in its frontmatter.
+// Used when a run that relied on this skill fails, signaling lower confidence.
+// Best-effort: silently skips if the skill file cannot be found or parsed.
+export function degradeSkill(skillId) {
+  ensureDir();
+  let files;
+  try {
+    files = fs.readdirSync(SKILLS_DIR).filter((f) => f.endsWith('.md'));
+  } catch {
+    return false;
+  }
+  for (const file of files) {
+    const filePath = path.join(SKILLS_DIR, file);
+    try {
+      const text = fs.readFileSync(filePath, 'utf8');
+      const { meta, body } = parseFrontmatter(text);
+      if (meta.id !== skillId) continue;
+      meta.degradeCount = (Number(meta.degradeCount) || 0) + 1;
+      meta.success = meta.degradeCount < 3; // mark unsuccessful after 3 failures
+      fs.writeFileSync(filePath, `${formatFrontmatter(meta)}\n\n${body}\n`, { mode: 0o600 });
+      return true;
+    } catch {
+      /* skip unreadable files */
+    }
+  }
+  return false;
+}
