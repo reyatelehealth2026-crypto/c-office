@@ -496,6 +496,46 @@ export function stepRun(runId, step) {
   emitRun(run);
 }
 
+// ---------- Approval gates ----------
+
+export function setRunStatus(runId, status) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  run.status = status;
+  emitRun(run);
+}
+
+const gateResolvers = new Map();
+
+export function registerGateResolver(runId, resolve, reject) {
+  gateResolvers.set(runId, { resolve, reject });
+}
+
+export function approveRunPhase(runId, phase) {
+  const run = state.runs.get(runId);
+  if (!run) throw new Error("unknown run: " + runId);
+  run.status = "running";
+  run.scratchpad.push({ ts: Date.now(), persona: "orchestra", personaName: "Orchestra", kind: "gate-approved", text: "Phase " + phase + " approved" });
+  if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
+  emitRun(run);
+  const gate = gateResolvers.get(runId);
+  if (gate) { gateResolvers.delete(runId); gate.resolve(phase); }
+}
+
+export function rejectRunPhase(runId, phase, reason) {
+  reason = reason || "Rejected";
+  const run = state.runs.get(runId);
+  if (!run) throw new Error("unknown run: " + runId);
+  run.status = "failed";
+  run.error = String(reason);
+  run.endedAt = Date.now();
+  run.scratchpad.push({ ts: Date.now(), persona: "orchestra", personaName: "Orchestra", kind: "gate-rejected", text: "Phase " + phase + " rejected: " + reason });
+  if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
+  emitRun(run);
+  const gate = gateResolvers.get(runId);
+  if (gate) { gateResolvers.delete(runId); gate.reject(new Error("Gate rejected: " + reason)); }
+}
+
 export function finishRun(runId, outcome = {}) {
   const run = state.runs.get(runId);
   if (!run) return;
