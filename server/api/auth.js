@@ -17,6 +17,7 @@ import { getCreds, setCreds, clearCreds } from '../auth/credentials.js';
 import * as anthropic from '../auth/anthropic.js';
 import * as google from '../auth/google.js';
 import * as codex from '../auth/codex.js';
+import { PROBE_BY_PROVIDER } from '../auth/probes.js';
 
 const PASTE_PROVIDERS = new Set(['replicate', 'openai']);
 
@@ -84,6 +85,31 @@ router.post('/api/auth/disconnect', async (req, res) => {
   else await clearCreds(provider);
   await broadcastStatus();
   res.json({ ok: true });
+});
+
+router.post('/api/auth/test/:provider', async (req, res) => {
+  const provider = req.params.provider;
+  const probe = PROBE_BY_PROVIDER[provider];
+  if (!probe) return res.status(400).json({ error: 'unknown provider' });
+  let creds;
+  if (provider === 'anthropic') {
+    const a = await anthropic.getAnthropicAuth().catch(() => null);
+    creds = a ? { apiKey: a.apiKey, accessToken: a.accessToken } : await getCreds('anthropic');
+  } else if (provider === 'google') {
+    const g = await google.getGoogleAuth().catch(() => null);
+    creds = g ? { apiKey: g.apiKey, accessToken: g.accessToken } : await getCreds('google');
+  } else if (provider === 'codex') {
+    const tok = await codex.getCodexAccessToken().catch(() => null);
+    creds = tok ? { accessToken: tok } : null;
+  } else {
+    creds = await getCreds(provider);
+  }
+  try {
+    const result = await probe(creds);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message || String(e) });
+  }
 });
 
 export default router;
