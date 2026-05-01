@@ -51,15 +51,9 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
     setChatMessages(prev => [...prev, userMsg]);
     setChatInput('');
 
-    // Dispatch to the agent via the scene system
-    window.openScene({
-      agentId: agent.id,
-      message: msg,
-      provider: window.PROVIDERS?.default || 'claude',
-      title: msg.slice(0, 60),
-      body: msg,
-      tag: 'chat',
-    });
+    // Real dispatch flows through the Notes page; this surface only echoes
+    // the user message locally. Use the Notes page (or the dashboard's
+    // Send-to-Orchestra) to drive an agent run.
     setBusy(false);
   };
 

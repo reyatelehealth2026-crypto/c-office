@@ -2,8 +2,8 @@
    Replaces the legacy Dashboard as the default 'dashboard' route.
    Reads window globals (AGENTS, NOTES, INVENTORY, SHOP_CATALOG, STATS) populated
    by data.js via SSE. Reuses .office-card states from cards.css for live status,
-   .note-status from notes.css for quest pills, and window.openScene() to launch
-   the existing JRPG dialogue overlay on quest sortie.
+   .note-status from notes.css for quest pills. Quest sortie hands off to the
+   Notes page via the c-office:navigate event for inline dispatch.
    =============================================================================== */
 
 // ── Status label maps (Thai) ─────────────────────────────────────────────────
@@ -205,18 +205,10 @@ const GuildHall = ({ onOpenAgent }) => {
   const aarNote = aarNoteId ? notes.find((n) => n.id === aarNoteId) : null;
 
   const launchSortie = (note) => {
-    if (!window.openScene) return;
-    const personaId = note.selectedAgent || note.persona || 'orchestra';
-    const result = window.openScene({
-      noteId: note.id,
-      agentId: personaId,
-      message: note.body || note.description || note.title,
-      provider: note.provider || 'codex',
-      title: note.title,
-      body: note.body || note.description,
-      tag: 'quest',
-    });
-    if (result && typeof result.catch === 'function') result.catch(() => {});
+    // Hand the user off to the Notes page to dispatch the quest inline.
+    window.dispatchEvent(new CustomEvent('c-office:navigate', {
+      detail: { page: 'notes', noteId: note.id },
+    }));
   };
 
   const Icons = window.GuildIcons || {};

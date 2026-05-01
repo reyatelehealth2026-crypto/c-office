@@ -10,7 +10,7 @@ const detailSource = readFileSync(new URL('../public/page-detail.jsx', import.me
 const miscSource = readFileSync(new URL('../public/page-misc.jsx', import.meta.url), 'utf8');
 
 test('notes chat sends directly to the dispatch API instead of opening scene', () => {
-  const dispatchBody = source.match(/async function dispatch[\s\S]*?\r?\n  }\r?\n\r?\n  function openScene/)?.[0] || '';
+  const dispatchBody = source.match(/async function dispatch[\s\S]*?\r?\n  }\r?\n\r?\n  async function saveEdit/)?.[0] || '';
   assert.match(dispatchBody, /fetch\(`\/api\/notes\/\$\{note\.id\}\/dispatch`/);
   assert.doesNotMatch(dispatchBody, /window\.openScene/);
 });
