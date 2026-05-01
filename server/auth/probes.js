@@ -35,17 +35,44 @@ export async function probeAnthropic(creds, fetchImpl = globalThis.fetch) {
   const access = creds?.accessToken;
   if (!key && !access) return { ok: false, error: 'no credentials stored', latencyMs: 0 };
   return timed(async () => {
-    const headers = { 'anthropic-version': '2023-06-01' };
-    if (access) headers['Authorization'] = `Bearer ${access}`;
-    else headers['x-api-key'] = key;
-    const r = await fetchWithTimeout(fetchImpl, 'https://api.anthropic.com/v1/models', { headers });
-    if (r.status === 401) return { ok: false, error: 'unauthorized — key invalid or expired', hint: 're-login or paste a fresh sk-ant-... key' };
-    if (r.status === 403) return { ok: false, error: 'forbidden — region or scope restriction', hint: 'check the key has Messages API access' };
-    if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
+    if (access) {
+      // OAuth tokens (from `claude login`) require the Messages API plus the
+      // OAuth beta header — the public /v1/models endpoint rejects them.
+      // 1-token max keeps the probe cheap (~$0.000015 on Sonnet 4.6).
+      const r = await fetchWithTimeout(fetchImpl, 'https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${access}`,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'oauth-2025-04-20',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'ping' }],
+        }),
+      });
+      if (r.status === 401) return { ok: false, error: 'unauthorized — OAuth token rejected', hint: 'run `claude login` again to refresh', mode: 'oauth' };
+      if (r.status === 403) return { ok: false, error: 'forbidden — OAuth scope insufficient', hint: 'ensure the OAuth client allows Messages API', mode: 'oauth' };
+      if (!r.ok) {
+        const txt = await r.text().catch(() => '');
+        return { ok: false, error: `HTTP ${r.status}`, hint: txt.slice(0, 160), mode: 'oauth' };
+      }
+      const j = await r.json().catch(() => ({}));
+      return { ok: true, model: j.model || 'claude-sonnet-4-6', mode: 'oauth' };
+    }
+    // API-key path — free /v1/models call.
+    const r = await fetchWithTimeout(fetchImpl, 'https://api.anthropic.com/v1/models', {
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+    });
+    if (r.status === 401) return { ok: false, error: 'unauthorized — key invalid or expired', hint: 're-login or paste a fresh sk-ant-... key', mode: 'api-key' };
+    if (r.status === 403) return { ok: false, error: 'forbidden — region or scope restriction', hint: 'check the key has Messages API access', mode: 'api-key' };
+    if (!r.ok) return { ok: false, error: `HTTP ${r.status}`, mode: 'api-key' };
     const j = await r.json().catch(() => ({}));
     const ids = (j?.data || []).map((m) => m.id);
     const top = ids.find((id) => id.includes('opus')) || ids.find((id) => id.includes('sonnet')) || ids[0];
-    return { ok: true, model: top || null, modelCount: ids.length };
+    return { ok: true, model: top || null, modelCount: ids.length, mode: 'api-key' };
   });
 }
 
