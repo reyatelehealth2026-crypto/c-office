@@ -115,6 +115,7 @@ export function persistSkill(run) {
     success: true,
     revisions: run.revisions || 0,
     tokens,
+    degradedCount: 0,
     createdAt: new Date().toISOString(),
   };
   if (run.projectId) meta.projectId = String(run.projectId);
@@ -167,7 +168,10 @@ export function recallSkills(goal, opts = {}) {
   const goalTags = new Set(extractTags(goal));
   if (goalTags.size === 0) return [];
 
-  const scored = skills.map((s) => {
+  const scored = skills
+    // Skip skills superseded by a newer version
+    .filter((s) => !s.supersededBy)
+    .map((s) => {
     const skillTags = new Set(s.tags || []);
     let overlap = 0;
     for (const t of goalTags) if (skillTags.has(t)) overlap++;
@@ -184,30 +188,99 @@ export function skillsDir() {
   return SKILLS_DIR;
 }
 
-// Mark a skill as degraded by bumping a failure counter in its frontmatter.
-// Used when a run that relied on this skill fails, signaling lower confidence.
-// Best-effort: silently skips if the skill file cannot be found or parsed.
-export function degradeSkill(skillId) {
+// ── Skill versioning (Phase 4.2) ─────────────────────────────────────────────
+
+const DEGRADE_THRESHOLD = 3;
+
+function findSkillFile(skillId) {
   ensureDir();
   let files;
   try {
     files = fs.readdirSync(SKILLS_DIR).filter((f) => f.endsWith('.md'));
   } catch {
-    return false;
+    return null;
   }
   for (const file of files) {
     const filePath = path.join(SKILLS_DIR, file);
     try {
       const text = fs.readFileSync(filePath, 'utf8');
-      const { meta, body } = parseFrontmatter(text);
-      if (meta.id !== skillId) continue;
-      meta.degradeCount = (Number(meta.degradeCount) || 0) + 1;
-      meta.success = meta.degradeCount < 3; // mark unsuccessful after 3 failures
-      fs.writeFileSync(filePath, `${formatFrontmatter(meta)}\n\n${body}\n`, { mode: 0o600 });
-      return true;
-    } catch {
-      /* skip unreadable files */
-    }
+      const parsed = parseFrontmatter(text);
+      if (parsed.meta.id === skillId) return { filePath, text, ...parsed };
+    } catch { /* skip */ }
   }
-  return false;
+  return null;
+}
+
+export function degradeSkill(skillId) {
+  const found = findSkillFile(skillId);
+  if (!found) return false;
+  const { filePath, meta, body } = found;
+  const newCount = (Number(meta.degradedCount) || 0) + 1;
+  meta.degradedCount = newCount;
+  if (newCount >= DEGRADE_THRESHOLD) meta.success = false;
+  try {
+    fs.writeFileSync(filePath, `${formatFrontmatter(meta)}\n\n${body}\n`, { mode: 0o600 });
+  } catch {
+    return false;
+  }
+  return newCount;
+}
+
+export function forkSkill(skillId, fromRun) {
+  const found = findSkillFile(skillId);
+  if (!found) return null;
+  const baseId = skillId.replace(/_v(d+)$/, '');
+  const existingVersions = listSkills()
+    .map((s) => s.id)
+    .filter((id) => id.startsWith(baseId + '_v'))
+    .map((id) => Number((id.match(/_v(d+)$/) || [])[1]) || 0)
+    .filter((n) => n > 0);
+  const nextVersion = existingVersions.length ? Math.max(...existingVersions) + 1 : 2;
+  const newId = baseId + '_v' + nextVersion;
+
+  const steps = Array.isArray(fromRun && fromRun.steps) ? fromRun.steps.filter((s) => s.result && s.result.ok) : [];
+  const personaSequence = steps.map((s) => s.persona);
+  const tags = extractTags((fromRun && fromRun.goal) || found.meta.goal);
+  const tokens = (fromRun && fromRun.phaseCosts)
+    ? Object.values(fromRun.phaseCosts).reduce((a, b) => a + tokensOf(b && b.usage), 0)
+    : 0;
+  const newMeta = {
+    id: newId,
+    goal: String((fromRun && fromRun.goal) || found.meta.goal || '').slice(0, 200),
+    tags,
+    steps: personaSequence.length ? personaSequence : (found.meta.steps || []),
+    success: true,
+    revisions: (fromRun && fromRun.revisions) || 0,
+    tokens,
+    degradedCount: 0,
+    supersedes: skillId,
+    createdAt: new Date().toISOString(),
+  };
+  if (fromRun && fromRun.projectId) newMeta.projectId = String(fromRun.projectId);
+  const newBody = [
+    '## When to use',
+    `Goals matching: ${tags.length ? tags.join(', ') : '(no salient tags)'}`,
+    '',
+    '## Persona sequence',
+    newMeta.steps.map((p, i) => `${i + 1}. ${p}`).join('\n'),
+    '',
+    '## Notes',
+    String((fromRun && fromRun.final) || '').slice(0, 600),
+    '',
+    `*(Forked from ${skillId} after ${DEGRADE_THRESHOLD} degradation strikes)*`,
+  ].join('\n');
+
+  const newFilePath = path.join(SKILLS_DIR, `${newId}.md`);
+  try {
+    fs.writeFileSync(newFilePath, `${formatFrontmatter(newMeta)}\n\n${newBody}\n`, { mode: 0o600 });
+  } catch {
+    return null;
+  }
+  try {
+    const { meta: origMeta, body: origBody } = found;
+    origMeta.success = false;
+    origMeta.supersededBy = newId;
+    fs.writeFileSync(found.filePath, `${formatFrontmatter(origMeta)}\n\n${origBody}\n`, { mode: 0o600 });
+  } catch { /* best effort */ }
+  return { id: newId, path: newFilePath };
 }

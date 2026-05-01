@@ -37,6 +37,7 @@ import { appendAudit } from './audit.js';
 import { gradeRunAgainstEval } from './evals.js';
 import { registerGateResolver } from '../state.js';
 import { recordPersonaOutcome } from './persona-tune.js';
+import { composedRecall, recordSkillCoOccurrence } from './skill-graph.js';
 
 const ORCHESTRA_PERSONA = 'orchestra';
 const CRITIC_PERSONA = 'vex';
@@ -250,7 +251,8 @@ async function planRun(runId, goal) {
   try {
     const run = state.runs.get(runId);
     const recallOpts = run?.projectId ? { projectId: run.projectId } : {};
-    recalled = recallSkills(goal, recallOpts).map((s) => ({ ...s, score: undefined }));
+    // 5.3: composedRecall augments direct tag recall with graph-adjacent skills
+    recalled = composedRecall(goal, recallOpts).map((s) => ({ ...s, score: undefined }));
   } catch {
     /* recall best-effort */
   }
@@ -1081,6 +1083,16 @@ async function runPipeline(runId, goal, opts = {}) {
       }
     } catch {
       /* skill persistence is best-effort */
+    }
+    // 5.3: record co-occurrence so the graph learns which skills compose well
+    try {
+      const finalRun = state.runs.get(runId);
+      const recalledIds = (finalRun?.skillsRecalled || []).map((s) => s.id).filter(Boolean);
+      if (recalledIds.length > 0) {
+        recordSkillCoOccurrence(runId, recalledIds);
+      }
+    } catch {
+      /* graph recording is best-effort */
     }
     // Fork degraded skills that were recalled for this goal — this successful
     // run is evidence that the goal is still achievable, so we mint a v2.
