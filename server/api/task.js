@@ -1,14 +1,32 @@
 // HTTP surface for the orchestrator runner.
 //
-//   POST /api/task         { goal }            → { run_id }
-//   GET  /api/task/:run_id                     → run record (status + steps + result)
-//   GET  /api/tasks                            → recent runs
+//   POST /api/task              { goal }            → { run_id }
+//   GET  /api/task/:run_id                          → run record (status + steps + result)
+//   GET  /api/tasks                                 → recent runs
+//   GET  /api/task/:run_id/audit                    → append-only audit log (text/plain JSONL)
+//   POST /api/task/:run_id/approve { phase }        → approve a gated phase
+//   POST /api/task/:run_id/reject  { phase, reason }→ reject a gated phase
+//
+// Eval harness:
+//   GET    /api/evals            → list evals
+//   POST   /api/evals            → create eval { goal, rubric, referenceOutput?, tags? }
+//   GET    /api/evals/:id        → get eval
+//   DELETE /api/evals/:id        → delete eval
+//   GET    /api/evals/:id/grades → list grades for eval
 
 import { Router } from 'express';
-import { state } from '../state.js';
+import { state, approveRunPhase, rejectRunPhase } from '../state.js';
 import { runOrchestrator } from '../agents/runner.js';
 import { listSkills } from '../agents/skills.js';
 import { listWorkflows } from '../agents/workflows.js';
+import {
+  listEvals,
+  getEval,
+  createEval,
+  deleteEval,
+  listGrades,
+} from '../agents/evals.js';
+import { readAuditLog } from '../agents/audit.js';
 
 const router = Router();
 
@@ -165,6 +183,94 @@ router.get('/api/skills', (req, res) => {
       createdAt: s.createdAt,
     }));
     res.json({ skills });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Approval gates ─────────────────────────────────────────────────────────
+
+router.post('/api/task/:run_id/approve', (req, res) => {
+  const { run_id } = req.params;
+  const phase = String(req.body?.phase || '').trim();
+  if (!phase) return res.status(400).json({ error: 'phase required' });
+  const run = state.runs.get(run_id);
+  if (!run) return res.status(404).json({ error: 'unknown run' });
+  try {
+    approveRunPhase(run_id, phase);
+    res.json({ ok: true, run_id, phase });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.post('/api/task/:run_id/reject', (req, res) => {
+  const { run_id } = req.params;
+  const phase = String(req.body?.phase || '').trim();
+  const reason = String(req.body?.reason || 'Rejected by user').trim();
+  if (!phase) return res.status(400).json({ error: 'phase required' });
+  const run = state.runs.get(run_id);
+  if (!run) return res.status(404).json({ error: 'unknown run' });
+  try {
+    rejectRunPhase(run_id, phase, reason);
+    res.json({ ok: true, run_id, phase, reason });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ── Audit trail ────────────────────────────────────────────────────────────
+
+router.get('/api/task/:run_id/audit', (req, res) => {
+  const { run_id } = req.params;
+  const run = state.runs.get(run_id);
+  if (!run) return res.status(404).json({ error: 'unknown run' });
+  try {
+    const log = readAuditLog(run_id);
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.send(log);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Eval harness ───────────────────────────────────────────────────────────
+
+router.get('/api/evals', (req, res) => {
+  try {
+    res.json({ evals: listEvals() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/evals', (req, res) => {
+  try {
+    const { goal, rubric, referenceOutput, tags } = req.body || {};
+    const record = createEval({ goal, rubric, referenceOutput, tags });
+    res.status(201).json(record);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.get('/api/evals/:id', (req, res) => {
+  const record = getEval(req.params.id);
+  if (!record) return res.status(404).json({ error: 'unknown eval' });
+  res.json(record);
+});
+
+router.delete('/api/evals/:id', (req, res) => {
+  const deleted = deleteEval(req.params.id);
+  if (!deleted) return res.status(404).json({ error: 'unknown eval or already deleted' });
+  res.json({ ok: true, id: req.params.id });
+});
+
+router.get('/api/evals/:id/grades', (req, res) => {
+  const record = getEval(req.params.id);
+  if (!record) return res.status(404).json({ error: 'unknown eval' });
+  try {
+    res.json({ grades: listGrades(req.params.id) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
