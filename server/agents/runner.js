@@ -30,9 +30,14 @@ import {
 } from '../state.js';
 import { getAgentSync, listAgentsSync, resolveAgentIdSync } from '../store/agents.js';
 import { costUsd } from '../mapping/pricing.js';
-import { recallSkills, persistSkill } from './skills.js';
+import { recallSkills, persistSkill, degradeSkill, forkSkill, listSkills } from './skills.js';
 import { getWorkflow } from './workflows.js';
 import { getProject } from '../store/projects.js';
+import { appendAudit } from './audit.js';
+import { gradeRunAgainstEval } from './evals.js';
+import { registerGateResolver } from '../state.js';
+import { recordPersonaOutcome } from './persona-tune.js';
+import { composedRecall, recordSkillCoOccurrence } from './skill-graph.js';
 
 const ORCHESTRA_PERSONA = 'orchestra';
 const CRITIC_PERSONA = 'vex';
@@ -190,6 +195,7 @@ function recordPhaseCost(runId, phase, model, usage) {
     const total = run?.phaseCosts
       ? Object.values(run.phaseCosts).reduce((s, c) => s + (c.usd || 0), 0)
       : 0;
+    appendAudit(runId, 'budget-exceeded', { phase, totalUsd: total, ceilingUsd: COST_CEILING_USD });
     throw new BudgetExceededError(total);
   }
 }
@@ -245,7 +251,8 @@ async function planRun(runId, goal) {
   try {
     const run = state.runs.get(runId);
     const recallOpts = run?.projectId ? { projectId: run.projectId } : {};
-    recalled = recallSkills(goal, recallOpts).map((s) => ({ ...s, score: undefined }));
+    // 5.3: composedRecall augments direct tag recall with graph-adjacent skills
+    recalled = composedRecall(goal, recallOpts).map((s) => ({ ...s, score: undefined }));
   } catch {
     /* recall best-effort */
   }
@@ -312,6 +319,11 @@ async function planRun(runId, goal) {
     kind: 'plan',
     text: plan.map((s, i) => `${i}. [${s.persona}] ${summarize(s.instruction, 140)}`).join(' | '),
   });
+  appendAudit(runId, 'plan-emitted', {
+    steps: plan.length,
+    personas: plan.map((s) => s.persona),
+    skillsRecalled: recalled.length,
+  });
   pushEvent({
     sessionId: runId,
     personaId: ORCHESTRA_PERSONA,
@@ -322,6 +334,208 @@ async function planRun(runId, goal) {
     dedupeKey: `plan:done:${runId}`,
   });
   return plan;
+}
+
+// ---------- Phase 1b: Plan Critique (5.1) ----------
+//
+// Before executing, ask the planner to audit the plan for:
+//   (a) persona outside its declared role
+//   (b) depends_on cycles
+//   (c) two adjacent steps that could merge
+//   (d) plan references a persona that doesn't exist in the roster
+//
+// If any HIGH issue is found, run a single rewrite pass (MAX_PLAN_REWRITES = 1).
+// Critique tokens are folded into the 'plan' phase cost bucket.
+
+const MAX_PLAN_REWRITES = 1;
+
+const PLAN_CRITIQUE_SYSTEM = `You are Orchestra in PLAN-CRITIC mode.
+Audit the JSON plan below against the agent roster for these problems only:
+(a) ROLE — a persona is asked to do work outside its declared role
+(b) CYCLE — a depends_on chain that has a cycle
+(c) MERGE — two adjacent steps that are so similar they should be one
+(d) UNKNOWN — plan references a persona id that does not appear in the roster
+
+Roster of valid persona ids and roles:
+{ROSTER}
+
+Reply format — JSON only, no prose:
+{"verdict":"OK"} — if no issues found, or only LOW-severity observations
+{"verdict":"REWRITE","issues":["<HIGH issue 1>","<HIGH issue 2>",...]} — if any HIGH-severity issues exist
+
+HIGH means the run would likely fail or produce wrong results. LOW means minor suggestions; treat them as OK.
+Respond with only valid JSON.`;
+
+const PLAN_REWRITE_SYSTEM = `You are Orchestra in PLAN-REWRITE mode.
+You have an existing plan with the following HIGH issues:
+{ISSUES}
+
+Rewrite the plan to fix those issues. Keep all non-problematic steps.
+Available personas:
+{ROSTER}
+
+Reply with ONLY a corrected JSON array in exactly the same schema:
+[{"persona":"<id>","instruction":"<brief>","depends_on":<index|null>}]`;
+
+function detectCycles(plan) {
+  const n = plan.length;
+  const visited = new Set();
+  const stack = new Set();
+
+  function dfs(idx) {
+    if (stack.has(idx)) return true;
+    if (visited.has(idx)) return false;
+    visited.add(idx);
+    stack.add(idx);
+    const dep = plan[idx]?.depends_on;
+    if (Number.isInteger(dep) && dep >= 0 && dep < n) {
+      if (dfs(dep)) return true;
+    }
+    stack.delete(idx);
+    return false;
+  }
+
+  for (let i = 0; i < n; i++) {
+    if (dfs(i)) return true;
+  }
+  return false;
+}
+
+function validatePlanLocally(plan, validPersonaIds) {
+  const issues = [];
+  const idSet = new Set(validPersonaIds);
+
+  if (detectCycles(plan)) {
+    issues.push('CYCLE: depends_on chain contains a cycle');
+  }
+
+  for (const step of plan) {
+    if (!idSet.has(step.persona)) {
+      issues.push(`UNKNOWN: persona "${step.persona}" is not in the roster`);
+    }
+  }
+
+  return issues;
+}
+
+export async function critiquePlan(runId, goal, plan) {
+  const orch = orchestratorAgent();
+  const model = orch.model || 'claude-sonnet-4-5';
+  const validIds = listAgentsSync({ includeDisabled: false }).map((a) => a.id);
+
+  const localIssues = validatePlanLocally(plan, validIds);
+
+  const planJson = JSON.stringify(
+    plan.map((s) => ({ persona: s.persona, instruction: s.instruction, depends_on: s.depends_on })),
+    null,
+    2,
+  );
+
+  const systemPrompt = PLAN_CRITIQUE_SYSTEM.replace('{ROSTER}', rosterText());
+
+  let verdict = 'OK';
+  let issues = [...localIssues];
+
+  try {
+    let raw = '';
+    for await (const message of withPhaseTimeout(
+      query({
+        prompt: `Audit this plan now.\n\n${planJson}`,
+        options: {
+          model,
+          maxTurns: 1,
+          systemPrompt,
+          permissionMode: 'dontAsk',
+        },
+      }),
+      'plan',
+    )) {
+      if (message.type === 'assistant') raw += textFromAssistant(message) + '\n';
+      if (message.type === 'result') {
+        recordPhaseCost(runId, 'plan', model, message.usage);
+        recordUsage({
+          model,
+          usage: message.usage,
+          dedupeKey: `usage:plan-critique:${runId}:${message.uuid}`,
+          sessionId: runId,
+        });
+      }
+    }
+    const jsonStart = raw.indexOf('{');
+    const jsonEnd = raw.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
+      try {
+        const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+        if (parsed.verdict === 'REWRITE' && Array.isArray(parsed.issues)) {
+          issues = [...new Set([...issues, ...parsed.issues])];
+          verdict = 'REWRITE';
+        }
+      } catch {
+        /* fall through — local issues still captured */
+      }
+    }
+  } catch (err) {
+    appendScratchpad(runId, {
+      persona: ORCHESTRA_PERSONA,
+      kind: 'plan-critique-error',
+      text: `Plan critique LLM call failed: ${err.message || String(err)}`,
+    });
+  }
+
+  if (localIssues.length > 0) verdict = 'REWRITE';
+
+  return { verdict, issues };
+}
+
+async function rewritePlan(runId, goal, plan, issues) {
+  const orch = orchestratorAgent();
+  const model = orch.model || 'claude-sonnet-4-5';
+  const planJson = JSON.stringify(
+    plan.map((s) => ({ persona: s.persona, instruction: s.instruction, depends_on: s.depends_on })),
+    null,
+    2,
+  );
+
+  const systemPrompt = PLAN_REWRITE_SYSTEM.replace(
+    '{ISSUES}',
+    issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n'),
+  ).replace('{ROSTER}', rosterText());
+
+  let rewriteText = '';
+  try {
+    for await (const message of withPhaseTimeout(
+      query({
+        prompt: `Original plan:\n${planJson}\n\nReturn the corrected JSON plan now.`,
+        options: {
+          model,
+          maxTurns: 1,
+          systemPrompt,
+          permissionMode: 'dontAsk',
+        },
+      }),
+      'plan',
+    )) {
+      if (message.type === 'assistant') rewriteText += textFromAssistant(message) + '\n';
+      if (message.type === 'result') {
+        recordPhaseCost(runId, 'plan', model, message.usage);
+        recordUsage({
+          model,
+          usage: message.usage,
+          dedupeKey: `usage:plan-rewrite:${runId}:${message.uuid}`,
+          sessionId: runId,
+        });
+      }
+    }
+  } catch (err) {
+    appendScratchpad(runId, {
+      persona: ORCHESTRA_PERSONA,
+      kind: 'plan-rewrite-error',
+      text: `Plan rewrite LLM call failed: ${err.message || String(err)}`,
+    });
+    return null;
+  }
+
+  return extractJsonArray(rewriteText);
 }
 
 // ---------- Phase 2: Execute ----------
@@ -364,6 +578,7 @@ function handleAssistantMessage(runId, message) {
       dedupeKey: `tu:run:${runId}:${block.id}`,
     });
     appendScratchpad(runId, { persona, kind: 'delegation', text: description });
+    appendAudit(runId, 'delegation-start', { persona, toolUseId: block.id, description: summarize(description, 200) });
   }
 }
 
@@ -425,6 +640,7 @@ function handleUserMessage(runId, message) {
       }
     }
 
+    appendAudit(runId, 'delegation-result', { persona, toolUseId: block.tool_use_id, ok: result.ok });
     finishTask({ tool_use_id: block.tool_use_id, status: result.ok ? 'done' : 'failed' });
   }
 }
@@ -571,6 +787,7 @@ async function critiqueRun(runId, goal, finalText) {
           : 'low';
 
   setRunCritique(runId, { text: trimmed, severity });
+  appendAudit(runId, 'critique-done', { severity, text: trimmed.slice(0, 300) });
   pushEvent({
     sessionId: runId,
     personaId: CRITIC_PERSONA,
@@ -637,6 +854,7 @@ async function verifyRun(runId, goal, finalText) {
   const trimmed = text.trim();
   const passed = /^PASS\b/i.test(trimmed);
   setRunVerification(runId, { passed, text: trimmed });
+  appendAudit(runId, 'verify-done', { passed, text: trimmed.slice(0, 200) });
   pushEvent({
     sessionId: runId,
     personaId: ORCHESTRA_PERSONA,
@@ -659,6 +877,11 @@ function planFromTemplate(runId, goal, workflow) {
     kind: 'plan',
     text: `Loaded workflow "${workflow.name}": ${workflow.plan.length} steps (planner skipped)`,
   });
+  appendAudit(runId, 'plan-template', {
+    workflow: workflow.name,
+    steps: workflow.plan.length,
+    personas: workflow.plan.map((s) => s.persona),
+  });
   pushEvent({
     sessionId: runId,
     personaId: ORCHESTRA_PERSONA,
@@ -671,18 +894,111 @@ function planFromTemplate(runId, goal, workflow) {
   return workflow.plan;
 }
 
+// Wait for approval gate. Returns a Promise that resolves when the gate is
+// approved or rejects when it is rejected. Times out after 30 minutes.
+const GATE_TIMEOUT_MS = 30 * 60 * 1000;
+
+function waitForGate(runId, phase) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Gate for phase '${phase}' timed out after 30 minutes`));
+    }, GATE_TIMEOUT_MS);
+    registerGateResolver(runId, (approvedPhase) => {
+      clearTimeout(timer);
+      resolve(approvedPhase);
+    }, (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+// Check whether the workflow or run requires approval for the given phase.
+function requiresApproval(opts, phase) {
+  const workflow = opts.workflow ? getWorkflow(opts.workflow) : null;
+  const gates = workflow?.requiresApproval || opts.requiresApproval || [];
+  return Array.isArray(gates) && gates.includes(phase);
+}
+
 async function runPipeline(runId, goal, opts = {}) {
   const workflow = opts.workflow ? getWorkflow(opts.workflow) : null;
   if (opts.workflow && !workflow) {
     finishRun(runId, { status: 'failed', error: `Unknown workflow '${opts.workflow}'` });
     return;
   }
-  const plan = workflow
+  let plan = workflow
     ? planFromTemplate(runId, goal, workflow)
     : await planRun(runId, goal);
   if (!plan) {
     finishRun(runId, { status: 'failed', error: 'Planner produced no usable plan.' });
     return;
+  }
+
+  // Phase 1b: critique the plan before executing (5.1)
+  // Workflows skip critique — they are pre-validated templates.
+  if (!workflow) {
+    try {
+      const planCritique = await critiquePlan(runId, goal, plan);
+      appendScratchpad(runId, {
+        persona: ORCHESTRA_PERSONA,
+        kind: 'plan-critique',
+        text: planCritique.verdict === 'OK'
+          ? 'Plan critique: OK — no high-severity issues found'
+          : `Plan critique: REWRITE — ${planCritique.issues.join('; ')}`,
+      });
+      if (planCritique.verdict === 'REWRITE' && planCritique.issues.length > 0) {
+        const rewrittenPlan = await rewritePlan(runId, goal, plan, planCritique.issues);
+        if (rewrittenPlan && rewrittenPlan.length > 0) {
+          plan = rewrittenPlan;
+          setRunPlan(runId, plan);
+          appendScratchpad(runId, {
+            persona: ORCHESTRA_PERSONA,
+            kind: 'plan-rewrite',
+            text: `Plan rewritten (${plan.length} steps): ${plan.map((s, i) => `${i}.[${s.persona}]`).join(' ')}`,
+          });
+          pushEvent({
+            sessionId: runId,
+            personaId: ORCHESTRA_PERSONA,
+            verb: 'result',
+            toolName: 'PlanCritique',
+            text: `Plan rewritten after critique (${planCritique.issues.length} issue${planCritique.issues.length === 1 ? '' : 's'} fixed)`,
+            status: 'ok',
+            dedupeKey: `plan-rewrite:done:${runId}`,
+          });
+        } else {
+          appendScratchpad(runId, {
+            persona: ORCHESTRA_PERSONA,
+            kind: 'plan-rewrite-skipped',
+            text: 'Plan rewrite returned no usable plan — proceeding with original',
+          });
+        }
+      }
+    } catch (critiqueErr) {
+      // Plan critique is best-effort; pipeline continues with original plan.
+      appendScratchpad(runId, {
+        persona: ORCHESTRA_PERSONA,
+        kind: 'plan-critique-error',
+        text: `Plan critique failed unexpectedly: ${critiqueErr.message || String(critiqueErr)}`,
+      });
+    }
+  }
+
+  // Approval gate: execute phase
+  if (requiresApproval(opts, 'execute')) {
+    const run = state.runs.get(runId);
+    if (run) {
+      run.status = 'awaiting-approval';
+      appendScratchpad(runId, { persona: ORCHESTRA_PERSONA, kind: 'gate-pending', text: "Awaiting approval before 'execute' phase" });
+      appendAudit(runId, 'gate-pending', { phase: 'execute' });
+      // emitRun is called by appendScratchpad internally
+    }
+    try {
+      await waitForGate(runId, 'execute');
+      appendAudit(runId, 'gate-approved', { phase: 'execute' });
+    } catch (gateErr) {
+      appendAudit(runId, 'gate-rejected', { phase: 'execute', reason: gateErr.message });
+      return;
+    }
   }
 
   let attempt = 0;
@@ -696,6 +1012,23 @@ async function runPipeline(runId, goal, opts = {}) {
   }
 
   if (exec.status === 'done' && exec.final) {
+    // Approval gate: verify phase
+    if (requiresApproval(opts, 'verify')) {
+      const run = state.runs.get(runId);
+      if (run) {
+        run.status = 'awaiting-approval';
+        appendScratchpad(runId, { persona: ORCHESTRA_PERSONA, kind: 'gate-pending', text: "Awaiting approval before 'verify' phase" });
+        appendAudit(runId, 'gate-pending', { phase: 'verify' });
+      }
+      try {
+        await waitForGate(runId, 'verify');
+        appendAudit(runId, 'gate-approved', { phase: 'verify' });
+      } catch (gateErr) {
+        appendAudit(runId, 'gate-rejected', { phase: 'verify', reason: gateErr.message });
+        return;
+      }
+    }
+
     const verdict = await verifyRun(runId, goal, exec.final);
     if (!verdict.passed && attempt < MAX_REVISIONS) {
       attempt = bumpRunRevision(runId);
@@ -707,10 +1040,37 @@ async function runPipeline(runId, goal, opts = {}) {
     }
   }
 
+  // Approval gate: final phase
+  if (exec.status === 'done' && exec.final && requiresApproval(opts, 'final')) {
+    const run = state.runs.get(runId);
+    if (run) {
+      run.status = 'awaiting-approval';
+      appendScratchpad(runId, { persona: ORCHESTRA_PERSONA, kind: 'gate-pending', text: "Awaiting approval before finalizing run" });
+      appendAudit(runId, 'gate-pending', { phase: 'final' });
+    }
+    try {
+      await waitForGate(runId, 'final');
+      appendAudit(runId, 'gate-approved', { phase: 'final' });
+    } catch (gateErr) {
+      appendAudit(runId, 'gate-rejected', { phase: 'final', reason: gateErr.message });
+      return;
+    }
+  }
+
   setRunPhase(runId, 'done');
   clearFailureCounters(runId);
+
+  // Degrade skills that contributed to failed runs
+  const finalRunSnapshot = state.runs.get(runId);
+  if (exec.status !== 'done' && Array.isArray(finalRunSnapshot?.skillsRecalled)) {
+    for (const recalled of finalRunSnapshot.skillsRecalled) {
+      try { degradeSkill(recalled.id); } catch { /* best effort */ }
+    }
+  }
+
   if (exec.status === 'done') {
     finishRun(runId, { status: 'done', final: exec.final });
+    appendAudit(runId, 'run-done', { revisions: attempt });
     try {
       const finalRun = state.runs.get(runId);
       const persisted = persistSkill(finalRun);
@@ -723,6 +1083,71 @@ async function runPipeline(runId, goal, opts = {}) {
       }
     } catch {
       /* skill persistence is best-effort */
+    }
+    // 5.3: record co-occurrence so the graph learns which skills compose well
+    try {
+      const finalRun = state.runs.get(runId);
+      const recalledIds = (finalRun?.skillsRecalled || []).map((s) => s.id).filter(Boolean);
+      if (recalledIds.length > 0) {
+        recordSkillCoOccurrence(runId, recalledIds);
+      }
+    } catch {
+      /* graph recording is best-effort */
+    }
+    // Fork degraded skills that were recalled for this goal — this successful
+    // run is evidence that the goal is still achievable, so we mint a v2.
+    try {
+      const finalRun = state.runs.get(runId);
+      if (Array.isArray(finalRun?.skillsRecalled)) {
+        for (const recalled of finalRun.skillsRecalled) {
+          const allSkills = listSkills();
+          const skill = allSkills.find((s) => s.id === recalled.id);
+          if (skill && (Number(skill.degradedCount) || 0) >= 3 && !skill.supersededBy) {
+            const forked = forkSkill(recalled.id, finalRun);
+            if (forked) {
+              appendScratchpad(runId, {
+                persona: ORCHESTRA_PERSONA,
+                kind: 'skill-forked',
+                text: `Skill ${recalled.id} forked to ${forked.id} after ${skill.degradedCount} degradation strikes`,
+              });
+            }
+          }
+        }
+      }
+    } catch {
+      /* fork is best-effort */
+    }
+    // Grade the run against any matching eval — best-effort
+    try {
+      const finalRun = state.runs.get(runId);
+      await gradeRunAgainstEval(finalRun);
+    } catch {
+      /* grading is best-effort */
+    }
+    // 5.2: record per-persona success outcomes for auto-tune stats
+    try {
+      const finalRun = state.runs.get(runId);
+      const projectId = finalRun?.projectId;
+      const personasSeen = new Set(
+        (finalRun?.steps || []).map((s) => s.persona).filter(Boolean),
+      );
+      for (const personaId of personasSeen) {
+        recordPersonaOutcome({ personaId, projectId, outcome: 'success' });
+      }
+      // Record critic-high if applicable
+      if (finalRun?.critique?.severity === 'high' || finalRun?.critique?.severity === 'critical') {
+        for (const personaId of personasSeen) {
+          recordPersonaOutcome({ personaId, projectId, outcome: 'critic-high' });
+        }
+      }
+      // Record verify-fail if applicable
+      if (finalRun?.verification && !finalRun.verification.passed) {
+        for (const personaId of personasSeen) {
+          recordPersonaOutcome({ personaId, projectId, outcome: 'verify-fail' });
+        }
+      }
+    } catch {
+      /* outcome recording is best-effort */
     }
     pushEvent({
       sessionId: runId,
@@ -737,6 +1162,20 @@ async function runPipeline(runId, goal, opts = {}) {
       status: 'failed',
       error: exec.error || 'Run failed without final answer.',
     });
+    appendAudit(runId, 'run-failed', { error: (exec.error || 'no final answer').slice(0, 200) });
+    // 5.2: record per-persona failure outcomes for auto-tune stats
+    try {
+      const failedRun = state.runs.get(runId);
+      const projectId = failedRun?.projectId;
+      const personasSeen = new Set(
+        (failedRun?.steps || []).map((s) => s.persona).filter(Boolean),
+      );
+      for (const personaId of personasSeen) {
+        recordPersonaOutcome({ personaId, projectId, outcome: 'failure' });
+      }
+    } catch {
+      /* outcome recording is best-effort */
+    }
     pushEvent({
       sessionId: runId,
       personaId: ORCHESTRA_PERSONA,
