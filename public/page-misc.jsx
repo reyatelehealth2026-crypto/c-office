@@ -95,6 +95,63 @@ const ConnectionsPanel = () => {
   const [busy, setBusy] = React.useState(null);
   const [tokenInputs, setTokenInputs] = React.useState({});
   const [googleClientId, setGoogleClientId] = React.useState('');
+  const [testResults, setTestResults] = React.useState({});
+  const [testingProvider, setTestingProvider] = React.useState(null);
+
+  const runTest = async (provider) => {
+    setTestingProvider(provider);
+    setTestResults((s) => ({ ...s, [provider]: { pending: true } }));
+    try {
+      const r = await fetch(`/api/auth/test/${provider}`, { method: 'POST' });
+      const j = await r.json().catch(() => ({ ok: false, error: 'invalid response' }));
+      setTestResults((s) => ({ ...s, [provider]: { ...j, ts: Date.now() } }));
+    } catch (e) {
+      setTestResults((s) => ({ ...s, [provider]: { ok: false, error: e.message, ts: Date.now() } }));
+    } finally {
+      setTestingProvider(null);
+    }
+  };
+
+  const TestButton = ({ provider, disabled }) => (
+    <button
+      disabled={disabled || testingProvider === provider}
+      onClick={() => runTest(provider)}
+      title="Run a live API probe"
+      style={{
+        padding: '6px 10px', borderRadius: 6,
+        border: '1px solid var(--border)',
+        background: 'var(--bg-3)', color: 'var(--text)',
+        fontSize: 12, cursor: disabled ? 'not-allowed' : 'pointer',
+      }}>
+      {testingProvider === provider ? 'testing...' : '🩺 Test'}
+    </button>
+  );
+
+  const TestResult = ({ provider }) => {
+    const r = testResults[provider];
+    if (!r) return null;
+    if (r.pending) return <span className="mono-s" style={{color:'var(--text-3)'}}>probing…</span>;
+    const okColor = r.ok ? 'var(--green)' : 'var(--red)';
+    const detail = r.ok
+      ? [
+          r.latencyMs != null ? `${r.latencyMs}ms` : null,
+          r.model ? r.model : null,
+          r.modelCount != null ? `${r.modelCount} models` : null,
+          r.account ? `acct: ${r.account}` : null,
+          r.hint ? r.hint : null,
+        ].filter(Boolean).join(' · ')
+      : `${r.error || 'failed'}${r.hint ? ' · ' + r.hint : ''}`;
+    return (
+      <div style={{
+        marginTop: 6, padding: '6px 10px', fontSize: 11,
+        background: 'var(--bg-3)', borderRadius: 6,
+        borderLeft: `3px solid ${okColor}`,
+        fontFamily: 'var(--font-mono)', color: r.ok ? 'var(--text-2)' : 'var(--red)',
+      }}>
+        <b style={{color: okColor}}>{r.ok ? 'OK' : 'FAIL'}</b> · {detail}
+      </div>
+    );
+  };
 
   const refresh = React.useCallback(() => {
     fetch('/api/auth/status').then(r => r.json()).then(setStatus).catch(()=>{});
@@ -185,18 +242,24 @@ const ConnectionsPanel = () => {
       </div>
       <div className="stack" style={{gap:8}}>
         <Row label="Anthropic" state={status?.anthropic} hint="reads ~/.claude/.credentials.json after `claude login`"
-          action={status?.anthropic?.connected
-            ? <button disabled={busy==='anthropic'} onClick={()=>disconnect('anthropic')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
-            : <button onClick={connectAnthropic} style={{padding:'6px 14px', borderRadius:6, border:'none', background:'var(--gold)', color:'#000', fontSize:12, fontWeight:600, cursor:'pointer'}}>Connect</button>
-          }/>
+          action={<div style={{display:'flex', gap:6}}>
+            <TestButton provider="anthropic" disabled={!status?.anthropic?.connected}/>
+            {status?.anthropic?.connected
+              ? <button disabled={busy==='anthropic'} onClick={()=>disconnect('anthropic')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
+              : <button onClick={connectAnthropic} style={{padding:'6px 14px', borderRadius:6, border:'none', background:'var(--gold)', color:'#000', fontSize:12, fontWeight:600, cursor:'pointer'}}>Connect</button>}
+          </div>}/>
+        <TestResult provider="anthropic"/>
         {!status?.anthropic?.connected && <TokenField provider="anthropic" placeholder="…or paste sk-ant-… key"/>}
 
         <Row label="Google (Nano Banana 2 Pro)" state={status?.google}
           hint={status?.google?.connected ? 'ready for Gemini image generation' : 'connect OAuth or paste Gemini API key'}
-          action={status?.google?.connected
-            ? <button disabled={busy==='google'} onClick={()=>disconnect('google')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
-            : <button disabled={!status?.google?.hasClientId} onClick={connectGoogle} style={{padding:'6px 14px', borderRadius:6, border:'none', background: status?.google?.hasClientId ? 'var(--gold)' : 'var(--bg-3)', color:'#000', fontSize:12, fontWeight:600, cursor: status?.google?.hasClientId ? 'pointer' : 'not-allowed'}}>Connect</button>
-          }/>
+          action={<div style={{display:'flex', gap:6}}>
+            <TestButton provider="google" disabled={!status?.google?.connected}/>
+            {status?.google?.connected
+              ? <button disabled={busy==='google'} onClick={()=>disconnect('google')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
+              : <button disabled={!status?.google?.hasClientId} onClick={connectGoogle} style={{padding:'6px 14px', borderRadius:6, border:'none', background: status?.google?.hasClientId ? 'var(--gold)' : 'var(--bg-3)', color:'#000', fontSize:12, fontWeight:600, cursor: status?.google?.hasClientId ? 'pointer' : 'not-allowed'}}>Connect</button>}
+          </div>}/>
+        <TestResult provider="google"/>
         {!status?.google?.hasClientId && (
           <div style={{display:'flex', gap:6, marginLeft:12}}>
             <input type="text" placeholder="Google OAuth client_id (Desktop or Web)" value={googleClientId} onChange={e=>setGoogleClientId(e.target.value)}
@@ -207,18 +270,29 @@ const ConnectionsPanel = () => {
         {!status?.google?.connected && <TokenField provider="google" placeholder="Gemini API key for Nano Banana 2 Pro"/>}
 
         <Row label="Replicate" state={status?.replicate} hint="paste an r8_… API token"
-          action={status?.replicate?.connected
-            ? <button disabled={busy==='replicate'} onClick={()=>disconnect('replicate')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
-            : <TokenField provider="replicate" placeholder="r8_…"/>
-          }/>
+          action={<div style={{display:'flex', gap:6}}>
+            <TestButton provider="replicate" disabled={!status?.replicate?.connected}/>
+            {status?.replicate?.connected
+              ? <button disabled={busy==='replicate'} onClick={()=>disconnect('replicate')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
+              : <TokenField provider="replicate" placeholder="r8_…"/>}
+          </div>}/>
+        <TestResult provider="replicate"/>
 
         <Row label="OpenAI" state={status?.openai} hint="paste an sk-… API key"
-          action={status?.openai?.connected
-            ? <button disabled={busy==='openai'} onClick={()=>disconnect('openai')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
-            : <TokenField provider="openai" placeholder="sk-…"/>
-          }/>
+          action={<div style={{display:'flex', gap:6}}>
+            <TestButton provider="openai" disabled={!status?.openai?.connected}/>
+            {status?.openai?.connected
+              ? <button disabled={busy==='openai'} onClick={()=>disconnect('openai')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
+              : <TokenField provider="openai" placeholder="sk-…"/>}
+          </div>}/>
+        <TestResult provider="openai"/>
+
         <Row label="Codex OAuth" state={status?.codex} hint="ใช้ login ของ Codex จาก ~/.codex/auth.json สำหรับสร้างภาพโดยไม่ต้องใส่ API key"
-          action={<span className={'badge ' + (status?.codex?.connected ? 'green' : 'slate')}>{status?.codex?.connected ? 'READY' : 'LOGIN CODEX'}</span>}/>
+          action={<div style={{display:'flex', gap:6}}>
+            <TestButton provider="codex" disabled={!status?.codex?.connected}/>
+            <span className={'badge ' + (status?.codex?.connected ? 'green' : 'slate')}>{status?.codex?.connected ? 'READY' : 'LOGIN CODEX'}</span>
+          </div>}/>
+        <TestResult provider="codex"/>
 
         <div className="mono-s" style={{marginTop:6}}>
           Tokens are stored locally encrypted in <span className="mono" style={{color:'var(--gold)'}}>~/.c-office/credentials.json</span>. Never committed.
