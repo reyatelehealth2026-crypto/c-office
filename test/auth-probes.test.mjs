@@ -46,6 +46,29 @@ test('probeAnthropic returns 401 hint when unauthorized', async () => {
   assert.match(r.hint, /sk-ant/);
 });
 
+test('probeAnthropic OAuth path posts to /v1/messages with the OAuth beta header', async () => {
+  const fetchImpl = fakeFetch((url, opts) => {
+    assert.match(url, /api\.anthropic\.com\/v1\/messages/);
+    assert.equal(opts.method, 'POST');
+    assert.equal(opts.headers['Authorization'], 'Bearer oauth-tok');
+    assert.equal(opts.headers['anthropic-beta'], 'oauth-2025-04-20');
+    const body = JSON.parse(opts.body);
+    assert.equal(body.max_tokens, 1);
+    return jsonResponse({ model: 'claude-sonnet-4-6', content: [{ type: 'text', text: '.' }] });
+  });
+  const r = await probeAnthropic({ accessToken: 'oauth-tok' }, fetchImpl);
+  assert.equal(r.ok, true);
+  assert.equal(r.mode, 'oauth');
+  assert.equal(r.model, 'claude-sonnet-4-6');
+});
+
+test('probeAnthropic OAuth path returns refresh hint on 401', async () => {
+  const r = await probeAnthropic({ accessToken: 'oauth-bad' }, fakeFetch(() => jsonResponse({}, 401)));
+  assert.equal(r.ok, false);
+  assert.equal(r.mode, 'oauth');
+  assert.match(r.hint, /claude login/);
+});
+
 test('probeAnthropic skips network when no credentials are provided', async () => {
   const r = await probeAnthropic({}, fakeFetch(() => { throw new Error('should not be called'); }));
   assert.equal(r.ok, false);
