@@ -48,6 +48,12 @@ const SendToOrchestra = () => {
   const [busy, setBusy] = React.useState(false);
   const [authStatus, setAuthStatus] = React.useState(null);
   const [runs, setRuns] = React.useState(window.RUNS || []);
+  const [workflows, setWorkflows] = React.useState([]);
+  const [workflow, setWorkflow] = React.useState('');
+  const [projects, setProjects] = React.useState([]);
+  const [projectId, setProjectId] = React.useState('');
+  const [showNewProject, setShowNewProject] = React.useState(false);
+  const [newProjectName, setNewProjectName] = React.useState('');
 
   const placeholders = [
     'Summarize TikTok trends for 2026...',
@@ -69,6 +75,8 @@ const SendToOrchestra = () => {
   React.useEffect(() => {
     fetch('/api/auth/status').then(r => r.json()).then(setAuthStatus).catch(()=>{});
     fetch('/api/tasks').then(r => r.json()).then(j => setRuns(j.runs || [])).catch(()=>{});
+    fetch('/api/workflows').then(r => r.json()).then(j => setWorkflows(j.workflows || [])).catch(()=>{});
+    fetch('/api/projects').then(r => r.json()).then(j => setProjects(j.projects || [])).catch(()=>{});
     const refresh = () => {
       setRuns(window.RUNS || []);
       if (window.AUTH_STATUS) setAuthStatus(window.AUTH_STATUS);
@@ -86,7 +94,11 @@ const SendToOrchestra = () => {
       const r = await fetch('/api/task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal: goal.trim() }),
+        body: JSON.stringify({
+          goal: goal.trim(),
+          workflow: workflow || undefined,
+          projectId: projectId || undefined,
+        }),
       });
       const j = await r.json();
       if (!r.ok) {
@@ -111,6 +123,81 @@ const SendToOrchestra = () => {
         disabled={!connected || busy}
         placeholder={connected ? placeholders[placeholderIdx] : 'Connect Anthropic in Settings first'}
       />
+      <select
+        value={projectId}
+        onChange={e => {
+          if (e.target.value === '__new__') { setShowNewProject(true); return; }
+          setProjectId(e.target.value);
+        }}
+        disabled={!connected || busy}
+        title="Group runs into a project (scopes the skill library)"
+        style={{
+          background: 'var(--bg-2)', color: 'var(--text-1)',
+          border: '1px solid var(--border)', borderRadius: 6,
+          padding: '6px 8px', fontSize: 12,
+          fontFamily: 'var(--font-mono)',
+        }}>
+        <option value="">no project</option>
+        {projects.map(p => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+        <option value="__new__">+ new project...</option>
+      </select>
+      {showNewProject && (
+        <span style={{display: 'flex', gap: 4}}>
+          <input
+            type="text"
+            value={newProjectName}
+            onChange={e => setNewProjectName(e.target.value)}
+            placeholder="project name"
+            style={{
+              background: 'var(--bg-2)', color: 'var(--text-1)',
+              border: '1px solid var(--border)', borderRadius: 6,
+              padding: '6px 8px', fontSize: 12, width: 140,
+            }}/>
+          <button className="btn-ghost" style={{fontSize: 11}} onClick={async () => {
+            const name = newProjectName.trim();
+            if (!name) return;
+            try {
+              const r = await fetch('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name }),
+              });
+              const j = await r.json();
+              if (r.ok && j.project) {
+                setProjects(prev => [j.project, ...prev]);
+                setProjectId(j.project.id);
+                setNewProjectName('');
+                setShowNewProject(false);
+              } else {
+                alert(j.error || 'Failed to create project');
+              }
+            } catch (err) { alert(err.message); }
+          }}>create</button>
+          <button className="btn-ghost" style={{fontSize: 11}} onClick={() => {
+            setShowNewProject(false); setNewProjectName('');
+          }}>cancel</button>
+        </span>
+      )}
+      {workflows.length > 0 && (
+        <select
+          value={workflow}
+          onChange={e => setWorkflow(e.target.value)}
+          disabled={!connected || busy}
+          title={workflow ? workflows.find(w => w.name === workflow)?.description : 'Auto-plan (LLM decomposes goal)'}
+          style={{
+            background: 'var(--bg-2)', color: 'var(--text-1)',
+            border: '1px solid var(--border)', borderRadius: 6,
+            padding: '6px 8px', fontSize: 12,
+            fontFamily: 'var(--font-mono)',
+          }}>
+          <option value="">auto-plan</option>
+          {workflows.map(w => (
+            <option key={w.name} value={w.name}>{w.name} ({w.steps})</option>
+          ))}
+        </select>
+      )}
       <button className="btn-primary-task"
         onClick={submit} disabled={!connected || busy || !goal.trim()}>
         {busy ? 'Sending...' : 'Send'}
@@ -138,6 +225,293 @@ const SendToOrchestra = () => {
   );
 };
 
+/* Multi-agent run timeline — plan / scratchpad / critique / verify */
+const PHASES = ['plan', 'execute', 'critique', 'verify', 'done'];
+
+const TeamTimeline = () => {
+  const [runs, setRuns] = React.useState(window.RUNS || []);
+  const [expanded, setExpanded] = React.useState(true);
+  const [openStep, setOpenStep] = React.useState(null);
+
+  React.useEffect(() => {
+    const refresh = () => setRuns(window.RUNS || []);
+    window.COfficeBus?.addEventListener('refresh', refresh);
+    return () => window.COfficeBus?.removeEventListener('refresh', refresh);
+  }, []);
+
+  const run = runs.find(r => r.status === 'running') || runs[0];
+  if (!run) return null;
+
+  const phaseLabel = {
+    plan: 'Planning',
+    execute: 'Executing',
+    critique: 'Reviewing',
+    done: 'Done',
+  }[run.phase || 'execute'] || (run.status === 'running' ? 'Working' : 'Done');
+
+  const phaseColor = run.status === 'failed'
+    ? 'var(--red)'
+    : run.phase === 'done' || run.status === 'done'
+      ? 'var(--green)'
+      : 'var(--gold)';
+
+  const plan = Array.isArray(run.plan) ? run.plan : [];
+  const scratch = Array.isArray(run.scratchpad) ? run.scratchpad.slice(-12) : [];
+  const critique = run.critique || null;
+
+  const sevColor = (sev) => {
+    if (sev === 'critical') return 'var(--red)';
+    if (sev === 'high') return 'var(--gold)';
+    if (sev === 'none') return 'var(--green)';
+    return 'var(--text-3)';
+  };
+
+  return (
+    <div className="panel" style={{marginBottom: 14, padding: 14}}>
+      <div className="panel-head" style={{marginBottom: 10}}>
+        <h3 style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+          <span style={{color: phaseColor, fontSize: 14}}>●</span>
+          Agent Team · {phaseLabel}
+          {run.workflow && (
+            <span className="chip" style={{
+              fontSize: 10, padding: '2px 6px',
+              background: 'var(--bg-2)', fontFamily: 'var(--font-mono)',
+            }}>{run.workflow}</span>
+          )}
+          {run.projectId && (
+            <span className="chip" style={{
+              fontSize: 10, padding: '2px 6px',
+              background: 'var(--gold)', color: 'var(--bg-0)',
+            }}>📁 {run.projectId.replace(/^proj_/, '').slice(0, 24)}</span>
+          )}
+          {run.revisions > 0 && (
+            <span className="chip" style={{fontSize: 10, padding: '2px 6px'}}>rev {run.revisions}</span>
+          )}
+        </h3>
+        <div className="right" style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+          <span className="mono-s" style={{color: 'var(--text-3)'}}>{run.summary || ''}</span>
+          <button className="btn-ghost" style={{fontSize: 11}} onClick={() => setExpanded(e => !e)}>
+            {expanded ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
+      </div>
+
+      <div style={{fontSize: 12, color: 'var(--text-2)', marginBottom: 8}}>
+        <b style={{color: 'var(--text-1)'}}>Goal:</b> {run.goal}
+      </div>
+
+      {/* Phase pills */}
+      <div style={{display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap'}}>
+        {PHASES.map((p, i) => {
+          const reached = PHASES.indexOf(run.phase || 'plan') >= i;
+          const isCurrent = run.phase === p;
+          return (
+            <span key={p} style={{
+              fontSize: 10,
+              padding: '3px 9px',
+              borderRadius: 12,
+              fontFamily: 'var(--font-mono)',
+              background: isCurrent ? phaseColor : reached ? 'var(--bg-2)' : 'transparent',
+              color: isCurrent ? 'var(--bg-0)' : reached ? 'var(--text-1)' : 'var(--text-3)',
+              border: `1px solid ${reached ? 'var(--border)' : 'var(--bg-2)'}`,
+              fontWeight: isCurrent ? 600 : 400,
+            }}>{p}</span>
+          );
+        })}
+        {run.phaseCosts && Object.keys(run.phaseCosts).length > 0 && (
+          <span className="mono-s" style={{
+            marginLeft: 'auto',
+            fontSize: 10,
+            color: 'var(--text-3)',
+          }}>
+            {Object.entries(run.phaseCosts).map(([ph, c]) =>
+              `${ph}: ${c.tokens.toLocaleString()}t / $${c.usd.toFixed(3)}`
+            ).join(' · ')}
+          </span>
+        )}
+      </div>
+
+      {/* Recalled skills strip */}
+      {Array.isArray(run.skillsRecalled) && run.skillsRecalled.length > 0 && (
+        <div style={{
+          display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10,
+          padding: '6px 8px', background: 'var(--bg-2)', borderRadius: 6,
+          fontSize: 11,
+        }}>
+          <span className="mono-s" style={{color: 'var(--text-3)'}}>↺ recalled:</span>
+          {run.skillsRecalled.map((s, i) => (
+            <span key={i} title={s.goal} style={{
+              padding: '1px 8px', background: 'var(--bg-0)',
+              borderRadius: 10, color: 'var(--text-2)',
+              border: '1px solid var(--border)',
+            }}>{s.id.replace(/^skill_/, '').slice(0, 32)}</span>
+          ))}
+        </div>
+      )}
+
+      {expanded && (
+        <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14}}>
+          {/* Plan column */}
+          <div>
+            <div className="mono-s" style={{color: 'var(--text-3)', marginBottom: 6}}>PLAN</div>
+            {plan.length === 0 ? (
+              <div className="muted" style={{fontSize: 12}}>Awaiting plan...</div>
+            ) : (
+              <ol style={{margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.6}}>
+                {plan.map((step, i) => {
+                  const agent = (window.AGENTS || []).find(a => a.id === step.persona);
+                  const matchedStep = (run.steps || []).find(s => s.persona === step.persona);
+                  const done = matchedStep?.result?.ok;
+                  const open = openStep === i;
+                  return (
+                    <li key={i} style={{color: done ? 'var(--text-2)' : 'var(--text-1)', opacity: done ? 0.7 : 1}}>
+                      <span
+                        onClick={() => matchedStep && setOpenStep(open ? null : i)}
+                        style={{cursor: matchedStep ? 'pointer' : 'default'}}>
+                        <b>[{agent?.name || step.persona}]</b> {step.instruction}
+                        {step.depends_on != null && (
+                          <span style={{color: 'var(--text-3)'}}> ← step {step.depends_on}</span>
+                        )}
+                        {done && <span style={{color: 'var(--green)', marginLeft: 6}}>✓</span>}
+                        {matchedStep && (
+                          <span style={{color: 'var(--text-3)', marginLeft: 6, fontSize: 10}}>
+                            {open ? '▾' : '▸'}
+                          </span>
+                        )}
+                      </span>
+                      {open && matchedStep && (
+                        <pre style={{
+                          marginTop: 4,
+                          padding: 8,
+                          background: 'var(--bg-2)',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          maxHeight: 200,
+                          overflowY: 'auto',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          color: 'var(--text-2)',
+                        }}>
+                          {matchedStep.result?.text || matchedStep.result?.error || '(no output)'}
+                        </pre>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
+
+          {/* Scratchpad column */}
+          <div>
+            <div className="mono-s" style={{color: 'var(--text-3)', marginBottom: 6}}>
+              SHARED SCRATCHPAD ({(run.scratchpad || []).length})
+            </div>
+            {scratch.length === 0 ? (
+              <div className="muted" style={{fontSize: 12}}>No notes yet.</div>
+            ) : (
+              <div style={{display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto'}}>
+                {scratch.map((entry, i) => {
+                  const kindColor = entry.kind === 'critique' ? 'var(--red)'
+                    : entry.kind === 'plan' ? 'var(--gold)'
+                    : entry.kind === 'finding' ? 'var(--green)'
+                    : entry.kind === 'error' ? 'var(--red)'
+                    : 'var(--text-3)';
+                  return (
+                    <div key={i} style={{
+                      fontSize: 11,
+                      padding: '4px 8px',
+                      background: 'var(--bg-2)',
+                      borderRadius: 4,
+                      borderLeft: `2px solid ${kindColor}`,
+                    }}>
+                      <div style={{display: 'flex', gap: 6, alignItems: 'baseline'}}>
+                        <b style={{color: 'var(--text-1)'}}>{entry.personaName}</b>
+                        <span className="mono-s" style={{color: kindColor, fontSize: 10}}>{entry.kind}</span>
+                      </div>
+                      <div style={{color: 'var(--text-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
+                        {entry.text}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {expanded && critique && (
+        <div style={{
+          marginTop: 12,
+          padding: 10,
+          background: 'var(--bg-2)',
+          borderRadius: 6,
+          borderLeft: `3px solid ${sevColor(critique.severity)}`,
+        }}>
+          <div style={{display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4}}>
+            <b style={{fontSize: 12}}>Vivi's review</b>
+            <span className="chip" style={{
+              fontSize: 10, padding: '1px 6px',
+              background: sevColor(critique.severity),
+              color: 'var(--bg-0)',
+            }}>{critique.severity}</span>
+          </div>
+          <div style={{fontSize: 12, color: 'var(--text-2)', whiteSpace: 'pre-wrap'}}>
+            {critique.text}
+          </div>
+        </div>
+      )}
+
+      {expanded && run.verification && (
+        <div style={{
+          marginTop: 12,
+          padding: 10,
+          background: 'var(--bg-2)',
+          borderRadius: 6,
+          borderLeft: `3px solid ${run.verification.passed ? 'var(--green)' : 'var(--red)'}`,
+        }}>
+          <div style={{display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4}}>
+            <b style={{fontSize: 12}}>Goal verification</b>
+            <span className="chip" style={{
+              fontSize: 10, padding: '1px 6px',
+              background: run.verification.passed ? 'var(--green)' : 'var(--red)',
+              color: 'var(--bg-0)',
+            }}>{run.verification.passed ? 'PASS' : 'FAIL'}</span>
+          </div>
+          <div style={{fontSize: 12, color: 'var(--text-2)'}}>{run.verification.text}</div>
+        </div>
+      )}
+
+      {expanded && (
+        <div style={{marginTop: 8, fontSize: 10, color: 'var(--text-3)', textAlign: 'right'}}>
+          <a href={`/api/task/${run.id}/trace`} target="_blank" rel="noreferrer"
+             style={{color: 'var(--text-3)', textDecoration: 'none', fontFamily: 'var(--font-mono)'}}>
+            ↗ download trace.md
+          </a>
+        </div>
+      )}
+
+      {expanded && run.final && (
+        <div style={{
+          marginTop: 12,
+          padding: 10,
+          background: 'var(--bg-2)',
+          borderRadius: 6,
+          borderLeft: '3px solid var(--green)',
+        }}>
+          <div style={{fontSize: 12, marginBottom: 4}}>
+            <b>Final deliverable</b>
+          </div>
+          <div style={{fontSize: 12, color: 'var(--text-1)', whiteSpace: 'pre-wrap'}}>
+            {run.final}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
   const totalTokens = (window.STATS?.tokensToday || 0);
   const totalCost   = (window.STATS?.spendToday || 0).toFixed(2);
@@ -148,8 +522,8 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>Agent <span className="accent">Workspace</span></h1>
-          <div className="sub">Live · {agentsOnline} online · {activeTasks} active tasks · {STATE_SESSIONS.filter(s=>!s.endedAt).length} sessions</div>
+          <h1>Sim Office <span className="accent">Workfloor</span></h1>
+          <div className="sub">Office floor · {agentsOnline} online · {activeTasks} active desks · {STATE_SESSIONS.filter(s=>!s.endedAt).length} sessions</div>
         </div>
         <div className="topbar-actions">
           <span className="chip"><span className="dot"/> Live</span>
@@ -158,6 +532,9 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
 
       {/* QUICK TASK BAR */}
       <SendToOrchestra/>
+
+      {/* AGENT TEAM TIMELINE — plan / scratchpad / critique */}
+      <TeamTimeline/>
 
       {/* STATS STRIP */}
       <div className="stats-strip">
@@ -276,7 +653,7 @@ const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
   );
 };
 
-/* ===== AGENT WORKSPACE — renamed OfficeFloor ===== */
+/* ===== SIM OFFICE FLOOR — dashboard workstation view ===== */
 const AgentWorkspace = ({ onOpenAgent }) => {
   const statusRank = { busy: 0, active: 1, idle: 2, offline: 3 };
 
@@ -292,11 +669,33 @@ const AgentWorkspace = ({ onOpenAgent }) => {
   const working = AGENTS.filter(a => a.status === 'busy' || a.status === 'active').length;
 
   return (
-    <div className="panel">
+    <div className="agent-office-page dashboard-office-floor">
+      <div className="agent-office-hero dashboard-office-hero">
+        <div>
+          <div className="mono-s">SIM OFFICE CONTROL</div>
+          <h2>C-Office <span className="accent">Workfloor</span></h2>
+          <p>ห้องทำงานรวมของทีม AI: แต่ละ agent มีโต๊ะ จอ คิวงาน สถานะ online/working และ workload ที่เปลี่ยนตามงานจริง</p>
+        </div>
+        <div className="agent-office-stats">
+          <span><b>{AGENTS.length}</b> staff</span>
+          <span><b>{working}</b> active desks</span>
+          <span><b>{AGENTS.filter(a => a.status === 'idle').length}</b> standby</span>
+        </div>
+      </div>
+
+      <section className="agent-party-stage dashboard-office-stage">
+        <div className="office-room-backdrop">
+          <span className="room-window"/>
+          <span className="room-light one"/>
+          <span className="room-light two"/>
+          <span className="office-wall-board"/>
+          <span className="office-coffee-bar"/>
+          <span className="room-floor-grid"/>
+        </div>
       <div className="panel-head">
-        <h3>Agent <span className="accent">Workspace</span>
+        <h3>Office Floor
           <span style={{color:'var(--text-3)', fontWeight:400, fontSize:11, marginLeft:8, fontFamily:'var(--font-mono)', letterSpacing:'0.1em'}}>
-            · {AGENTS.length} AGENTS
+            · {AGENTS.length} DESKS
           </span>
         </h3>
         <div className="right">
@@ -306,72 +705,18 @@ const AgentWorkspace = ({ onOpenAgent }) => {
         </div>
       </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-        gap: 10,
-      }}>
-        {sorted.map(a => {
-          const state =
-            a.status === 'busy'    ? 'busy'    :
-            a.status === 'offline' ? 'offline' :
-            a.status === 'idle'    ? 'idle'    :
-            'active';
-          const label =
-            state === 'busy'    ? 'Working'  :
-            state === 'offline' ? 'Offline'  :
-            state === 'idle'    ? 'Idle'     :
-            'Online';
-          const statusColor = state === 'busy' ? 'var(--gold)' : state === 'active' ? 'var(--green)' : 'var(--text-4)';
-
-          return (
-            <div
+        <div className="agent-party-lineup dashboard-office-lineup">
+          {sorted.map(a => (
+            <AgentModelUnit
               key={a.id}
-              onClick={() => onOpenAgent(a.id)}
-              title={a.currentTask ? `${a.name} — ${a.currentTask}` : a.name}
-              style={{
-                position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                padding: '14px 8px 10px',
-                borderRadius: 10,
-                border: `1px solid ${state === 'active' ? 'rgba(46,204,113,0.3)' : state === 'busy' ? 'rgba(240,180,41,0.3)' : 'var(--border)'}`,
-                background: 'var(--bg-2)',
-                cursor: 'pointer',
-                transition: 'all 160ms ease',
-                opacity: state === 'offline' ? 0.4 : 1,
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.borderColor = 'var(--border-2)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.borderColor = state === 'active' ? 'rgba(46,204,113,0.3)' : state === 'busy' ? 'rgba(240,180,41,0.3)' : 'var(--border)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              <div style={{
-                width: 44, height: 44, borderRadius: 10, overflow: 'hidden',
-                background: a.gradient || 'var(--bg-3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                marginBottom: 8,
-                boxShadow: state === 'busy' ? '0 0 12px rgba(240,180,41,0.3)' : state === 'active' ? '0 0 10px rgba(46,204,113,0.2)' : 'none',
-              }}>
-                {a.image
-                  ? <img src={a.image} alt={a.name} style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'center top'}}/>
-                  : <span style={{fontFamily:'var(--font-display)', fontWeight:700, fontSize:16, color:'rgba(255,255,255,0.9)'}}>{a.avatarInitials}</span>
-                }
-              </div>
-              <div style={{fontSize:11, fontWeight:600, textAlign:'center', lineHeight:1.2, marginBottom:4}}>{a.name}</div>
-              <div style={{display:'flex', alignItems:'center', gap:4}}>
-                <span style={{width:5, height:5, borderRadius:'50%', background: statusColor, boxShadow: state === 'busy' || state === 'active' ? `0 0 6px ${statusColor}` : 'none'}}/>
-                <span style={{fontSize:9, fontFamily:'var(--font-mono)', letterSpacing:'0.1em', textTransform:'uppercase', color: statusColor}}>{label}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              agent={a}
+              selected={a.status === 'busy' || a.status === 'active'}
+              onSelect={() => onOpenAgent(a.id)}
+              onOpenAgent={onOpenAgent}
+            />
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

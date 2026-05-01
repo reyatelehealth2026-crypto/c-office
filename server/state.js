@@ -3,6 +3,7 @@ import { Dedupe, RingBuffer } from './util/dedupe.js';
 import { listAgentsSync, getAgentSync, resolveAgentIdSync, mapAgentSync } from './store/agents.js';
 import { getTaskBoardSync } from './store/task-board.js';
 import { getThemeState, listThemes } from './store/theme.js';
+import { persistRun, findStaleRunningRuns } from './store/runs.js';
 import { costUsd } from './mapping/pricing.js';
 
 export const bus = new EventEmitter();
@@ -104,6 +105,22 @@ export function viewRun(run) {
 
 function emitRun(run) {
   bus.emit('run', viewRun(run));
+  try { persistRun(run); } catch { /* best effort */ }
+}
+
+// Boot-time sweep: mark any "running" runs from a prior process as failed
+// because we cannot resume them in Phase 1. Resume is Phase 2.
+export function sweepStaleRuns() {
+  let swept = 0;
+  for (const stale of findStaleRunningRuns()) {
+    stale.status = 'failed';
+    stale.error = stale.error || 'Server restart — run abandoned';
+    stale.endedAt = stale.endedAt || Date.now();
+    state.runs.set(stale.id, stale);
+    persistRun(stale);
+    swept++;
+  }
+  return swept;
 }
 
 function rolloverIfNewDay() {
@@ -305,6 +322,14 @@ export function startRun(runId, goal) {
     steps: [],
     progress: { steps: 0, ok: 0, failed: 0 },
     status: 'running',
+    phase: 'plan',
+    plan: null,
+    scratchpad: [],
+    critique: null,
+    verification: null,
+    revisions: 0,
+    phaseCosts: {},
+    skillsRecalled: [],
     result: null,
     final: null,
     error: null,
@@ -315,6 +340,133 @@ export function startRun(runId, goal) {
   state.runs.set(runId, run);
   emitRun(run);
   return run;
+}
+
+export function setRunPhase(runId, phase) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  run.phase = phase;
+  emitRun(run);
+}
+
+export function setRunPlan(runId, plan) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  run.plan = Array.isArray(plan)
+    ? plan.map((step, idx) => ({
+        index: idx,
+        persona: resolvePersonaId(step?.persona),
+        instruction: summarize(step?.instruction || '', 320),
+        depends_on: Number.isInteger(step?.depends_on) ? step.depends_on : null,
+      }))
+    : null;
+  emitRun(run);
+}
+
+export function appendScratchpad(runId, entry) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  const personaId = resolvePersonaId(entry?.persona);
+  const persona = getAgentSync(personaId);
+  run.scratchpad.push({
+    ts: Date.now(),
+    persona: personaId,
+    personaName: persona?.name || personaId,
+    kind: String(entry?.kind || 'note'),
+    text: summarize(entry?.text || '', 1200),
+  });
+  if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
+  emitRun(run);
+}
+
+export function setRunCritique(runId, critique) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  run.critique = critique
+    ? {
+        text: summarize(critique.text || '', 2000),
+        severity: critique.severity || 'none',
+        ts: Date.now(),
+      }
+    : null;
+  if (critique?.text) {
+    run.scratchpad.push({
+      ts: Date.now(),
+      persona: 'vex',
+      personaName: getAgentSync('vex')?.name || 'Vivi',
+      kind: 'critique',
+      text: summarize(critique.text, 1200),
+    });
+    if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
+  }
+  emitRun(run);
+}
+
+export function bumpRunRevision(runId) {
+  const run = state.runs.get(runId);
+  if (!run) return 0;
+  run.revisions = (run.revisions || 0) + 1;
+  emitRun(run);
+  return run.revisions;
+}
+
+export function addPhaseCost(runId, phase, cost) {
+  const run = state.runs.get(runId);
+  if (!run || !phase) return 0;
+  run.phaseCosts = run.phaseCosts || {};
+  const prev = run.phaseCosts[phase] || { tokens: 0, usd: 0 };
+  run.phaseCosts[phase] = {
+    tokens: prev.tokens + (Number(cost?.tokens) || 0),
+    usd: prev.usd + (Number(cost?.usd) || 0),
+  };
+  emitRun(run);
+  return Object.values(run.phaseCosts).reduce((sum, c) => sum + (c.usd || 0), 0);
+}
+
+export const COST_CEILING_USD = Number(process.env.COFFICE_MAX_USD_PER_RUN) || 5.0;
+
+export function runOverBudget(runId) {
+  const run = state.runs.get(runId);
+  if (!run?.phaseCosts) return false;
+  const total = Object.values(run.phaseCosts).reduce((sum, c) => sum + (c.usd || 0), 0);
+  return total > COST_CEILING_USD;
+}
+
+export function setRunSkillsRecalled(runId, skills) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  run.skillsRecalled = Array.isArray(skills)
+    ? skills.map((s) => ({
+        id: String(s?.id || ''),
+        goal: summarize(s?.goal || '', 160),
+        tags: Array.isArray(s?.tags) ? s.tags.slice(0, 8) : [],
+        score: Number.isFinite(s?.score) ? s.score : 0,
+      }))
+    : [];
+  emitRun(run);
+}
+
+export function setRunVerification(runId, verification) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  run.verification = verification
+    ? {
+        passed: !!verification.passed,
+        text: summarize(verification.text || '', 1200),
+        ts: Date.now(),
+      }
+    : null;
+  if (verification?.text) {
+    run.scratchpad.push({
+      ts: Date.now(),
+      persona: 'orchestra',
+      personaName: getAgentSync('orchestra')?.name || 'Orchestra',
+      kind: verification.passed ? 'verify-pass' : 'verify-fail',
+      text: summarize(verification.text, 800),
+    });
+    if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
+  }
+  emitRun(run);
 }
 
 export function stepRun(runId, step) {
@@ -342,6 +494,46 @@ export function stepRun(runId, step) {
   run.progress = runProgress(run);
   run.summary = runSummary(run);
   emitRun(run);
+}
+
+// ---------- Approval gates ----------
+
+export function setRunStatus(runId, status) {
+  const run = state.runs.get(runId);
+  if (!run) return;
+  run.status = status;
+  emitRun(run);
+}
+
+const gateResolvers = new Map();
+
+export function registerGateResolver(runId, resolve, reject) {
+  gateResolvers.set(runId, { resolve, reject });
+}
+
+export function approveRunPhase(runId, phase) {
+  const run = state.runs.get(runId);
+  if (!run) throw new Error("unknown run: " + runId);
+  run.status = "running";
+  run.scratchpad.push({ ts: Date.now(), persona: "orchestra", personaName: "Orchestra", kind: "gate-approved", text: "Phase " + phase + " approved" });
+  if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
+  emitRun(run);
+  const gate = gateResolvers.get(runId);
+  if (gate) { gateResolvers.delete(runId); gate.resolve(phase); }
+}
+
+export function rejectRunPhase(runId, phase, reason) {
+  reason = reason || "Rejected";
+  const run = state.runs.get(runId);
+  if (!run) throw new Error("unknown run: " + runId);
+  run.status = "failed";
+  run.error = String(reason);
+  run.endedAt = Date.now();
+  run.scratchpad.push({ ts: Date.now(), persona: "orchestra", personaName: "Orchestra", kind: "gate-rejected", text: "Phase " + phase + " rejected: " + reason });
+  if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
+  emitRun(run);
+  const gate = gateResolvers.get(runId);
+  if (gate) { gateResolvers.delete(runId); gate.reject(new Error("Gate rejected: " + reason)); }
 }
 
 export function finishRun(runId, outcome = {}) {

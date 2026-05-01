@@ -4,12 +4,13 @@ import { fileURLToPath } from 'node:url';
 import stateRoute from './api/state.js';
 import streamRoute from './api/stream.js';
 import hooksRoute from './api/hooks.js';
-import { clearState, resetPersonaLevels } from './state.js';
+import { clearState, resetPersonaLevels, sweepStaleRuns } from './state.js';
 import agentsRoute from './api/agents.js';
 import memoryRoute from './api/memory.js';
 import dispatchesRoute from './api/dispatches.js';
 import authRoute from './api/auth.js';
 import taskRoute from './api/task.js';
+import projectsRoute from './api/projects.js';
 import taskBoardRoute from './api/task-board.js';
 import themeRoute from './api/theme.js';
 import shopRoute from './api/shop.js';
@@ -25,6 +26,7 @@ import {
 import { startSessionsWatcher } from './watchers/sessions.js';
 import { startTranscriptsWatcher } from './watchers/transcripts.js';
 import { accessLoginRoute, accessStatus, requireAccessToken } from './security/access-token.js';
+import { listPendingSuggestions } from './agents/persona-tune.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '../public');
@@ -46,9 +48,12 @@ app.get ('/api/memory',         memoryRoute);
 app.use ('/api/dispatches',     dispatchesRoute);
 app.use (authRoute);                              // /auth/*, /api/auth/*
 app.use (taskRoute);                              // /api/task, /api/task/:id, /api/tasks
+app.use (projectsRoute);                          // /api/projects (CRUD + scoped runs)
 app.use ('/api/task-board',     taskBoardRoute);
 app.use ('/api/theme',          themeRoute);
 app.get ('/api/settings',       getSettings);
+// 5.2: persona auto-tune suggestions
+app.get ('/api/persona-tuning', (_req, res) => res.json({ ok: true, suggestions: listPendingSuggestions() }));
 
 // Notes inbox + agent dispatch
 app.get   ('/api/notes',                   notesList);
@@ -78,6 +83,10 @@ app.listen(PORT, HOST, async () => {
   console.log(`[c-office] monitor on http://${HOST}:${PORT}`);
   if (accessStatus().enabled) console.log('[c-office] access token gate enabled');
   else if (HOST !== '127.0.0.1' && HOST !== 'localhost') console.warn('[c-office] WARNING: external host without C_OFFICE_ACCESS_TOKEN');
+  try {
+    const swept = sweepStaleRuns();
+    if (swept > 0) console.log(`[c-office] swept ${swept} stale running run(s) from prior process`);
+  } catch (e) { console.error('[c-office] sweep stale runs failed:', e.message); }
   try { await startSessionsWatcher();    console.log('[c-office] sessions watcher up'); } catch (e) { console.error('[c-office] sessions watcher failed:', e.message); }
   try { await startTranscriptsWatcher(); console.log('[c-office] transcripts watcher up'); } catch (e) { console.error('[c-office] transcripts watcher failed:', e.message); }
   try {
