@@ -21,6 +21,7 @@
 <link rel="stylesheet" href="ux-images.css?v=20260502a"/>
 <link rel="stylesheet" href="ux-settings.css?v=20260502a"/>
 <link rel="stylesheet" href="ux-projects.css?v=20260502a"/>
+<link rel="stylesheet" href="ux-agent-detail.css?v=20260502a"/>
 <style>
 .feed-row {
   display:flex; gap:12px; align-items:center;
@@ -53,6 +54,7 @@
 <script type="text/babel" src="page-dashboard-v2.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-mission-control.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-detail.jsx?v=20260502a"></script>
+<script type="text/babel" src="page-detail-v2.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-memory.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-misc.jsx"></script>
 <script type="text/babel" src="page-settings-v2.jsx?v=20260502a"></script>
@@ -95,8 +97,6 @@ const App = () => {
 
   React.useEffect(() => { localStorage.setItem('c-office-page', page); }, [page]);
 
-  // Cross-page navigation requests fired by inline-dispatch helpers
-  // (e.g. Guild → notes chat panel hand-off, SendToOrchestra → run-workspace).
   React.useEffect(() => {
     const onNav = (e) => {
       const target = e.detail?.page;
