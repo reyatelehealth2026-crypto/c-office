@@ -32,6 +32,7 @@ import {
 import { getAgentSync, listAgentsSync, resolveAgentIdSync } from '../store/agents.js';
 import { costUsd } from '../mapping/pricing.js';
 import { recallSkills, persistSkill, degradeSkill, forkSkill, listSkills } from './skills.js';
+import { generateImage } from './image.js';
 import { getWorkflow } from './workflows.js';
 import { getProject } from '../store/projects.js';
 import { appendAudit } from './audit.js';
@@ -703,6 +704,61 @@ async function executeStep(runId, goal, step, idx, prior) {
   const priorBlock = prior.length
     ? `\n\nContext from earlier steps:\n${prior.map((p) => `### ${p.persona}\n${p.text}`).join('\n\n')}`
     : '';
+
+  // ── Image-generation branch ─────────────────────────────────────────
+  // Echo (Emi) is an image persona, not an LLM persona. Calling query()
+  // would hang because persona.model is null. Route to the image adapter
+  // (Nano Banana 2) directly and write the URL into result.image.
+  if (personaId === 'echo') {
+    let imageOut = null;
+    let imageError = '';
+    try {
+      const imagePrompt = `${step.instruction}${priorBlock ? '\n\n(Context: based on earlier persona outputs)' : ''}`.slice(0, 4000);
+      imageOut = await generateImage({ prompt: imagePrompt, persona: `${runId}-echo-${idx}` });
+    } catch (err) {
+      imageError = err?.message || String(err);
+    }
+    const ok = !!imageOut?.url;
+    const summary = ok
+      ? `Generated image (${imageOut.model || imageOut.provider}): ${imageOut.url}`
+      : `Image generation failed: ${imageError}`;
+    const result = {
+      ok,
+      text: summary,
+      error: ok ? null : imageError,
+      image: ok ? { url: imageOut.url, model: imageOut.model, provider: imageOut.provider } : null,
+    };
+    stepRun(runId, {
+      tool_use_id: toolUseId,
+      persona: personaId,
+      instruction: step.instruction,
+      result,
+    });
+    pushEvent({
+      sessionId: runId,
+      personaId,
+      verb: 'result',
+      toolName: 'Task',
+      text: summary,
+      status: ok ? 'ok' : 'err',
+      toolUseId,
+      dedupeKey: `tr:run:${runId}:${toolUseId}`,
+    });
+    appendScratchpad(runId, {
+      persona: personaId,
+      kind: ok ? 'finding' : 'error',
+      text: summary,
+    });
+    finishTask({ tool_use_id: toolUseId, status: ok ? 'done' : 'failed' });
+    return {
+      ok,
+      persona: personaId,
+      personaName: persona.name || personaId,
+      text: ok ? summary : '',
+      error: ok ? '' : imageError,
+    };
+  }
+
   const prompt = `Original goal: ${goal}\n\nYour assignment: ${step.instruction}${priorBlock}\n\nReturn the artifact only — no preface.`;
   const systemPrompt = persona.systemPrompt
     || `You are ${persona.name || personaId}. ${persona.role || ''}\nReturn a concise, self-contained artifact for the assigned task.`;

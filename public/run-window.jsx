@@ -87,10 +87,22 @@ const ChatBubble = ({ entry, onCopy, copied }) => {
           color: failed ? 'var(--red)' : 'var(--text-1)',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
-          maxHeight: 280,
+          maxHeight: 360,
           overflowY: 'auto',
         }}>
-          {text || <span className="muted" style={{fontStyle:'italic'}}>(running…)</span>}
+          {entry.result?.image?.url && (
+            <a href={entry.result.image.url} target="_blank" rel="noreferrer"
+              style={{display: 'block', marginBottom: text ? 8 : 0}}>
+              <img src={entry.result.image.url}
+                alt={entry.instruction || 'generated image'}
+                style={{
+                  maxWidth: '100%', maxHeight: 240,
+                  borderRadius: 8, display: 'block',
+                  border: '1px solid var(--border)',
+                }}/>
+            </a>
+          )}
+          {text || (!entry.result?.image?.url && <span className="muted" style={{fontStyle:'italic'}}>(running…)</span>)}
         </div>
         {text && (
           <button onClick={() => onCopy(text, entry.persona + ':' + (entry.tool_use_id || ''))}
