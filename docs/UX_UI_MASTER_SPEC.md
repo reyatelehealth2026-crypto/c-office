@@ -8,18 +8,26 @@
 
 ### Phase 1 Foundation — first pass shipped
 
-Implemented in this pass:
+Implemented:
 
 - `public/ux-system.css` — UX design token layer, app shell polish, topbar styles, status chips, empty/error/skeleton primitives, responsive bottom-nav behavior
 - `public/ux-components.jsx` — shared dependency-free React primitives: `UXTopbar`, `UXStatusChip`, `UXEmptyState`, `UXErrorState`, `UXSkeleton`
 - `public/index.html` — loaded the UX layer after legacy CSS and inserted `UXTopbar` into the global app shell
 
-The legacy page components remain intact. This pass intentionally upgrades the shell and shared visual language first, without migrating the no-build frontend or rewriting every page at once.
+### Phase 2 Dashboard — first pass shipped
+
+Implemented:
+
+- `public/ux-dashboard.css` — Dashboard V2 layout, hero, metric cards, agent roster cards, provider readiness, run list, live feed, responsive rules
+- `public/page-dashboard-v2.jsx` — safe dashboard override that replaces `window.Dashboard` after the legacy dashboard loads
+- `public/index.html` — loaded Dashboard V2 CSS and JSX after the original dashboard file
+
+The original dashboard file remains intact. Dashboard V2 is currently an override layer, which makes it easy to roll back or continue iterating without deleting the old surface.
 
 Next recommended pass:
 
-1. Redesign Dashboard cards and live feed using the UX primitives.
-2. Add Mission Control as a first-class visible route.
+1. Add Mission Control as a first-class visible route.
+2. Add event filters, pause/resume stream UI, and event detail drawer.
 3. Convert Notes into a three-panel workspace.
 
 ---
@@ -300,7 +308,7 @@ Use semantic tokens instead of hardcoded colors.
 | `PageHeader` | title, description, actions | pending |
 | `Panel` | reusable surface/card wrapper | CSS utility `ux-panel` shipped |
 | `StatusChip` | busy/active/idle/offline/provider states | shipped as `UXStatusChip` |
-| `MetricCard` | numeric summary cards | pending |
+| `MetricCard` | numeric summary cards | shipped for Dashboard V2 as `UXMetricCard` |
 | `ActionButton` | consistent primary/secondary/ghost actions | partial CSS shipped |
 | `IconButton` | compact actions | pending |
 | `Tabs` | page sections | pending |
@@ -313,23 +321,23 @@ Use semantic tokens instead of hardcoded colors.
 
 ### 7.2 Product Components
 
-| Component | Purpose |
-|---|---|
-| `PersonaCard` | dashboard persona summary |
-| `PersonaInspector` | status, history, skills, actions |
-| `ActivityFeed` | realtime event list |
-| `ActivityFeedItem` | single readable event |
-| `RunCard` | Orchestra run summary |
-| `RunTimeline` | delegation steps |
-| `ProviderCard` | connection and provider readiness |
-| `NoteListItem` | note inbox row |
-| `ChatMessage` | notes chat message |
-| `Composer` | message input and provider/agent selector |
-| `ImageTile` | generated/uploaded asset preview |
-| `ProjectCard` | project summary |
-| `TaskBoardColumn` | kanban column |
-| `TaskCard` | compact task card |
-| `SkillMatrix` | persona skill view |
+| Component | Purpose | Status |
+|---|---|---|
+| `PersonaCard` | dashboard persona summary | shipped for Dashboard V2 as `UXAgentCardV2` |
+| `PersonaInspector` | status, history, skills, actions | pending |
+| `ActivityFeed` | realtime event list | shipped as Dashboard preview |
+| `ActivityFeedItem` | single readable event | shipped as Dashboard preview row |
+| `RunCard` | Orchestra run summary | shipped as Dashboard run row |
+| `RunTimeline` | delegation steps | pending |
+| `ProviderCard` | connection and provider readiness | shipped as Dashboard provider readiness row |
+| `NoteListItem` | note inbox row | pending |
+| `ChatMessage` | notes chat message | pending |
+| `Composer` | message input and provider/agent selector | pending |
+| `ImageTile` | generated/uploaded asset preview | pending |
+| `ProjectCard` | project summary | pending |
+| `TaskBoardColumn` | kanban column | pending |
+| `TaskCard` | compact task card | pending |
+| `SkillMatrix` | persona skill view | pending |
 
 ---
 
@@ -767,7 +775,7 @@ Deliverables:
 - [x] Create topbar
 - [x] Create reusable panel/card styles
 - [x] Create status chips
-- [ ] Create metric cards
+- [x] Create metric cards
 - [x] Create empty states
 - [x] Create error states
 - [x] Create skeleton loading states
@@ -775,13 +783,13 @@ Deliverables:
 
 ### Dashboard
 
-- [ ] Add global health summary
-- [ ] Add provider readiness row
-- [ ] Redesign persona cards
-- [ ] Add current run strip
-- [ ] Improve live activity preview
-- [ ] Add quick Send to Orchestra field
-- [ ] Add no-hooks empty/warning state
+- [x] Add global health summary
+- [x] Add provider readiness row
+- [x] Redesign persona cards
+- [x] Add current run strip
+- [x] Improve live activity preview
+- [x] Add quick Send to Orchestra field
+- [x] Add no-hooks empty/warning state
 
 ### Mission Control
 
