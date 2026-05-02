@@ -7,12 +7,13 @@
 <title>C-Office — AI Agent Hub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sarabun:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="cards.css"/>
 <link rel="stylesheet" href="notes.css"/>
 <link rel="stylesheet" href="guild.css"/>
 <link rel="stylesheet" href="agent-office.css"/>
+<link rel="stylesheet" href="ux-system.css?v=20260502a"/>
 <style>
 .feed-row {
   display:flex; gap:12px; align-items:center;
@@ -33,6 +34,7 @@
 
 <script src="data.js"></script>
 <script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="ux-components.jsx?v=20260502a"></script>
 <script type="text/babel" src="guild-icons.jsx"></script>
 <script type="text/babel" src="page-guild.jsx"></script>
 <script type="text/babel" src="page-agents.jsx"></script>
@@ -58,6 +60,7 @@ const MemoryPanel = window.MemoryPanel;
 const SettingsPage = window.SettingsPage;
 const NotesPage = window.NotesPage;
 const RunDock = window.RunDock;
+const UXTopbar = window.UXTopbar;
 
 const initialPage = () => {
   const p = localStorage.getItem('c-office-page') || 'dashboard';
@@ -95,6 +98,7 @@ const App = () => {
     <div className="app" data-screen-label={page}>
       <Sidebar page={page} setPage={(p) => { setPage(p); setActiveAgent(null); }}/>
       <main className="main">
+        {UXTopbar && <UXTopbar page={page} onSendGoal={(runId) => { setActiveRunId(runId); }}/>} 
         {page === 'dashboard' && <Dashboard layout={dashLayout} setLayout={setDashLayout} onOpenAgent={openAgent}/>}
         {page === 'guild' && <GuildHall onOpenAgent={openAgent}/>}
         {page === 'agents' && <AgentsPage onOpenAgent={openAgent} setPage={setPage}/>}
