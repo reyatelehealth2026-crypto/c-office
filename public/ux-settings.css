@@ -1,0 +1,269 @@
+/* ==========================================================================
+   C-Office Settings / Connections V2
+   Trust-focused setup surface: provider cards, hook diagnostics, sessions,
+   access-token awareness, local credential explainer.
+   ========================================================================== */
+
+.ux-settings {
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(320px, 420px);
+  gap: 18px;
+  align-items: start;
+}
+
+.ux-settings-hero {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-xl);
+  background:
+    radial-gradient(560px 260px at 0% 0%, rgba(157,92,255,0.16), transparent 70%),
+    radial-gradient(460px 240px at 100% 0%, rgba(251,191,36,0.12), transparent 70%),
+    rgba(255,255,255,0.045);
+  box-shadow: var(--ux-shadow-card);
+}
+
+.ux-settings-hero h2 {
+  margin: 0;
+  color: var(--ux-text-primary);
+  font: 850 clamp(24px, 3vw, 38px)/1.05 var(--font-display);
+  letter-spacing: -0.04em;
+}
+
+.ux-settings-hero p {
+  margin: 10px 0 0;
+  color: var(--ux-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ux-settings-panel {
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-xl);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.058), rgba(255,255,255,0.032));
+  box-shadow: var(--ux-shadow-card);
+  overflow: hidden;
+}
+
+.ux-settings-head {
+  padding: 16px;
+  border-bottom: 1px solid var(--ux-border-soft);
+  background: rgba(255,255,255,0.035);
+}
+
+.ux-settings-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ux-settings-title {
+  margin: 0;
+  color: var(--ux-text-primary);
+  font: 830 17px var(--font-display);
+}
+
+.ux-settings-subtitle {
+  margin-top: 4px;
+  color: var(--ux-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ux-settings-body {
+  padding: 16px;
+}
+
+.ux-provider-grid-v2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.ux-provider-card-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background:
+    radial-gradient(260px 130px at 100% 0%, color-mix(in srgb, var(--provider-color, var(--ux-accent-secondary)) 12%, transparent), transparent 70%),
+    rgba(255,255,255,0.035);
+}
+
+.ux-provider-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.ux-provider-card-name {
+  color: var(--ux-text-primary);
+  font: 820 15px var(--font-display);
+}
+
+.ux-provider-card-desc {
+  margin-top: 4px;
+  color: var(--ux-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.ux-provider-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ux-token-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.ux-token-row input,
+.ux-profile-textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.045);
+  color: var(--ux-text-primary);
+  outline: none;
+  font: 600 12px var(--font-mono);
+}
+
+.ux-profile-textarea {
+  min-height: 260px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.ux-diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.ux-diagnostic-card {
+  padding: 12px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.035);
+}
+
+.ux-diagnostic-card b {
+  display: block;
+  color: var(--ux-text-primary);
+  font: 830 16px var(--font-display);
+}
+
+.ux-diagnostic-card span {
+  display: block;
+  margin-top: 5px;
+  color: var(--ux-text-muted);
+  font: 800 9px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ux-hook-list,
+.ux-session-list,
+.ux-runtime-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ux-hook-row,
+.ux-session-row,
+.ux-runtime-row,
+.ux-trust-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.035);
+}
+
+.ux-hook-name,
+.ux-runtime-name,
+.ux-session-name {
+  color: var(--ux-text-primary);
+  font: 760 12px var(--font-mono);
+}
+
+.ux-hook-detail,
+.ux-runtime-detail,
+.ux-session-detail,
+.ux-trust-detail {
+  margin-top: 3px;
+  color: var(--ux-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.ux-trust-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ux-trust-row[data-severity="warn"] {
+  border-color: rgba(245,158,11,0.36);
+  background: rgba(245,158,11,0.06);
+}
+
+.ux-trust-row[data-severity="ok"] {
+  border-color: rgba(52,211,153,0.30);
+  background: rgba(52,211,153,0.045);
+}
+
+.ux-settings-side {
+  position: sticky;
+  top: 94px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ux-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+@media (max-width: 1180px) {
+  .ux-settings {
+    grid-template-columns: 1fr;
+  }
+  .ux-settings-side {
+    position: relative;
+    top: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .ux-settings-hero {
+    grid-template-columns: 1fr;
+  }
+  .ux-token-row,
+  .ux-hook-row,
+  .ux-session-row,
+  .ux-runtime-row,
+  .ux-trust-row {
+    grid-template-columns: 1fr;
+  }
+}
