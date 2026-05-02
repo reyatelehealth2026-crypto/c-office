@@ -203,27 +203,40 @@ const RunWindow = ({ runId, position, onClose, onMinimize, minimized }) => {
     );
   }
 
-  // Build chat entries from run.steps. Each entry has the persona's
-  // instruction (from plan) + their output (from result).
-  const entries = (run.steps || []).map((s) => ({
-    persona: s.persona,
-    personaName: s.personaName,
-    instruction: s.instruction,
-    result: s.result,
-    durationMs: s.durationMs,
-    tool_use_id: s.tool_use_id,
-  }));
-  // Add awaiting-bubbles for plan items not yet started.
+  // Build chat entries from run.plan, hydrated by run.steps in array order.
+  // Index-based matching is robust against (a) instruction-string truncation
+  // mismatches between setRunPlan (320 chars) and stepRun (220 chars), and
+  // (b) the same persona being delegated multiple times in team flow.
   const planArr = Array.isArray(run.plan) ? run.plan : [];
-  for (const p of planArr) {
-    if (!entries.some((e) => e.persona === p.persona)) {
-      entries.push({
+  const stepsArr = Array.isArray(run.steps) ? run.steps : [];
+  let entries;
+  if (planArr.length > 0) {
+    entries = planArr.map((p, i) => {
+      const s = stepsArr[i] && stepsArr[i].persona === p.persona ? stepsArr[i] : null;
+      return {
         persona: p.persona,
-        personaName: personaName(p.persona),
-        instruction: p.instruction,
-        result: null,
+        personaName: (s && s.personaName) || personaName(p.persona),
+        instruction: (s && s.instruction) || p.instruction,
+        result: s ? s.result : null,
+        durationMs: s ? s.durationMs : null,
+        tool_use_id: s ? s.tool_use_id : null,
+      };
+    });
+    // Tail any extra steps beyond the plan (defensive).
+    for (let i = planArr.length; i < stepsArr.length; i++) {
+      const s = stepsArr[i];
+      entries.push({
+        persona: s.persona, personaName: s.personaName,
+        instruction: s.instruction, result: s.result,
+        durationMs: s.durationMs, tool_use_id: s.tool_use_id,
       });
     }
+  } else {
+    entries = stepsArr.map((s) => ({
+      persona: s.persona, personaName: s.personaName,
+      instruction: s.instruction, result: s.result,
+      durationMs: s.durationMs, tool_use_id: s.tool_use_id,
+    }));
   }
 
   return (

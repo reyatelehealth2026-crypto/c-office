@@ -14,7 +14,8 @@ import projectsRoute from './api/projects.js';
 import taskBoardRoute from './api/task-board.js';
 import themeRoute from './api/theme.js';
 import { getSettings } from './api/settings.js';
-import { imageStatusRoute, imageLibraryRoute, deleteImageRoute, generateImageRoute } from './api/images.js';
+import { getUserProfile, putUserProfile } from './api/user-profile.js';
+import { imageStatusRoute, imageLibraryRoute, deleteImageRoute, generateImageRoute, uploadImageRoute } from './api/images.js';
 import {
   listRoute as notesList, getOneRoute as notesGet, createRoute as notesCreate,
   patchRoute as notesPatch, deleteRoute as notesDelete,
@@ -32,7 +33,7 @@ const PORT = Number(process.env.PORT) || 7878;
 const HOST = process.env.HOST || '127.0.0.1';
 
 const app = express();
-app.use(express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '16mb' }));
 app.get('/access', accessLoginRoute);
 app.use(requireAccessToken);
 
@@ -50,6 +51,8 @@ app.use (projectsRoute);                          // /api/projects (CRUD + scope
 app.use ('/api/task-board',     taskBoardRoute);
 app.use ('/api/theme',          themeRoute);
 app.get ('/api/settings',       getSettings);
+app.get ('/api/user-profile',   getUserProfile);
+app.put ('/api/user-profile',   putUserProfile);
 // 5.2: persona auto-tune suggestions
 app.get ('/api/persona-tuning', (_req, res) => res.json({ ok: true, suggestions: listPendingSuggestions() }));
 
@@ -67,6 +70,7 @@ app.get   ('/api/images/status',           imageStatusRoute);
 app.get   ('/api/images/library',          imageLibraryRoute);
 app.delete('/api/images/library/:name',    deleteImageRoute);
 app.post  ('/api/images/generate',         generateImageRoute);
+app.post  ('/api/images/upload',           uploadImageRoute);
 
 app.use(express.static(PUBLIC_DIR, {
   cacheControl: false,

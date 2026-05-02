@@ -68,17 +68,21 @@ const initialPage = () => {
 const App = () => {
   const [page, setPage] = React.useState(initialPage);
   const [activeAgent, setActiveAgent] = React.useState(null);
+  const [activeRunId, setActiveRunId] = React.useState(null);
   const [dashLayout, setDashLayout] = React.useState('overview');
   useCOfficeRefresh();
 
   React.useEffect(() => { localStorage.setItem('c-office-page', page); }, [page]);
 
   // Cross-page navigation requests fired by inline-dispatch helpers
-  // (e.g. Guild → notes chat panel hand-off).
+  // (e.g. Guild → notes chat panel hand-off, SendToOrchestra → run-workspace).
   React.useEffect(() => {
     const onNav = (e) => {
       const target = e.detail?.page;
-      if (target) { setPage(target); setActiveAgent(null); }
+      if (!target) return;
+      setPage(target);
+      setActiveAgent(null);
+      if (target === 'run-workspace' && e.detail?.runId) setActiveRunId(e.detail.runId);
     };
     window.addEventListener('c-office:navigate', onNav);
     return () => window.removeEventListener('c-office:navigate', onNav);
@@ -101,6 +105,7 @@ const App = () => {
         {page === 'memory' && <MemoryPanel onOpenAgent={openAgent}/>}
         {page === 'settings' && <SettingsPage/>}
         {page === 'notes' && <NotesPage onOpenAgent={openAgent}/>}
+        {page === 'run-workspace' && <RunWorkspacePage runId={activeRunId} onBack={() => setPage('dashboard')}/>}
       </main>
       <RunDock/>
     </div>

@@ -69,11 +69,56 @@ const durationLabel = (ms) => {
   return `${h}h ${m % 60}m`;
 };
 
+// Phase weights for an aggregate progress bar — execute is the longest
+// phase so it owns most of the bar. plan(10) + execute(65) + critique(10)
+// + verify(10) + done(5) = 100.
+const PHASE_WEIGHTS = { plan: 0.10, execute: 0.65, critique: 0.10, verify: 0.10, done: 0.05 };
+const PHASE_LABEL = {
+  clarify: 'รอข้อมูลเพิ่มเติม',
+  plan: 'กำลังวางแผน',
+  execute: 'กำลังลงมือ',
+  critique: 'กำลังตรวจคุณภาพ',
+  verify: 'กำลังตรวจตามเป้า',
+  done: 'เสร็จสมบูรณ์',
+};
+
 const runProgress = (run) => {
   const steps = Array.isArray(run?.steps) ? run.steps : [];
   const failed = steps.filter(s => s.result?.ok === false).length;
   const ok = steps.filter(s => s.result?.ok === true).length;
-  return { steps: steps.length, ok, failed };
+  const plan = Array.isArray(run?.plan) ? run.plan : [];
+  const totalPlanned = plan.length || steps.length;
+
+  let percent = 0;
+  const phase = run?.phase || 'plan';
+  if (run?.status === 'done') {
+    percent = 100;
+  } else if (run?.status === 'failed') {
+    percent = Math.min(99, Math.round((ok / Math.max(totalPlanned, 1)) * 80));
+  } else if (phase === 'plan') {
+    percent = 5;
+  } else if (phase === 'execute' && totalPlanned > 0) {
+    const stepFraction = (ok + failed) / totalPlanned;
+    percent = Math.round((PHASE_WEIGHTS.plan + PHASE_WEIGHTS.execute * stepFraction) * 100);
+  } else if (phase === 'critique') {
+    percent = Math.round((PHASE_WEIGHTS.plan + PHASE_WEIGHTS.execute) * 100);
+  } else if (phase === 'verify') {
+    percent = Math.round((PHASE_WEIGHTS.plan + PHASE_WEIGHTS.execute + PHASE_WEIGHTS.critique) * 100);
+  } else {
+    percent = 95;
+  }
+  percent = Math.max(0, Math.min(100, percent));
+
+  const activeStepIndex = ok + failed;
+  const activePersona = phase === 'execute' && plan[activeStepIndex] ? plan[activeStepIndex].persona : null;
+  const phaseLabel = PHASE_LABEL[phase] || phase || '';
+  const label = activePersona
+    ? `${phaseLabel} · ${activePersona} (${activeStepIndex + 1}/${totalPlanned})`
+    : totalPlanned
+      ? `${phaseLabel} · ${ok + failed}/${totalPlanned}`
+      : phaseLabel;
+
+  return { steps: steps.length, ok, failed, totalPlanned, percent, phase, label, activePersona };
 };
 
 const runSummary = (run) => {

@@ -15,8 +15,36 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 
 public static class CutoutTool {
-  static bool IsBg(byte r, byte g, byte b, byte bgR, byte bgG, byte bgB) {
-    return Math.Abs(r - bgR) <= 15 && Math.Abs(g - bgG) <= 15 && Math.Abs(b - bgB) <= 15;
+  // The image prompt asks the model to fill the bg with #00FF00. We still
+  // auto-detect from the corner pixel, but bias the tolerance for green
+  // chroma keys since AI/JPEG noise around the edge can wobble ±25.
+  static bool IsBg(byte r, byte g, byte b, byte bgR, byte bgG, byte bgB, bool greenKey) {
+    int dr = Math.Abs(r - bgR), dg = Math.Abs(g - bgG), db = Math.Abs(b - bgB);
+    if (greenKey) {
+      if (dr <= 35 && dg <= 45 && db <= 35) return true;
+      if (g > 140 && g > r + 40 && g > b + 40) return true;
+      return false;
+    }
+    return dr <= 15 && dg <= 15 && db <= 15;
+  }
+
+  // Despill pulls the green channel down toward avg(R,B) on opaque pixels
+  // that retain a green halo from the chroma background. Removes the rim
+  // glow without touching legitimate greens elsewhere.
+  static void Despill(byte[] px, int w, int h, int stride, byte[] alphaCopy) {
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        int p = y * stride + x * 4;
+        if (alphaCopy[y * w + x] == 0) continue;
+        byte r = px[p + 2], g = px[p + 1], b = px[p];
+        if (g > r && g > b && g > 100) {
+          int target = (r + b) / 2;
+          if (g - target > 18) {
+            px[p + 1] = (byte)Math.Max(target, g - 30);
+          }
+        }
+      }
+    }
   }
 
   public static void Run(string src, string dst) {
@@ -30,10 +58,10 @@ public static class CutoutTool {
       int len = Math.Abs(stride) * h;
       byte[] px = new byte[len];
       Marshal.Copy(data.Scan0, px, 0, len);
-      
-      // Sample background color from the top-left pixel
+
       byte bgB = px[0], bgG = px[1], bgR = px[2];
-      
+      bool greenKey = bgG > 150 && bgG > bgR + 50 && bgG > bgB + 50;
+
       bool[] seen = new bool[w * h];
       Queue<int> q = new Queue<int>();
       Action<int, int> enq = (x, y) => {
@@ -42,13 +70,12 @@ public static class CutoutTool {
         if (seen[idx]) return;
         int p = y * stride + x * 4;
         byte b = px[p], g = px[p + 1], r = px[p + 2];
-        if (IsBg(r, g, b, bgR, bgG, bgB)) { seen[idx] = true; q.Enqueue(idx); }
+        if (IsBg(r, g, b, bgR, bgG, bgB, greenKey)) { seen[idx] = true; q.Enqueue(idx); }
       };
-      
-      // Start flood fill from the borders
+
       for (int x = 0; x < w; x++) { enq(x, 0); enq(x, h - 1); }
       for (int y = 0; y < h; y++) { enq(0, y); enq(w - 1, y); }
-      
+
       while (q.Count > 0) {
         int idx = q.Dequeue();
         int x = idx % w, y = idx / w;
@@ -56,7 +83,15 @@ public static class CutoutTool {
         px[p] = 255; px[p + 1] = 255; px[p + 2] = 255; px[p + 3] = 0;
         enq(x + 1, y); enq(x - 1, y); enq(x, y + 1); enq(x, y - 1);
       }
-      
+
+      byte[] alpha = new byte[w * h];
+      for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+          alpha[y * w + x] = px[y * stride + x * 4 + 3];
+        }
+      }
+      if (greenKey) Despill(px, w, h, stride, alpha);
+
       Marshal.Copy(px, 0, data.Scan0, len);
       bmp.UnlockBits(data);
       bmp.Save(dst, ImageFormat.Png);

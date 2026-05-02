@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="icon" href="/images/Orchestra.png"/>
+<title>C-Office Run Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"/>
+<link rel="stylesheet" href="cards.css"/>
+<link rel="stylesheet" href="notes.css"/>
+<link rel="stylesheet" href="guild.css"/>
+<link rel="stylesheet" href="agent-office.css"/>
+<style>
+body { background: var(--bg-0); }
+#root { min-height: 100vh; padding: 24px; max-width: 1280px; margin: 0 auto; }
+.feed-row { display:flex; gap:12px; align-items:center; padding: 10px 8px; border-radius: 8px; transition: background 120ms; cursor: pointer; }
+.feed-row:hover { background: var(--bg-2); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Same data layer as the main app — populates window.RUNS / AGENTS / etc.
+     and opens its own EventSource on /api/stream so this standalone window
+     gets live updates independent of the main tab. -->
+<script src="data.js"></script>
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="page-dashboard.jsx"></script>
+
+<script type="text/babel">
+/* Standalone Run Workspace — opened in its own browser window for a single
+   run. URL contract: /run.html?id=<run_id>. The window pulls live state
+   from the same SSE stream as the main dashboard, so steps/scratchpad
+   updates arrive in real time without needing the main tab open. */
+const RunWorkspacePage = window.RunWorkspacePage;
+
+const RunWindowApp = () => {
+  window.useCOfficeRefresh?.();
+  const params = new URLSearchParams(window.location.search);
+  const runId = params.get('id') || '';
+  // Re-title the window when run state arrives so taskbar shows the goal.
+  React.useEffect(() => {
+    const fit = () => {
+      const r = (window.RUNS || []).find((x) => x.id === runId);
+      if (r) document.title = `${(r.goal || 'Run').slice(0, 60)} · C-Office`;
+    };
+    fit();
+    const t = setInterval(fit, 2000);
+    return () => clearInterval(t);
+  }, [runId]);
+  return <RunWorkspacePage runId={runId} onBack={() => window.close()}/>;
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<RunWindowApp/>);
+</script>
+</body>
+</html>

@@ -34,6 +34,39 @@ router.get('/:id/history', (req, res) => {
   res.json({ agent: id, persona: id, items });
 });
 
+// Real Orchestra-pipeline runs that touched this persona — used by the
+// Activity History and Desk Chat tabs to surface clickable run summaries.
+router.get('/:id/runs', (req, res) => {
+  const id = req.params.id;
+  if (!getAgentSync(id)) return res.status(404).json({ error: 'unknown agent' });
+  const limit = Math.min(200, Number(req.query.limit) || 50);
+  const runs = [...state.runs.values()]
+    .filter((run) => {
+      if (!run) return false;
+      const personas = Array.isArray(run.personas) ? run.personas : [];
+      const planPersonas = Array.isArray(run.plan) ? run.plan.map((s) => s && s.persona) : [];
+      const stepPersonas = Array.isArray(run.steps) ? run.steps.map((s) => s && s.persona) : [];
+      return personas.includes(id) || planPersonas.includes(id) || stepPersonas.includes(id);
+    })
+    .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))
+    .slice(0, limit)
+    .map((run) => ({
+      id: run.id,
+      goal: run.goal,
+      status: run.status,
+      phase: run.phase,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      personas: run.personas || [],
+      plan: Array.isArray(run.plan)
+        ? run.plan.map((s) => ({ persona: s.persona, instruction: s.instruction }))
+        : [],
+      stepCount: Array.isArray(run.steps) ? run.steps.length : 0,
+      hasFinal: !!(run.final && String(run.final).trim()),
+    }));
+  res.json({ agent: id, runs });
+});
+
 router.get('/:id', (req, res) => {
   const agent = getAgentSync(req.params.id);
   if (!agent) return res.status(404).json({ error: 'unknown agent' });

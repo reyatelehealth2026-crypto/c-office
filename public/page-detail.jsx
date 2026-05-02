@@ -48,18 +48,71 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
     return actions;
   }, [agent.id]);
 
-  const sendChat = (text) => {
+  // Desk Chat now drives the same Orchestra pipeline as the Dashboard's
+  // "Send to Orchestra" — every message is a real run, biased toward this
+  // agent. The reply lands as the synthesized final and the row links into
+  // the run viewer for full step-by-step detail.
+  const sendChat = async (text) => {
     const msg = text || chatInput.trim();
     if (!msg || busy) return;
     setBusy(true);
-    const userMsg = { id: Date.now(), role: 'user', content: msg, ts: Date.now() };
-    setChatMessages(prev => [...prev, userMsg]);
+    const ts = Date.now();
+    const userMsg = { id: ts, role: 'user', content: msg, ts };
+    const placeholderId = ts + 1;
+    setChatMessages(prev => [...prev, userMsg, {
+      id: placeholderId, role: 'agent', content: 'Orchestra: กำลังวางแผน…',
+      ts: placeholderId, pending: true,
+    }]);
     setChatInput('');
 
-    // Real dispatch flows through the Notes page; this surface only echoes
-    // the user message locally. Use the Notes page (or the dashboard's
-    // Send-to-Orchestra) to drive an agent run.
-    setBusy(false);
+    const goal = `(สั่งงานผ่าน Desk Chat ของ ${agent.name} — ให้ ${agent.name} รับผิดชอบหลัก)\n\n${msg}`;
+    const updatePlaceholder = (patch) => {
+      setChatMessages(prev => prev.map(m => m.id === placeholderId ? { ...m, ...patch } : m));
+    };
+    try {
+      const startResp = await fetch('/api/task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal }),
+      });
+      const startJson = await startResp.json().catch(() => ({}));
+      if (!startResp.ok || !startJson.run_id) {
+        throw new Error(startJson.error || 'Orchestra ไม่ตอบรับงาน');
+      }
+      const runId = startJson.run_id;
+      updatePlaceholder({ runId, content: `Orchestra: กำลังวางแผน… (run ${runId})` });
+
+      let lastPhase = '';
+      let final = '';
+      let lastErr = '';
+      const deadline = Date.now() + 10 * 60_000;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 1500));
+        const r = await fetch(`/api/task/${runId}`);
+        if (!r.ok) {
+          if (r.status === 404) { lastErr = 'run หายไปจากเซิร์ฟเวอร์'; break; }
+          continue;
+        }
+        const run = await r.json();
+        if (run.phase && run.phase !== lastPhase) {
+          lastPhase = run.phase;
+          updatePlaceholder({ content: `Orchestra: ${run.phase}… (run ${runId})` });
+        }
+        if (run.status === 'done' || run.status === 'failed' || run.status === 'cancelled') {
+          final = run.final || '';
+          lastErr = run.error || '';
+          break;
+        }
+      }
+      updatePlaceholder({
+        content: (final && final.trim()) || lastErr || '(Orchestra ไม่มีผลตอบกลับ)',
+        pending: false,
+      });
+    } catch (e) {
+      updatePlaceholder({ content: 'ข้อผิดพลาด: ' + (e.message || String(e)), pending: false, error: true });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -198,12 +251,21 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
                       background: m.role === 'user'
                         ? 'linear-gradient(135deg, rgba(255,107,107,0.15), rgba(238,90,36,0.08))'
                         : 'var(--bg-2)',
-                      border: `1px solid ${m.role === 'user' ? 'rgba(255,107,107,0.25)' : 'var(--border)'}`,
+                      border: `1px solid ${m.role === 'user' ? 'rgba(255,107,107,0.25)' : (m.error ? 'rgba(255,107,107,0.4)' : 'var(--border)')}`,
                       fontSize: 13,
                       lineHeight: 1.5,
                       color: 'var(--text)',
+                      whiteSpace: 'pre-wrap',
                     }}>
                       {m.content}
+                      {m.runId && (
+                        <div style={{marginTop:6}}>
+                          <a href={`/run.html?id=${m.runId}`} target="_blank" rel="noreferrer"
+                             style={{fontSize:11, color:'var(--cyan)', fontFamily:'var(--font-mono)'}}>
+                            เปิด run รายละเอียดเต็ม →
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -320,16 +382,35 @@ const SkillsPanel = ({ agent, skills }) => {
 
 const HistoryPanel = ({ agent }) => {
   const [items, setItems] = React.useState([]);
+  const [runs, setRuns] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  React.useEffect(() => {
+  const [runsLoading, setRunsLoading] = React.useState(true);
+
+  const reload = React.useCallback(() => {
     let cancelled = false;
     setLoading(true);
+    setRunsLoading(true);
     fetch(`/api/agents/${agent.id}/history?limit=200`)
       .then(r => r.json())
       .then(j => { if (!cancelled) { setItems(j.items || []); setLoading(false); } })
       .catch(() => { if (!cancelled) setLoading(false); });
+    fetch(`/api/agents/${agent.id}/runs?limit=50`)
+      .then(r => r.json())
+      .then(j => { if (!cancelled) { setRuns(j.runs || []); setRunsLoading(false); } })
+      .catch(() => { if (!cancelled) setRunsLoading(false); });
     return () => { cancelled = true; };
   }, [agent.id]);
+
+  React.useEffect(() => reload(), [reload]);
+
+  // Auto-refresh while there are active runs so the panel reflects live work.
+  React.useEffect(() => {
+    const hasActive = runs.some(r => r.status === 'running' || r.status === 'awaiting-approval');
+    if (!hasActive) return;
+    const t = setInterval(reload, 4000);
+    return () => clearInterval(t);
+  }, [runs, reload]);
+
   const fmt = (ts) => {
     if (!ts) return '-';
     const dt = Date.now() - ts;
@@ -342,25 +423,91 @@ const HistoryPanel = ({ agent }) => {
     if (h < 24) return h + 'h';
     return Math.floor(h/24) + 'd';
   };
+
+  const statusColor = (s) => ({
+    done: 'var(--green)',
+    running: 'var(--gold)',
+    failed: 'var(--red)',
+    cancelled: 'var(--text-3)',
+    'awaiting-approval': 'var(--cyan)',
+  })[s] || 'var(--text-3)';
+
   return (
-    <div className="panel">
-      <div className="panel-head"><h3>Activity History</h3><div className="right">{loading ? 'loading...' : `${items.length} events`}</div></div>
-      <div className="stack" style={{gap:0}}>
-        {!loading && items.length === 0 && <div className="muted" style={{fontSize:12, padding:'14px 4px'}}>No activity yet for {agent.name}.</div>}
-        {items.map((r,i) => {
-          const tokens = r.tokens ?? ((r.usage?.input_tokens||0)+(r.usage?.output_tokens||0));
-          return (
-            <div key={r.id || i} className="feed-row" style={{borderBottom: i < items.length-1 ? '1px solid var(--border)' : 'none'}}>
-              <div className="mono-s" style={{width: 50}}>{fmt(r.ts)}</div>
-              <div style={{flex:1, minWidth:0}}>
-                <div style={{fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
-                  <span style={{color:'var(--text-3)'}}>{r.verb}{r.toolName ? ` · ${r.toolName}`:''}</span> {r.text}
-                </div>
-              </div>
-              {tokens > 0 && <span className="mono-s">{tokens.toLocaleString()} tok</span>}
+    <div className="stack" style={{gap:14}}>
+      <div className="panel">
+        <div className="panel-head">
+          <h3>Work Runs</h3>
+          <div className="right">
+            {runsLoading ? 'loading…' : `${runs.length} run${runs.length === 1 ? '' : 's'}`}
+            <button className="btn ghost" onClick={reload} style={{fontSize:11, marginLeft:8, padding:'2px 8px'}}>↻</button>
+          </div>
+        </div>
+        <div className="stack" style={{gap:6}}>
+          {!runsLoading && runs.length === 0 && (
+            <div className="muted" style={{fontSize:12, padding:'14px 4px'}}>
+              ยังไม่มีงานที่ผ่าน Orchestra แล้วถึง {agent.name}. ลองสั่งงานจาก Desk Chat หรือ Dashboard ดู
             </div>
-          );
-        })}
+          )}
+          {runs.map((r) => {
+            const planSummary = (r.plan || []).map(s => s.persona).join(' → ') || '—';
+            return (
+              <a key={r.id} href={`/run.html?id=${r.id}`} target="_blank" rel="noreferrer"
+                 style={{
+                   display:'flex', gap:12, alignItems:'flex-start',
+                   padding:'10px 12px', background:'var(--bg-2)', borderRadius:10,
+                   border:'1px solid var(--border)', textDecoration:'none', color:'inherit',
+                   transition:'border-color 120ms',
+                 }}
+                 onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--coral)'}
+                 onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}>
+                <span style={{
+                  width:8, height:8, borderRadius:'50%', background: statusColor(r.status),
+                  marginTop:6, flexShrink:0,
+                }}/>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:13, fontWeight:600, marginBottom:2,
+                                overflow:'hidden', textOverflow:'ellipsis',
+                                display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>
+                    {r.goal || '(no goal)'}
+                  </div>
+                  <div className="mono-s" style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+                    <span>{fmt(r.startedAt)} ago</span>
+                    <span style={{color: statusColor(r.status)}}>{r.status}{r.phase && r.status === 'running' ? ` · ${r.phase}` : ''}</span>
+                    <span>{r.stepCount} step{r.stepCount === 1 ? '' : 's'}</span>
+                    <span style={{color:'var(--text-3)'}}>plan: {planSummary}</span>
+                  </div>
+                </div>
+                <span className="mono-s" style={{color:'var(--cyan)', flexShrink:0}}>เปิด →</span>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head"><h3>Activity Events</h3><div className="right">{loading ? 'loading...' : `${items.length} events`}</div></div>
+        <div className="stack" style={{gap:0}}>
+          {!loading && items.length === 0 && <div className="muted" style={{fontSize:12, padding:'14px 4px'}}>No activity yet for {agent.name}.</div>}
+          {items.map((r,i) => {
+            const tokens = r.tokens ?? ((r.usage?.input_tokens||0)+(r.usage?.output_tokens||0));
+            const runId = r.sessionId && /^run_/.test(r.sessionId) ? r.sessionId : null;
+            const Row = runId ? 'a' : 'div';
+            const rowProps = runId ? { href: `/run.html?id=${runId}`, target: '_blank', rel: 'noreferrer', style: { textDecoration:'none', color:'inherit', cursor:'pointer' } } : {};
+            return (
+              <Row key={r.id || i} className="feed-row" {...rowProps}
+                   style={{borderBottom: i < items.length-1 ? '1px solid var(--border)' : 'none', ...(rowProps.style || {})}}>
+                <div className="mono-s" style={{width: 50}}>{fmt(r.ts)}</div>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                    <span style={{color:'var(--text-3)'}}>{r.verb}{r.toolName ? ` · ${r.toolName}`:''}</span> {r.text}
+                  </div>
+                </div>
+                {tokens > 0 && <span className="mono-s">{tokens.toLocaleString()} tok</span>}
+                {runId && <span className="mono-s" style={{color:'var(--cyan)', marginLeft:6}}>run →</span>}
+              </Row>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

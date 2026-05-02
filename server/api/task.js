@@ -18,7 +18,7 @@ import { Router } from 'express';
 import { state, approveRunPhase, rejectRunPhase, requestRunCancellation, appendScratchpad } from '../state.js';
 import { runOrchestrator } from '../agents/runner.js';
 import { listSkills } from '../agents/skills.js';
-import { listWorkflows } from '../agents/workflows.js';
+import { listWorkflows, saveWorkflow, deleteWorkflow, isBuiltInWorkflow } from '../agents/workflows.js';
 import {
   listEvals,
   getEval,
@@ -146,10 +146,32 @@ router.get('/api/workflows', (req, res) => {
         description: wf.description || '',
         steps: wf.plan.length,
         plan: wf.plan,
+        builtIn: isBuiltInWorkflow(wf.name),
       })),
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// Create / overwrite a custom workflow. Built-in names are rejected by saveWorkflow.
+router.post('/api/workflows', (req, res) => {
+  try {
+    const { name, description, plan } = req.body || {};
+    const wf = saveWorkflow({ name, description, plan });
+    res.json({ ok: true, workflow: wf });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.delete('/api/workflows/:name', (req, res) => {
+  try {
+    const removed = deleteWorkflow(req.params.name);
+    if (!removed) return res.status(404).json({ error: 'workflow not found' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
 });
 
@@ -170,6 +192,26 @@ router.post('/api/task/:run_id/cancel', (req, res) => {
   const reason = String(req.body?.reason || 'user-cancelled').slice(0, 200);
   const ok = requestRunCancellation(req.params.run_id, reason);
   if (!ok) return res.status(404).json({ error: 'unknown or already-finished run' });
+  res.json({ ok: true });
+});
+
+// Mid-run user comment. Lands in the run's scratchpad as a `user-note`
+// entry so currently-running and upcoming steps see it inside their prior
+// context. `stepIdx` is optional — when provided the note prefixes which
+// step the comment is aimed at.
+router.post('/api/task/:run_id/comment', (req, res) => {
+  const runId = req.params.run_id;
+  const run = state.runs.get(runId);
+  if (!run) return res.status(404).json({ error: 'unknown run' });
+  const text = String(req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ error: 'text required' });
+  const stepIdx = Number.isInteger(req.body?.stepIdx) ? req.body.stepIdx : null;
+  const tag = stepIdx != null ? `[Re: step #${stepIdx + 1}] ` : '';
+  appendScratchpad(runId, {
+    persona: 'user',
+    kind: 'user-note',
+    text: `${tag}${text.slice(0, 4000)}`,
+  });
   res.json({ ok: true });
 });
 

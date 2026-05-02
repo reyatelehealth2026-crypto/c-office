@@ -238,7 +238,18 @@ const gpt = {
   },
 };
 
-export const PROVIDERS = { claude, codex };
+const gemini = {
+  name: 'gemini',
+  display: 'Gemini CLI',
+  description: 'Google Gemini CLI (gemini -p "..."). Override with C_OFFICE_GEMINI_CMD.',
+  detect: () => !!which('gemini'),
+  async run({ prompt }, onChunk) {
+    const argv = buildCmd('C_OFFICE_GEMINI_CMD', 'gemini -p ${PROMPT}', prompt);
+    return runArgv(argv, onChunk, { timeoutMs: timeoutForProvider('gemini') });
+  },
+};
+
+export const PROVIDERS = { claude, codex, gemini };
 
 export function listProviders() {
   return Object.values(PROVIDERS).map(p => ({

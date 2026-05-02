@@ -271,7 +271,10 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
   const agent = agents.find(a => a.id === note.agentId);
   const [draft, setDraft] = React.useState('');
   const [provider, setProvider] = React.useState(defaultProvider);
+  const [useOrchestra, setUseOrchestra] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
+  const [orchestraStatus, setOrchestraStatus] = React.useState('');
+  const [activeRunId, setActiveRunId] = React.useState(null);
   const [optimisticMessages, setOptimisticMessages] = React.useState([]);
   const [imageBusy, setImageBusy] = React.useState(false);
   const [imageStatus, setImageStatus] = React.useState(null);
@@ -307,19 +310,24 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
     setOptimisticMessages(prev => [...prev, pending]);
     setDraft('');
     setBusy(true);
+    setOrchestraStatus('');
     try {
-      const r = await fetch(`/api/notes/${note.id}/dispatch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider,
-          agentId: note.agentId || 'orchestra',
-          message: message.trim(),
-        }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.ok) {
-        throw new Error(j.error || j.output || `Provider ${provider} failed`);
+      if (useOrchestra) {
+        await dispatchViaOrchestra(message.trim());
+      } else {
+        const r = await fetch(`/api/notes/${note.id}/dispatch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider,
+            agentId: note.agentId || 'orchestra',
+            message: message.trim(),
+          }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) {
+          throw new Error(j.error || j.output || `Provider ${provider} failed`);
+        }
       }
       await onChange?.();
     } catch (e) {
@@ -327,7 +335,72 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
       await onChange?.();
     } finally {
       setBusy(false);
+      setActiveRunId(null);
+      setOrchestraStatus('');
     }
+  }
+
+  // Orchestra-flow path — same pipeline as the Dashboard's "Send to
+  // Orchestra" button. Posts goal to /api/task, polls for completion, then
+  // mirrors the synthesized result back into the note's chat log.
+  async function dispatchViaOrchestra(message) {
+    const ownerName = agent?.name || note.agentId || 'Orchestra';
+    const goalParts = [];
+    if (note.title) goalParts.push(`เรื่อง: ${note.title}`);
+    if (note.body)  goalParts.push(`บริบท:\n${note.body}`);
+    if (note.agentId && note.agentId !== 'orchestra') {
+      goalParts.push(`(แนะนำให้ส่งต่อหรือร่วมงานกับ ${ownerName})`);
+    }
+    goalParts.push(`คำสั่งจากผู้ใช้: ${message}`);
+    const goal = goalParts.join('\n\n');
+
+    setOrchestraStatus('Orchestra: กำลังวางแผน…');
+    const startResp = await fetch('/api/task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal, provider: provider === 'claude' ? '' : provider }),
+    });
+    const startJson = await startResp.json().catch(() => ({}));
+    if (!startResp.ok || !startJson.run_id) {
+      throw new Error(startJson.error || 'Orchestra ไม่ตอบรับงาน');
+    }
+    const runId = startJson.run_id;
+    setActiveRunId(runId);
+
+    // Poll the run record until it's no longer running. SSE would be
+    // cleaner but the notes page is short-lived, so polling is fine.
+    let lastPhase = '';
+    let final = '';
+    let lastErr = '';
+    const deadline = Date.now() + 10 * 60_000; // 10 min hard cap
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 1500));
+      const r = await fetch(`/api/task/${runId}`);
+      if (!r.ok) {
+        if (r.status === 404) { lastErr = 'run หายไปจากเซิร์ฟเวอร์'; break; }
+        continue;
+      }
+      const run = await r.json();
+      if (run.phase && run.phase !== lastPhase) {
+        lastPhase = run.phase;
+        setOrchestraStatus(`Orchestra: ${run.phase}…`);
+      }
+      if (run.status === 'done' || run.status === 'failed' || run.status === 'cancelled') {
+        final = run.final || '';
+        lastErr = run.error || '';
+        break;
+      }
+    }
+
+    const content = final.trim() || lastErr || '(Orchestra ไม่มีข้อความตอบกลับ)';
+    await fetch(`/api/notes/${note.id}/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: 'agent',
+        content: `[via Orchestra · run ${runId}]\n\n${content}`,
+      }),
+    }).catch(() => {});
   }
 
   async function saveEdit() {
@@ -410,6 +483,11 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
           </button>
         )}
         <div style={{flex: 1}}/>
+        <label className="mono-s" style={{display:'flex', alignItems:'center', gap:6, cursor:'pointer'}}
+               title="ใช้ flow เดียวกับ Dashboard: Orchestra วางแผน → delegate → critique → synthesize">
+          <input type="checkbox" checked={useOrchestra} onChange={e => setUseOrchestra(e.target.checked)}/>
+          Orchestra Flow
+        </label>
         <span className="mono-s">ตัวรัน →</span>
         <select className="provider-select" value={provider} onChange={e => setProvider(e.target.value)}>
           {providers.map(p => (
@@ -486,7 +564,9 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
         />
         <div className="row" style={{gap: 8, marginTop: 8, justifyContent: 'flex-end'}}>
           <span className="mono-s" style={{marginRight: 'auto'}}>
-            Ctrl/⌘+Enter to dispatch · provider <b>{provider}</b>
+            Ctrl/⌘+Enter to dispatch · {useOrchestra ? <>flow <b>Orchestra</b></> : <>provider <b>{provider}</b></>}
+            {orchestraStatus && <span style={{marginLeft:8, color:'var(--gold)'}}>· {orchestraStatus}</span>}
+            {activeRunId && <a href={`/run.html?id=${activeRunId}`} target="_blank" rel="noreferrer" style={{marginLeft:8, color:'var(--cyan)'}}>เปิด run →</a>}
           </span>
           <button
             className="btn gold"

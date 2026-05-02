@@ -11,11 +11,24 @@ There is **no build step**. Backend is ESM Node, frontend is React 18 (UMD) + Ba
 ## Commands
 
 ```bash
-npm run dev              # node --watch — auto-restart on server file changes
-npm start                # production start (no watch)
-npm run install-hooks    # writes hook entries into ~/.claude/settings.json (idempotent, makes timestamped backup)
-npm run uninstall-hooks  # removes c-office hook entries (matched by `c-office:post-event` marker)
+npm run dev               # node --watch — auto-restart on server file changes
+npm start                 # production start (no watch)
+npm run install-hooks     # writes hook entries into ~/.claude/settings.json (idempotent, makes timestamped backup)
+npm run uninstall-hooks   # removes c-office hook entries (matched by `c-office:post-event` marker)
+npm run tunnel            # expose http://127.0.0.1:7878 publicly (Cloudflare Quick Tunnel, fallback to localtunnel)
+npm run tunnel:cloudflare # force Cloudflare Quick Tunnel via npx cloudflared
+npm run tunnel:localtunnel# force localtunnel.me via npx localtunnel
 ```
+
+### Public-link access
+
+`scripts/tunnel.js` runs an outbound tunnel to whichever local port the server is on (`PORT`, default 7878). No port-forward and no DNS needed. **Always set an access token before exposing publicly** — `server/security/access-token.js` already runs as a global middleware:
+
+- Set `C_OFFICE_ACCESS_TOKEN=<secret>` (or `C_OFFICE_PUBLIC_TOKEN=<secret>`) before `npm start`
+- Browser users land on a small `/access` login page; CLI/API callers send `Authorization: Bearer <secret>` or `?token=<secret>`
+- A signed cookie persists the session across page loads so the dashboard stops re-prompting after the first visit
+
+If the env var is unset the gate is bypassed (local-only convenience). The tunnel script prints a yellow warning when it detects no token is configured.
 
 Server listens on `http://127.0.0.1:7878` (override with `PORT` / `HOST` env). Frontend `.jsx` files are served from `public/` and edits are picked up on browser reload — `node --watch` is **not** needed for frontend changes.
 

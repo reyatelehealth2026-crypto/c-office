@@ -338,6 +338,101 @@ const ThemeEnginePanel = () => {
   );
 };
 
+/* ===== USER PROFILE ===== */
+// Markdown-based "who I am" the user maintains once. Server appends it to
+// every persona system prompt so agents know the operator without being told
+// inside each task. Persisted at ~/.c-office/user-profile.md.
+const UserProfilePanel = () => {
+  const [text, setText] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
+  const [path, setPath] = React.useState('');
+  const [tpl, setTpl] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState('');
+  const [bytes, setBytes] = React.useState(0);
+
+  const refresh = React.useCallback(() => {
+    fetch('/api/user-profile')
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j || j.ok === false) return;
+        setText(j.text || '');
+        setPath(j.path || '');
+        setTpl(j.defaultTemplate || '');
+        setBytes(j.bytes || 0);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  React.useEffect(() => { refresh(); }, [refresh]);
+
+  const save = async () => {
+    setBusy(true);
+    setStatus('');
+    try {
+      const r = await fetch('/api/user-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const j = await r.json();
+      if (!r.ok || j.ok === false) throw new Error(j.error || `HTTP ${r.status}`);
+      setBytes(j.bytes || 0);
+      setStatus('บันทึกแล้ว · เอเจนต์ทุกตัวจะใช้โปรไฟล์นี้ในรันถัดไป');
+      setTimeout(() => setStatus(''), 4000);
+    } catch (e) {
+      setStatus('บันทึกไม่สำเร็จ: ' + (e.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadTemplate = () => {
+    if (text.trim() && !window.confirm('เขียนทับด้วยเทมเพลตเริ่มต้น?')) return;
+    setText(tpl);
+  };
+
+  return (
+    <div className="panel" style={{ gridColumn: 'span 2' }}>
+      <div className="panel-head">
+        <h3>User Profile (agent context)</h3>
+        <div className="right mono-s">{loaded ? `${bytes} bytes` : 'loading…'}</div>
+      </div>
+      <div className="mono-s" style={{ marginBottom: 8, lineHeight: 1.6 }}>
+        เขียน Markdown บอกว่าคุณเป็นใคร ทำธุรกิจอะไร กลุ่มเป้าหมาย โทน คำที่ห้ามใช้ ฯลฯ —
+        เซิร์ฟเวอร์จะแนบเข้า system prompt ของทุกเอเจนต์อัตโนมัติ จึงไม่ต้องบอกซ้ำในทุกคำสั่ง
+        {path && <> · file: <span className="mono" style={{ color: 'var(--gold)' }}>{path}</span></>}
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        spellCheck={false}
+        placeholder={tpl || '# About me\n- Name:\n- Role / business:\n'}
+        style={{
+          width: '100%', minHeight: 240, padding: 12,
+          background: 'var(--bg-2)', color: 'var(--text-1)',
+          border: '1px solid var(--border)', borderRadius: 8,
+          fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.55,
+          resize: 'vertical',
+        }}
+      />
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
+        <button className="btn primary" disabled={busy || !loaded} onClick={save}>
+          {busy ? 'กำลังบันทึก…' : 'บันทึกโปรไฟล์'}
+        </button>
+        <button className="btn-ghost" disabled={busy} onClick={loadTemplate} style={{ fontSize: 12 }}>
+          ใส่เทมเพลต
+        </button>
+        <button className="btn-ghost" disabled={busy} onClick={refresh} style={{ fontSize: 12 }}>
+          โหลดใหม่
+        </button>
+        {status && <span className="mono-s" style={{ marginLeft: 'auto', color: 'var(--green)' }}>{status}</span>}
+      </div>
+    </div>
+  );
+};
+
 /* ===== SETTINGS ===== */
 const SettingsPage = () => {
   const [settings, setSettings] = React.useState(null);
@@ -364,6 +459,7 @@ const SettingsPage = () => {
       <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap: 18}}>
         <ThemeEnginePanel/>
         <ConnectionsPanel/>
+        <UserProfilePanel/>
         <div className="panel">
           <div className="panel-head"><h3>Hooks</h3>
             <div className="right">{installedCount}/{hookEvents.length} installed</div>

@@ -83,3 +83,56 @@ export function getWorkflow(name) {
 export function workflowsDir() {
   return WORKFLOWS_DIR;
 }
+
+// Slugify into a safe filename. Allows letters/digits/dash/underscore only —
+// prevents user-supplied names from escaping WORKFLOWS_DIR.
+function workflowFilename(name) {
+  const slug = String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  if (!slug) throw new Error('workflow name required');
+  return `${slug}.json`;
+}
+
+export function saveWorkflow({ name, description, plan }) {
+  const wf = {
+    name: String(name || '').trim(),
+    description: String(description || '').trim(),
+    plan: Array.isArray(plan) ? plan.map((s, i) => ({
+      persona: String(s.persona || '').trim(),
+      instruction: String(s.instruction || '').trim(),
+      depends_on: Number.isInteger(s.depends_on) ? s.depends_on : (i > 0 ? i - 1 : null),
+    })) : [],
+  };
+  if (!isValidWorkflow(wf)) {
+    throw new Error('Invalid workflow: name and at least 1 step (persona + instruction) required');
+  }
+  if (BUILT_INS[wf.name]) {
+    throw new Error(`"${wf.name}" is a built-in workflow and cannot be overwritten — pick a different name`);
+  }
+  fs.mkdirSync(WORKFLOWS_DIR, { recursive: true });
+  fs.writeFileSync(
+    path.join(WORKFLOWS_DIR, workflowFilename(wf.name)),
+    JSON.stringify(wf, null, 2),
+    'utf8',
+  );
+  return wf;
+}
+
+export function deleteWorkflow(name) {
+  if (BUILT_INS[name]) throw new Error('cannot delete a built-in workflow');
+  const filePath = path.join(WORKFLOWS_DIR, workflowFilename(name));
+  try {
+    fs.unlinkSync(filePath);
+    return true;
+  } catch (e) {
+    if (e.code === 'ENOENT') return false;
+    throw e;
+  }
+}
+
+export function isBuiltInWorkflow(name) {
+  return Object.prototype.hasOwnProperty.call(BUILT_INS, name);
+}

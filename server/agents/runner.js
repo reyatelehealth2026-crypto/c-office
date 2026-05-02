@@ -38,6 +38,7 @@ import { getWorkflow } from './workflows.js';
 import { getProject } from '../store/projects.js';
 import { appendAudit } from './audit.js';
 import { gradeRunAgainstEval } from './evals.js';
+import { userProfileBlock } from './user-profile.js';
 import { registerGateResolver } from '../state.js';
 import { recordPersonaOutcome } from './persona-tune.js';
 import { composedRecall, recordSkillCoOccurrence } from './skill-graph.js';
@@ -764,9 +765,25 @@ async function executeStep(runId, goal, step, idx, prior, opts = {}) {
   });
   appendScratchpad(runId, { persona: personaId, kind: 'delegation', text: step.instruction });
 
-  const priorBlock = prior.length
-    ? `\n\nContext from earlier steps:\n${prior.map((p) => `### ${p.persona}\n${p.text}`).join('\n\n')}`
+  // Surface mid-run user comments (kind === 'user-note') so the model
+  // actually sees what the operator typed into the workspace comment box.
+  // Filter to ones that target this step (or are global).
+  const runForNotes = state.runs.get(runId);
+  const userNotes = (runForNotes?.scratchpad || [])
+    .filter((s) => s.kind === 'user-note')
+    .filter((s) => {
+      const m = /^\[Re: step #(\d+)\]/.exec(s.text || '');
+      return !m || Number(m[1]) === idx + 1;
+    })
+    .map((s) => s.text)
+    .slice(-6); // cap to avoid runaway prompt growth
+  const userNoteBlock = userNotes.length
+    ? `\n\nUser notes / instructions during this run (treat these as authoritative):\n${userNotes.map((t) => `- ${t}`).join('\n')}`
     : '';
+
+  const priorBlock = (prior.length
+    ? `\n\nContext from earlier steps:\n${prior.map((p) => `### ${p.persona}\n${p.text}`).join('\n\n')}`
+    : '') + userNoteBlock;
 
   // ── Image-generation branch ─────────────────────────────────────────
   // Echo (Emi) is an image persona, not an LLM persona. Calling query()
@@ -779,21 +796,28 @@ async function executeStep(runId, goal, step, idx, prior, opts = {}) {
   // + instruction into a focused visual prompt via a cheap LLM call, and
   // (b) fall back to a direct concat if the distillation fails.
   if (personaId === 'echo') {
-    let imageOut = null;
-    let imageError = '';
-    let imagePrompt = step.instruction;
+    // Compose ONE OR MANY image prompts based on the prior context. The
+    // composer LLM returns a JSON array — if the prior text contained
+    // "post 1 / post 2" or the instruction asks for N images, we get
+    // N prompts. Otherwise it returns a single-item array.
+    let imagePrompts = [step.instruction];
     if (prior.length > 0) {
       const priorText = prior
         .map((p) => `[${p.persona}]\n${p.text}`)
         .join('\n\n')
         .slice(0, 6000);
-      const composerSystem = `You compose vivid image-generation prompts for diffusion models.
-Read the research / writing context and the assignment, then output ONE
-self-contained English image prompt (~80-160 words). Include subject,
-setting, lighting, composition, mood, and any concrete product / brand /
-visual cue that appeared in the context. No preface, no JSON, no quotes —
-just the prompt text.`;
-      const composerPrompt = `Assignment: ${step.instruction}\n\nContext from earlier steps:\n${priorText}\n\nWrite the image prompt now.`;
+      const composerSystem = `You compose image-generation prompts for diffusion models.
+Read the assignment + earlier research/writing context, then decide how
+many distinct images this deliverable needs (e.g. one image per Facebook
+post, one per product variant). Output a JSON array of self-contained
+English prompts — each ~80-160 words, including subject, setting,
+lighting, composition, mood, and concrete visual cues from the context.
+
+Reply with ONLY the JSON array, no preface or prose:
+["prompt 1", "prompt 2", ...]
+
+Use 1 prompt unless the context clearly calls for more. Cap at 4.`;
+      const composerPrompt = `Assignment: ${step.instruction}\n\nContext from earlier steps:\n${priorText}\n\nReturn the JSON array of prompts now.`;
       try {
         let composed = '';
         for await (const message of callOrchLLM({
@@ -814,38 +838,84 @@ just the prompt text.`;
             });
           }
         }
-        const trimmed = composed.trim();
-        if (trimmed.length > 40) {
-          imagePrompt = trimmed;
+        const parsed = extractJsonArray(composed);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          imagePrompts = parsed
+            .map((p) => typeof p === 'string' ? p : (p?.prompt || p?.instruction || ''))
+            .filter((p) => p && p.length > 30)
+            .slice(0, 4);
+        } else if (composed.trim().length > 40) {
+          imagePrompts = [composed.trim()];
         } else {
-          // Composer returned nothing useful — fall back to direct concat.
-          imagePrompt = `${step.instruction}\n\nVisualize using these details from earlier research:\n${priorText.slice(0, 2000)}`;
+          imagePrompts = [`${step.instruction}\n\nVisualize using these details from earlier research:\n${priorText.slice(0, 2000)}`];
         }
       } catch (composeErr) {
-        // LLM unreachable — use direct concat so the image still reflects priors.
-        imagePrompt = `${step.instruction}\n\nVisualize using these details from earlier research:\n${priorText.slice(0, 2000)}`;
+        imagePrompts = [`${step.instruction}\n\nVisualize using these details from earlier research:\n${priorText.slice(0, 2000)}`];
       }
     }
-    imagePrompt = imagePrompt.slice(0, 4000);
+    imagePrompts = imagePrompts.map((p) => p.slice(0, 4000));
     appendScratchpad(runId, {
       persona: personaId,
       kind: 'image-prompt',
-      text: imagePrompt,
+      text: `Composing ${imagePrompts.length} image${imagePrompts.length === 1 ? '' : 's'}:\n\n` +
+        imagePrompts.map((p, n) => `[#${n + 1}] ${p}`).join('\n\n'),
     });
-    try {
-      imageOut = await generateImage({ prompt: imagePrompt, persona: `${runId}-echo-${idx}` });
-    } catch (err) {
-      imageError = err?.message || String(err);
+
+    // Hard timeout per image — keeps a hung provider from stalling the run.
+    const IMAGE_TIMEOUT_MS = Number(process.env.COFFICE_TIMEOUT_IMAGE_MS) || 120_000;
+    const generateOne = async (prompt, n) => {
+      let timer;
+      const deadline = new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Image ${n + 1} timed out after ${Math.round(IMAGE_TIMEOUT_MS / 1000)}s`)),
+          IMAGE_TIMEOUT_MS,
+        );
+      });
+      try {
+        return await Promise.race([
+          generateImage({ prompt, persona: `${runId}-echo-${idx}-${n}` }),
+          deadline,
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    // Generate sequentially so a single rate-limit doesn't fan out.
+    const images = [];
+    let imageError = '';
+    for (let n = 0; n < imagePrompts.length; n++) {
+      // Visible progress signal — image API can take 30-90s; without this
+      // the UI shows "execute" with no movement and looks frozen.
+      pushEvent({
+        sessionId: runId,
+        personaId,
+        verb: 'used',
+        toolName: 'ImageGen',
+        text: `Calling image API (${n + 1}/${imagePrompts.length})…`,
+        status: 'ok',
+        dedupeKey: `imggen:${runId}:${toolUseId}:${n}`,
+      });
+      try {
+        const out = await generateOne(imagePrompts[n], n);
+        if (out?.url) images.push({ url: out.url, model: out.model, provider: out.provider });
+      } catch (err) {
+        if (!imageError) imageError = err?.message || String(err);
+        break; // stop on first failure to avoid burning budget
+      }
     }
-    const ok = !!imageOut?.url;
+
+    const ok = images.length > 0;
+    const imageOut = images[0] || null;
     const summary = ok
-      ? `Generated image (${imageOut.model || imageOut.provider}): ${imageOut.url}`
+      ? `Generated ${images.length} image${images.length === 1 ? '' : 's'} (${imageOut.model || imageOut.provider}):\n${images.map((im) => im.url).join('\n')}`
       : `Image generation failed: ${imageError}`;
     const result = {
       ok,
       text: summary,
       error: ok ? null : imageError,
-      image: ok ? { url: imageOut.url, model: imageOut.model, provider: imageOut.provider } : null,
+      image: ok ? imageOut : null,
+      images: ok ? images : [],
     };
     stepRun(runId, {
       tool_use_id: toolUseId,
@@ -900,7 +970,7 @@ Return the artifact only — no preface or conversational filler.`;
   
   const baseSystemPrompt = persona.systemPrompt
     || `You are ${persona.name || personaId}. ${persona.role || ''}\nReturn a concise, self-contained artifact for the assigned task.`;
-  const systemPrompt = baseSystemPrompt + `\n\nIMPORTANT TEMPORAL CONTEXT: Today is ${dateStr} (Simulation Year 2026). All your responses, research, and data processing MUST be relative to this date. If you search the internet, look for 2026 data. Do not treat 2024 or 2025 as the present; they are the past.`;
+  const systemPrompt = baseSystemPrompt + `\n\nIMPORTANT TEMPORAL CONTEXT: Today is ${dateStr} (Simulation Year 2026). All your responses, research, and data processing MUST be relative to this date. If you search the internet, look for 2026 data. Do not treat 2024 or 2025 as the present; they are the past.` + userProfileBlock();
 
   let outText = '';
   let stepError = '';
@@ -1043,7 +1113,7 @@ Return the artifact only — no preface or conversational filler.`;
 
 async function* callOrchLLM({ phase, prompt, systemPrompt, model, opts }) {
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const finalSystemPrompt = systemPrompt + `\n\nIMPORTANT TEMPORAL CONTEXT: Today is ${dateStr} (Simulation Year 2026). All your responses, research, and data processing MUST be relative to this date. If you search the internet, look for 2026 data. Do not treat 2024 or 2025 as the present; they are the past.`;
+  const finalSystemPrompt = systemPrompt + `\n\nIMPORTANT TEMPORAL CONTEXT: Today is ${dateStr} (Simulation Year 2026). All your responses, research, and data processing MUST be relative to this date. If you search the internet, look for 2026 data. Do not treat 2024 or 2025 as the present; they are the past.` + userProfileBlock();
   const provider = opts.provider || 'claude';
   let m = model;
   if (provider !== 'claude' && typeof m === 'string' && m.includes('claude')) {
@@ -1094,7 +1164,8 @@ async function* callOrchLLM({ phase, prompt, systemPrompt, model, opts }) {
 
 async function executeRun(runId, goal, plan, critique, opts = {}) {
   setRunPhase(runId, 'execute');
-  const prior = [];
+  // results[i] is the output (or null) of plan[i], indexed by plan order.
+  const results = new Array(plan.length).fill(null);
   let firstError = '';
 
   if (critique?.text) {
@@ -1105,25 +1176,76 @@ async function executeRun(runId, goal, plan, critique, opts = {}) {
     });
   }
 
+  // Group plan into dependency waves. A step belongs to wave W iff the max
+  // wave of any step it depends on is W-1. Independent steps share wave 0
+  // and run concurrently — Orchestra fans them out, then synthesizes after.
+  const waves = [];
+  const waveOf = new Array(plan.length).fill(0);
   for (let i = 0; i < plan.length; i++) {
+    const dep = plan[i].depends_on;
+    const depIdx = (typeof dep === 'number' && dep >= 0 && dep < i) ? dep : null;
+    waveOf[i] = depIdx !== null ? (waveOf[depIdx] + 1) : 0;
+    if (!waves[waveOf[i]]) waves[waveOf[i]] = [];
+    waves[waveOf[i]].push(i);
+  }
+
+  for (let w = 0; w < waves.length; w++) {
     if (isRunCancellationRequested(runId)) {
       return { status: 'failed', final: '', error: 'Run cancelled by user' };
     }
-    const step = plan[i];
-    const out = await executeStep(runId, goal, step, i, prior, opts);
-    if (out.ok) {
-      prior.push({ persona: out.personaName, text: out.text });
-    } else if (!firstError) {
-      firstError = `Step ${i} (${out.persona}) failed: ${out.error || 'no output'}`;
+    const wave = waves[w];
+
+    // Build the prior-context list each step in this wave should see — only
+    // results from earlier waves count, so concurrent steps stay independent.
+    const priorForWave = [];
+    for (let j = 0; j < plan.length; j++) {
+      if (waveOf[j] < w && results[j]) {
+        priorForWave.push({
+          persona: results[j].personaName || results[j].persona,
+          personaName: results[j].personaName || results[j].persona,
+          text: results[j].text,
+        });
+      }
+    }
+
+    if (wave.length > 1) {
+      pushEvent({
+        sessionId: runId,
+        personaId: ORCHESTRA_PERSONA,
+        verb: 'used',
+        toolName: 'Dispatch',
+        text: `Dispatching ${wave.length} steps in parallel: ${wave.map((i) => `[${plan[i].persona}]`).join(' ')}`,
+        status: 'ok',
+        dedupeKey: `dispatch:wave:${runId}:${w}`,
+      });
+    }
+
+    const settled = await Promise.all(wave.map((i) =>
+      executeStep(runId, goal, plan[i], i, priorForWave, opts)
+        .then((out) => ({ i, out }))
+        .catch((err) => ({ i, out: { ok: false, persona: plan[i].persona, error: err?.message || String(err) } }))
+    ));
+
+    for (const { i, out } of settled) {
+      if (out.ok) {
+        results[i] = {
+          persona: out.personaName || out.persona,
+          personaName: out.personaName || out.persona,
+          text: out.text,
+        };
+      } else if (!firstError) {
+        firstError = `Step ${i} (${out.persona}) failed: ${out.error || 'no output'}`;
+      }
     }
   }
 
-  if (prior.length === 0) {
+  const ordered = results.filter(Boolean);
+  if (ordered.length === 0) {
     return { status: 'failed', final: '', error: firstError || 'No step produced output.' };
   }
 
-  const finalText = prior
-    .map((p) => `## ${p.personaName}\n${p.text}`)
+  const finalText = ordered
+    .map((p) => `## ${p.personaName || p.persona || 'Agent'}\n${p.text}`)
     .join('\n\n');
   return { status: 'done', final: finalText, error: '' };
 }
@@ -1341,6 +1463,220 @@ function requiresApproval(opts, phase) {
   return Array.isArray(gates) && gates.includes(phase);
 }
 
+// ---------- Team Flow (iterative orchestration) ----------
+//
+// Replaces the static "plan up front → execute" model with a dynamic loop.
+// Orchestra (Sonnet) sees the goal + a transcript of previous specialist
+// outputs and decides ONE of two things:
+//   (a) delegate(persona, instruction) — call the next specialist
+//   (b) done(final)                    — assemble final, stop the loop
+//
+// This lets the boss adapt: e.g. ask Nana for research, read it, then decide
+// based on what came back whether to call Mira for distribution, Vex for a
+// compliance pass, Echo for an image, or end. Plan grows live in state so
+// the dashboard reflects the real branching.
+
+const TEAM_FLOW_MAX_ITERATIONS = 12;
+
+const TEAM_DECIDE_SYSTEM = `You are Orchestra, the team boss in TEAM-FLOW mode.
+You orchestrate a chain of specialists ONE AT A TIME, reading the result
+before deciding who comes next. You do NOT produce a static plan up front.
+
+Roster of valid persona ids:
+{ROSTER}
+
+You will receive:
+- The original user goal
+- A numbered transcript of specialist outputs already produced (may be empty
+  on the first turn)
+
+Decide the next move and reply with EXACTLY ONE JSON object — no markdown,
+no preface:
+
+  { "action": "delegate", "persona": "<id>", "instruction": "<self-contained brief>", "reason": "<one sentence why this persona, why now>" }
+
+  OR
+
+  { "action": "done", "final": "<assembled final answer for the user>", "reason": "<one sentence why we are finished>" }
+
+Rules:
+- Pick the SINGLE next specialist whose output most advances the goal.
+- The instruction MUST be self-contained — the specialist sees only what
+  you write here, plus the prior transcript you decide to quote inline.
+- Use 'done' as soon as the goal is satisfied. Do not pad with extra steps.
+- Hard cap: if the transcript already has ${TEAM_FLOW_MAX_ITERATIONS - 1} entries, you MUST reply 'done' with the best assembly you can.
+- For real-time / 2026 facts, delegate to nyx (Nana) FIRST before anyone writes copy.
+- Do NOT delegate to 'orchestra' — that's you.
+- Do NOT repeat a persona on the SAME sub-task. If a persona already produced what you need, move on.
+- When 'done', 'final' must be the COMPLETE artifact the user asked for, not a summary of what happened.`;
+
+function teamTranscript(history) {
+  if (!history || history.length === 0) return '(empty — no specialists run yet)';
+  return history.map((h, i) =>
+    `[#${i + 1}] persona=${h.persona}\n  instruction: ${h.instruction}\n  output:\n${h.output || '(no output)'}\n`
+  ).join('\n');
+}
+
+async function orchestraDecide(runId, goal, history, model, opts) {
+  const sys = TEAM_DECIDE_SYSTEM.replace('{ROSTER}', rosterText());
+  const userPrompt =
+    `USER GOAL:\n${goal}\n\n` +
+    `TRANSCRIPT (${history.length} specialist output${history.length === 1 ? '' : 's'} so far):\n${teamTranscript(history)}\n\n` +
+    `Reply with the single JSON decision now.`;
+  let text = '';
+  try {
+    for await (const message of callOrchLLM({
+      phase: 'plan',
+      prompt: userPrompt,
+      systemPrompt: sys,
+      model,
+      opts,
+    })) {
+      if (message.type === 'assistant') text += textFromAssistant(message) + '\n';
+      if (message.type === 'result') {
+        recordPhaseCost(runId, 'plan', model, message.usage);
+        recordUsage({
+          model,
+          usage: message.usage,
+          dedupeKey: `usage:team-decide:${runId}:${history.length}:${message.uuid}`,
+          sessionId: runId,
+        });
+      }
+    }
+  } catch (err) {
+    return { action: 'done', final: '', reason: `decide failed: ${err.message || err}` };
+  }
+  // Parse the single JSON object the model emitted.
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fenced ? fenced[1].trim() : trimmed;
+  let obj = null;
+  try { obj = JSON.parse(candidate); } catch {
+    const start = candidate.indexOf('{');
+    const end = candidate.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      try { obj = JSON.parse(candidate.slice(start, end + 1)); } catch { /* fallthrough */ }
+    }
+  }
+  if (!obj || typeof obj !== 'object') {
+    return { action: 'done', final: text, reason: 'decide returned non-JSON; using raw text as final' };
+  }
+  if (obj.action !== 'delegate' && obj.action !== 'done') obj.action = 'done';
+  return obj;
+}
+
+async function runTeamFlow(runId, goal, opts = {}) {
+  setRunPhase(runId, 'execute');
+  const orch = orchestratorAgent();
+  const model = orch.model || 'claude-sonnet-4-5';
+
+  const history = [];      // { persona, instruction, output, ok }
+  const planLive = [];     // mirror for setRunPlan / dashboard
+  let final = '';
+  let firstError = '';
+  let stopReason = '';
+
+  for (let iter = 0; iter < TEAM_FLOW_MAX_ITERATIONS; iter++) {
+    if (isRunCancellationRequested(runId)) {
+      return { status: 'failed', final: final || '', error: 'Run cancelled by user' };
+    }
+
+    pushEvent({
+      sessionId: runId,
+      personaId: ORCHESTRA_PERSONA,
+      verb: 'used',
+      toolName: 'Decide',
+      text: history.length === 0
+        ? 'Orchestra: deciding first specialist…'
+        : `Orchestra: reviewing output #${history.length}, deciding next move…`,
+      status: 'ok',
+      dedupeKey: `team-decide:${runId}:${iter}`,
+    });
+
+    const decision = await orchestraDecide(runId, goal, history, model, opts);
+    appendScratchpad(runId, {
+      persona: ORCHESTRA_PERSONA,
+      kind: 'team-decision',
+      text: `iter ${iter}: action=${decision.action}` +
+            (decision.action === 'delegate' ? ` → ${decision.persona}` : '') +
+            (decision.reason ? `\nreason: ${decision.reason}` : ''),
+    });
+
+    if (decision.action === 'done') {
+      final = decision.final || '';
+      stopReason = decision.reason || 'orchestra signalled done';
+      break;
+    }
+
+    const persona = String(decision.persona || '').toLowerCase();
+    const instruction = String(decision.instruction || '').trim();
+    if (!persona || !instruction) {
+      stopReason = 'orchestra returned malformed delegation';
+      break;
+    }
+    if (persona === ORCHESTRA_PERSONA) {
+      stopReason = 'orchestra tried to delegate to itself';
+      break;
+    }
+
+    planLive.push({ persona, instruction, depends_on: planLive.length ? planLive.length - 1 : null });
+    setRunPlan(runId, planLive);
+
+    const prior = history.map((h) => ({
+      persona: h.persona,
+      personaName: h.persona,
+      text: h.output,
+    }));
+
+    const out = await executeStep(
+      runId,
+      goal,
+      { persona, instruction, depends_on: planLive.length > 1 ? planLive.length - 2 : null },
+      iter,
+      prior,
+      opts,
+    );
+
+    if (out.ok) {
+      history.push({
+        persona: out.personaName || out.persona || persona,
+        instruction,
+        output: out.text || '',
+        ok: true,
+      });
+    } else {
+      if (!firstError) firstError = `Step ${iter} (${out.persona}) failed: ${out.error || 'no output'}`;
+      history.push({
+        persona: out.personaName || out.persona || persona,
+        instruction,
+        output: `(step failed: ${out.error || 'no output'})`,
+        ok: false,
+      });
+    }
+  }
+
+  // If Orchestra never said done (hit iteration cap), assemble from history.
+  if (!final) {
+    if (history.length === 0) {
+      return { status: 'failed', final: '', error: firstError || stopReason || 'team flow produced no output' };
+    }
+    final = history
+      .filter((h) => h.ok && h.output && h.output.trim())
+      .map((h) => `## ${h.persona}\n${h.output}`)
+      .join('\n\n');
+    if (!final) {
+      return { status: 'failed', final: '', error: firstError || stopReason || 'all team steps failed' };
+    }
+    appendScratchpad(runId, {
+      persona: ORCHESTRA_PERSONA,
+      kind: 'team-fallback-synth',
+      text: `Hit iteration cap (${TEAM_FLOW_MAX_ITERATIONS}); assembled final from ${history.length} step(s) without explicit done`,
+    });
+  }
+
+  return { status: 'done', final, error: '' };
+}
+
 async function runPipeline(runId, goal, opts = {}) {
   // Phase 0: Initial Analysis / Clarification.
   // Skip when the user has already supplied follow-up feedback — at that
@@ -1370,17 +1706,45 @@ async function runPipeline(runId, goal, opts = {}) {
     finishRun(runId, { status: 'failed', error: `Unknown workflow '${opts.workflow}'` });
     return;
   }
-  let plan = workflow
-    ? planFromTemplate(runId, goal, workflow)
-    : await planRun(runId, goal, opts);
+
+  // Team-flow path: dynamic, per-step orchestration. Default for non-workflow
+  // runs. Workflows continue to use the static template path so pre-validated
+  // sequences keep working unchanged.
+  if (!workflow) {
+    if (requiresApproval(opts, 'execute')) {
+      const run = state.runs.get(runId);
+      if (run) {
+        run.status = 'awaiting-approval';
+        appendScratchpad(runId, { persona: ORCHESTRA_PERSONA, kind: 'gate-pending', text: "Awaiting approval before team flow starts" });
+        appendAudit(runId, 'gate-pending', { phase: 'execute' });
+      }
+      try {
+        await waitForGate(runId, 'execute');
+        appendAudit(runId, 'gate-approved', { phase: 'execute' });
+      } catch (gateErr) {
+        appendAudit(runId, 'gate-rejected', { phase: 'execute', reason: gateErr.message });
+        return;
+      }
+    }
+    const teamExec = await runTeamFlow(runId, goal, opts);
+    if (teamExec.status !== 'done' || !teamExec.final) {
+      finishRun(runId, { status: 'failed', error: teamExec.error || 'team flow produced no output' });
+      return;
+    }
+    finishRun(runId, { status: 'done', final: teamExec.final });
+    return;
+  }
+
+  // Workflow (template) path — legacy static plan execution preserved.
+  let plan = planFromTemplate(runId, goal, workflow);
   if (!plan) {
     finishRun(runId, { status: 'failed', error: 'Planner produced no usable plan.' });
     return;
   }
 
-  // Phase 1b: critique the plan before executing (5.1)
-  // Workflows skip critique — they are pre-validated templates.
-  if (!workflow) {
+  const SKIP_CRITIQUE_PLAN_LEN = 2;
+  const planIsTrivial = !!plan && plan.length <= SKIP_CRITIQUE_PLAN_LEN;
+  if (!workflow && !planIsTrivial) {
     try {
       const planCritique = await critiquePlan(runId, goal, plan, opts);
       appendScratchpad(runId, {
@@ -1448,14 +1812,53 @@ async function runPipeline(runId, goal, opts = {}) {
   let attempt = 0;
   let exec = await executeRun(runId, goal, plan, null, opts);
 
-  while (exec.status === 'done' && exec.final && attempt < MAX_REVISIONS) {
-    const critique = await critiqueRun(runId, goal, exec.final, opts);
-    if (critique.severity !== 'critical' && critique.severity !== 'high') break;
-    attempt = bumpRunRevision(runId);
-    exec = await executeRun(runId, goal, plan, critique, opts);
+  // Preserve every successful draft so a failed revision (or server restart
+  // mid-revision) can never make the user's artifact disappear. We always
+  // ship the BEST draft we have, even if it had open critiques.
+  let bestDraft = exec.status === 'done' && exec.final ? { ...exec } : null;
+  if (bestDraft) {
+    appendScratchpad(runId, {
+      persona: ORCHESTRA_PERSONA,
+      kind: 'draft',
+      text: `Draft v${attempt} preserved (length=${bestDraft.final.length})`,
+    });
   }
 
-  if (exec.status === 'done' && exec.final) {
+  while (exec.status === 'done' && exec.final && attempt < MAX_REVISIONS) {
+    const critique = await critiqueRun(runId, goal, exec.final, opts);
+    // Only revise on CRITICAL — HIGH issues become disclaimers attached to
+    // the artifact, not a full re-execute. Revisions are expensive and have
+    // a real failure rate; protecting the user's artifact matters more.
+    if (critique.severity !== 'critical') break;
+    attempt = bumpRunRevision(runId);
+    const revised = await executeRun(runId, goal, plan, critique, opts);
+    if (revised.status === 'done' && revised.final) {
+      // Revision succeeded — promote to current. Keep prior draft in scratchpad.
+      bestDraft = { ...revised };
+      exec = revised;
+      appendScratchpad(runId, {
+        persona: ORCHESTRA_PERSONA,
+        kind: 'draft',
+        text: `Draft v${attempt} preserved (length=${revised.final.length})`,
+      });
+    } else {
+      // Revision failed — keep the prior best draft and stop revising.
+      appendScratchpad(runId, {
+        persona: ORCHESTRA_PERSONA,
+        kind: 'revision-fallback',
+        text: `Revision v${attempt} failed (${revised.error || 'no output'}); keeping draft v${attempt - 1}.`,
+      });
+      exec = bestDraft;
+      break;
+    }
+  }
+
+  // Skip the verify pass for short plans that already passed (or skipped)
+  // critique — the artifact is the synthesis of 1–2 specialist outputs that
+  // Orchestra already routed; a separate Sonnet round to "verify" mostly
+  // tells us "OK" while costing another 30–60s.
+  const skipVerify = planIsTrivial && attempt === 0;
+  if (exec.status === 'done' && exec.final && !skipVerify) {
     // Approval gate: verify phase
     if (requiresApproval(opts, 'verify')) {
       const run = state.runs.get(runId);
@@ -1477,11 +1880,27 @@ async function runPipeline(runId, goal, opts = {}) {
     if (!verdict.passed && attempt < MAX_REVISIONS) {
       attempt = bumpRunRevision(runId);
       const fixCritique = { text: `Verifier rejected: ${verdict.text}`, severity: 'high' };
-      exec = await executeRun(runId, goal, plan, fixCritique, opts);
-      if (exec.status === 'done' && exec.final) {
+      const verifyRevised = await executeRun(runId, goal, plan, fixCritique, opts);
+      if (verifyRevised.status === 'done' && verifyRevised.final) {
+        bestDraft = { ...verifyRevised };
+        exec = verifyRevised;
         await verifyRun(runId, goal, exec.final, opts);
+      } else {
+        // Verify-revision failed — fall back to the best draft we have.
+        appendScratchpad(runId, {
+          persona: ORCHESTRA_PERSONA,
+          kind: 'revision-fallback',
+          text: `Verify-revision failed (${verifyRevised.error || 'no output'}); shipping prior draft.`,
+        });
+        exec = bestDraft;
       }
     }
+  }
+
+  // Final safety net: if we have any preserved draft, never let exec go
+  // below it. Belt-and-suspenders against any path that could blank `exec`.
+  if (bestDraft && bestDraft.final && (!exec || !exec.final)) {
+    exec = bestDraft;
   }
 
   // Approval gate: final phase

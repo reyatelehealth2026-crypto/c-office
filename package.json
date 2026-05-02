@@ -9,7 +9,10 @@
     "dev": "node --watch server/index.js",
     "test": "node --test",
     "install-hooks": "node server/install-hooks.js install",
-    "uninstall-hooks": "node server/install-hooks.js uninstall"
+    "uninstall-hooks": "node server/install-hooks.js uninstall",
+    "tunnel": "node scripts/tunnel.js",
+    "tunnel:cloudflare": "npx -y cloudflared@latest tunnel --url http://127.0.0.1:7878",
+    "tunnel:localtunnel": "npx -y localtunnel --port 7878"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.0",
