@@ -106,6 +106,7 @@ const SendToOrchestra = () => {
       } else {
         setGoal('');
         setRuns(prev => [{ id: j.run_id, goal: goal.trim(), status: 'running', steps: [], startedAt: Date.now() }, ...prev]);
+        if (typeof window.openRunWindow === 'function') window.openRunWindow(j.run_id);
       }
     } finally { setBusy(false); }
   };
@@ -358,6 +359,11 @@ const TeamTimeline = () => {
             <button className="btn-ghost" style={{fontSize: 11, padding: '6px 10px'}}
               onClick={() => copy(run.goal, 'goal')}>
               {copiedKey === 'goal' ? '✓ copied' : '📋 goal'}
+            </button>
+            <button className="btn-ghost" style={{fontSize: 11, padding: '6px 10px'}}
+              onClick={() => typeof window.openRunWindow === 'function' && window.openRunWindow(run.id)}
+              title="Open this run in a floating chat window">
+              ↗ window
             </button>
             <a href={`/api/task/${run.id}/trace`} target="_blank" rel="noreferrer"
               style={{
