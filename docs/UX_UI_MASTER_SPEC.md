@@ -31,13 +31,21 @@ Implemented:
 - `public/page-mission-control.jsx` — full realtime event inspection page using existing `window.ACTIVITY`, `window.AGENTS`, and SSE-backed state
 - `public/index.html` — wired Mission Control CSS, JS, route, and sidebar override
 
-The page includes search, persona filter, event type pills, pause/resume visual stream, readable event cards, and an event inspector with JSON copy.
+### Phase 2 Notes Workspace — first pass shipped
+
+Implemented:
+
+- `public/ux-notes.css` — three-panel notes layout, work inbox, search/tags, composer, context inspector, provider mini cards, responsive rules
+- `public/page-notes-v2.jsx` — safe Notes override that reuses legacy `AgentPicker` and `NoteDetail` to preserve dispatch, Orchestra flow, note patch/delete, and image generation behavior
+- `public/index.html` — loaded Notes V2 CSS and JSX after the original notes file
+
+The Notes page now has left inbox/search, center note/chat detail, and right agent/provider context panel while keeping the existing functional logic intact.
 
 Next recommended pass:
 
-1. Convert Notes into a three-panel workspace.
-2. Add a reusable drawer primitive so persona/event/image inspectors can share one shell.
-3. Add grouped repeated events in Mission Control if feed noise becomes high.
+1. Redesign Tasks and Run Detail into a workflow surface.
+2. Add reusable timeline/step components.
+3. Add provider-unavailable error banners inside Notes composer if needed.
 
 ---
 
@@ -338,10 +346,10 @@ Use semantic tokens instead of hardcoded colors.
 | `ActivityFeedItem` | single readable event | shipped as Dashboard preview row and Mission Control event card |
 | `RunCard` | Orchestra run summary | shipped as Dashboard run row |
 | `RunTimeline` | delegation steps | pending |
-| `ProviderCard` | connection and provider readiness | shipped as Dashboard provider readiness row |
-| `NoteListItem` | note inbox row | pending |
-| `ChatMessage` | notes chat message | pending |
-| `Composer` | message input and provider/agent selector | pending |
+| `ProviderCard` | connection and provider readiness | shipped as Dashboard provider readiness row and Notes provider mini card |
+| `NoteListItem` | note inbox row | shipped as `UXNoteCard` |
+| `ChatMessage` | notes chat message | legacy reused in `NoteDetail` |
+| `Composer` | message input and provider/agent selector | legacy reused in `NoteDetail`, new inbox composer shipped |
 | `ImageTile` | generated/uploaded asset preview | pending |
 | `ProjectCard` | project summary | pending |
 | `TaskBoardColumn` | kanban column | pending |
@@ -810,11 +818,11 @@ Deliverables:
 
 ### Notes
 
-- [ ] Three-panel layout
-- [ ] Search and tags
-- [ ] Sticky composer
-- [ ] Better provider/agent selectors
-- [ ] Message states
+- [x] Three-panel layout
+- [x] Search and tags
+- [x] Sticky composer
+- [x] Better provider/agent selectors
+- [x] Message states
 - [ ] Error state for provider unavailable
 
 ### Tasks
