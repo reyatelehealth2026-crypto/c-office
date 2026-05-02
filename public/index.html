@@ -38,10 +38,11 @@
 <script type="text/babel" src="page-agents.jsx"></script>
 <script type="text/babel" src="page-shop.jsx"></script>
 <script type="text/babel" src="page-dashboard.jsx"></script>
-<script type="text/babel" src="page-detail.jsx"></script>
-<script type="text/babel" src="page-memory.jsx"></script>
+<script type="text/babel" src="page-detail.jsx?v=20260502a"></script>
+<script type="text/babel" src="page-memory.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-misc.jsx"></script>
 <script type="text/babel" src="page-notes.jsx"></script>
+<script type="text/babel" src="run-window.jsx"></script>
 
 <script type="text/babel">
 const App = () => {
@@ -81,6 +82,7 @@ const App = () => {
         {page === 'settings' && <SettingsPage/>}
         {page === 'notes' && <NotesPage onOpenAgent={openAgent}/>}
       </main>
+      <RunDock/>
     </div>
   );
 };
