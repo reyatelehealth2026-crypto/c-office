@@ -1,5 +1,6 @@
 import { bus } from '../state.js';
 import { notesBus } from '../runner/notes.js';
+import { statusSnapshot } from './auth.js';
 
 const HEARTBEAT_MS = 25_000;
 const EVENT_TYPES = [
@@ -39,6 +40,13 @@ export default function streamRoute(req, res) {
   }
   const notesHandler = (payload) => send('notes', payload);
   notesBus.on('change', notesHandler);
+
+  // Push current auth status immediately on connect so the dashboard's
+  // Gateway & Provider Health panel reflects real state instead of "disconnected"
+  // until the next mutation event.
+  statusSnapshot()
+    .then((snap) => send('auth.status', snap))
+    .catch(() => { /* best-effort initial push */ });
 
   const hb = setInterval(() => res.write(`: hb\n\n`), HEARTBEAT_MS);
 

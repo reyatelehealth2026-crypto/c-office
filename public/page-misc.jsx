@@ -1,4 +1,6 @@
 /* ===== TASKS / OPERATIONS BOARD ===== */
+const AgentDot = window.AgentDot;
+
 const TasksPage = ({ onOpenAgent }) => {
   const [filter, setFilter] = React.useState('ALL');
   const statuses = ['ALL', 'running', 'done', 'failed'];
@@ -499,8 +501,29 @@ const Switch = ({ value, onChange }) => (
 const DynamicTasksPage = ({ onOpenAgent }) => {
   window.useCOfficeRefresh?.();
   const board = window.TASK_BOARD || { statuses: ['backlog', 'running', 'review', 'done'], columns: {}, tasks: [] };
-  const [draft, setDraft] = React.useState({ title: '', agentId: AGENTS[0]?.id || '', provider: window.PROVIDERS?.default || 'claude' });
+  const [draft, setDraft] = React.useState({ title: '', agentId: (window.AGENTS || [])[0]?.id || '', provider: window.PROVIDERS?.default || 'claude' });
   const [busy, setBusy] = React.useState(false);
+  const [runCancelBusy, setRunCancelBusy] = React.useState({});
+
+  const activeOrchestraRuns = (window.RUNS || []).filter(
+    (r) => r && (r.status === 'running' || r.status === 'awaiting-approval'),
+  );
+
+  const cancelOrchestraRun = async (run) => {
+    const id = run?.id;
+    if (!id || runCancelBusy[id] || run.cancelRequested) return;
+    if (!window.confirm('ยกเลิกรัน Orchestra นี้หรือไม่?\nขั้นที่กำลังทำอยู่จะเล่นจบก่อน แล้วจะหยุดไม่ทำขั้นถัดไป')) return;
+    setRunCancelBusy((b) => ({ ...b, [id]: true }));
+    try {
+      await fetch(`/api/task/${id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'user-cancelled' }),
+      });
+    } finally {
+      setTimeout(() => setRunCancelBusy((b) => { const n = { ...b }; delete n[id]; return n; }), 1000);
+    }
+  };
 
   const create = async () => {
     if (!draft.title.trim()) return;
@@ -536,14 +559,52 @@ const DynamicTasksPage = ({ onOpenAgent }) => {
       <div className="topbar">
         <div>
           <h1>Operations <span className="accent">Board</span></h1>
-          <div className="sub">{(Array.isArray(board.tasks) ? board.tasks.length : 0)} work cards · {TASKS.filter(t=>t.status==='running').length} active</div>
+          <div className="sub">{(Array.isArray(board.tasks) ? board.tasks.length : 0)} work cards · {(window.TASKS || []).filter(t=>t.status==='running').length} CLI tasks active</div>
         </div>
       </div>
+
+      {activeOrchestraRuns.length > 0 && (
+        <div className="panel" style={{ marginBottom: 14, padding: '12px 16px' }}>
+          <div className="panel-head" style={{ marginBottom: 10 }}>
+            <h3>Orchestrator runs</h3>
+            <div className="right mono-s">ส่งจาก Dashboard · ยกเลิก = หยุดหลังขั้นปัจจุบัน</div>
+          </div>
+          <div className="stack" style={{ gap: 10 }}>
+            {activeOrchestraRuns.map((r) => (
+              <div
+                key={r.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                  padding: '10px 12px', background: 'var(--bg-2)', borderRadius: 8, border: '1px solid var(--border)',
+                }}
+              >
+                <span style={{ color: r.status === 'awaiting-approval' ? 'var(--cyan)' : 'var(--gold)' }}>●</span>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{(r.goal || r.id || '').slice(0, 120)}{(r.goal || '').length > 120 ? '…' : ''}</div>
+                  <div className="mono-s" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                    {r.id} · {r.phase || r.status}
+                    {r.cancelRequested ? ' · คำขอยกเลิกแล้ว' : ''}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={!!runCancelBusy[r.id] || r.cancelRequested}
+                  style={{ fontSize: 12, color: 'var(--red)' }}
+                  onClick={() => cancelOrchestraRun(r)}
+                >
+                  {r.cancelRequested ? 'กำลังยกเลิก…' : runCancelBusy[r.id] ? '…' : 'ยกเลิกรัน'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="task-board-compose">
         <input value={draft.title} onChange={(e)=>setDraft({...draft, title:e.target.value})} placeholder="Create work card"/>
         <select value={draft.agentId} onChange={(e)=>setDraft({...draft, agentId:e.target.value})}>
-          {(AGENTS || []).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+          {(window.AGENTS || []).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
         </select>
         <select value={draft.provider} onChange={(e)=>setDraft({...draft, provider:e.target.value})}>
           {((window.PROVIDERS?.providers || []).map((p)=>p.name).concat([draft.provider])).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).map((provider) => (
@@ -562,7 +623,7 @@ const DynamicTasksPage = ({ onOpenAgent }) => {
             </div>
             <div className="task-board-stack">
               {(board.columns?.[status] || []).map((task) => {
-                const agent = AGENTS.find((a) => a.id === task.agentId || a.id === task.personaId);
+                const agent = (window.AGENTS || []).find((a) => a.id === task.agentId || a.id === task.personaId);
                 const live = String(task.id || '').startsWith('live:');
                 return (
                   <article className="task-board-card" key={task.id}>
@@ -571,6 +632,11 @@ const DynamicTasksPage = ({ onOpenAgent }) => {
                       <span>{task.runStatus || status}</span>
                     </div>
                     <p>{task.description || (live ? 'Live operation from runtime events' : 'Manual operations card')}</p>
+                    {live && (
+                      <p className="mono-s" style={{ fontSize: 10, color: 'var(--text-4)', marginTop: 4 }}>
+                        งานย่อยจาก Claude Code session — ควบคุมได้ที่เทอร์มินัล ไม่ใช่ปุ่มยกเลิกที่นี่
+                      </p>
+                    )}
                     <div className="row" style={{gap: 8}}>
                       <AgentDot agent={agent} size={24}/>
                       <button className="task-agent-link" onClick={() => agent && onOpenAgent(agent.id)}>{agent?.name || task.agentId || 'Unassigned'}</button>

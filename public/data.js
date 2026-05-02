@@ -99,6 +99,18 @@
   }
   window.refreshNotes = refreshNotes;
 
+  async function refreshAuthStatus() {
+    try {
+      const r = await fetch('/api/auth/status');
+      if (r.ok) {
+        window.AUTH_STATUS = await r.json();
+        stateVersion++;
+        fire();
+      }
+    } catch (e) { /* SSE will deliver an updated snapshot later */ }
+  }
+  window.refreshAuthStatus = refreshAuthStatus;
+
   async function refreshProviders() {
     try {
       const r = await fetch('/api/notes/providers');
@@ -132,6 +144,7 @@
     fetchMemory();
     refreshNotes();
     refreshProviders();
+    refreshAuthStatus();
     if (es) try { es.close(); } catch {}
     es = new EventSource('/api/stream');
     window._cofficeStream = es;             // exposed so live UI (note chat indicator) can listen too

@@ -118,6 +118,19 @@ If you add a new hook event to listen on, append it to the `EVENTS` array — un
 
 The CLI surface is independent: `.claude/agents/<persona>.md` files (orchestra, nana, luna, emi to start) make the same personas usable via the Task tool inside any Claude Code session — existing hook events already render them in the dashboard with no extra wiring. **Slug ↔ persona id ↔ display name** are three different things; `mapPersona()` reconciles them, but when authoring system prompts and `delegate` enums use **persona ids** (`nyx`, `lumen`, `echo`, …).
 
+### Pipeline phases & timeouts (`server/agents/runner.js`)
+
+Each run flows through `analyze → plan → plan-critique → execute → critique → verify`. Key invariants:
+
+- **Phase 0 (analyze)** is skipped when `runOrchestrator` is invoked with `existingRunId` — that means the user already supplied follow-up feedback, and re-asking the clarification question would just loop. The `ANALYZE_SYSTEM` prompt is biased hard toward `CLEAR`; only genuinely missing concrete facts (no subject, no destination, no language) trigger a clarifying question. Style/tone/length ambiguity is *not* a reason to ask.
+- **Per-phase wall-clock timeouts** live in `PHASE_TIMEOUTS_MS` (`plan: 60s, execute: 600s, critique: 90s, verify: 60s`). The claude path is wrapped with `withPhaseTimeout()`; non-claude providers (`codex`, `gemini`) are wrapped with the equivalent `Promise.race` — *both* must time out, otherwise an unresponsive provider hangs the run forever.
+- **Tool-using personas** get `maxTurns = 30` and the prompt includes an explicit "TOOL BUDGET: at most 6 tool calls, then STOP and write final" instruction. On `error_max_turns` we keep any accumulated assistant text; if there's still nothing, we fire one **synthesis turn** (no tools, `maxTurns=1`) to force a final answer instead of failing the step.
+- **Echo (image) step** distills `prior` (research/writing outputs) + `step.instruction` into a focused image prompt via a Haiku 4.5 composer call before invoking `generateImage()`. The composed prompt is logged to scratchpad as `[image-prompt]` so it shows up in the run trace. Falls back to direct concat if the composer fails.
+
+### Image Studio Look Lock (`public/page-images.jsx`)
+
+Image generation has three top-level controls — `IMAGE_STYLES` (Photorealistic / Cinematic / Anime / Manga / 3D / Pixel / Oil / Watercolor / Concept / Flat), `ASPECT_RATIOS` (1:1, 4:3, 3:4, 16:9, 9:16, 21:9), and `RESOLUTIONS` (1K/2K/4K/8K). At send time `decoratePrompt()` appends the chosen modifiers after a `--- LOOK LOCK ---` marker, and `generate()` also passes `size`/`quality` to `/api/images/generate`. Server-side `buildImagePrompt()` recognises the marker and passes the prompt through verbatim instead of wrapping it in the legacy "vivid fantasy game illustration" preamble that used to override user style.
+
 ## OAuth credential store
 
 There is **no `ANTHROPIC_API_KEY`, no `REPLICATE_API_TOKEN` env var**. Credentials live in `~/.c-office/credentials.json`, AES-256-GCM encrypted with a per-machine key derived from `os.hostname()` + a one-time salt under `~/.c-office/.salt`. Same trust model as Claude Code's own `~/.claude/.credentials.json` — defeats casual `cat`, not a determined local attacker.
@@ -130,7 +143,7 @@ Auth surface (`server/auth/`, `server/api/auth.js`):
 | Google (Gemini Imagen) | Full PKCE OAuth, loopback redirect to `/auth/google/callback` | First requires a `client_id` from Google Cloud Console — pasted in Settings (Desktop or Web client; PKCE means no secret needed). |
 | Replicate, OpenAI | Settings paste-token only | No public third-party OAuth. |
 
-The Settings → Connections panel shows live status per provider via the `'auth.status'` SSE event. The dashboard's "Send to Orchestra" button is gated on Anthropic being connected.
+The Settings → Connections panel shows live status per provider via the `'auth.status'` SSE event. **On SSE connect** `server/api/stream.js` immediately pushes the current `statusSnapshot()` so newly-loaded clients reflect real state instead of "disconnected"; on bootstrap `public/data.js` also fetches `/api/auth/status` once for first-paint correctness. The dashboard's "Send to Orchestra" button is gated on Anthropic being connected.
 
 When adding a new provider:
 1. Drop a module in `server/auth/<provider>.js` exposing `getXAuth()`, `statusOf()`, optionally `startAuth/handleCallback` for OAuth.

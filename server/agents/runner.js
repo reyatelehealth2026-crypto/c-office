@@ -212,12 +212,18 @@ function recalledSkillsBlock(skills) {
   return `\n\nPrior similar runs (from skill library — adapt only what fits):\n${lines.join('\n')}`;
 }
 
-const ANALYZE_SYSTEM = `You are Orchestra, the boss. Analyze the user's goal. 
-Is it clear enough to execute a multi-agent plan?
-If you have enough information, reply with exactly "CLEAR".
-If you are missing crucial details or the goal is too vague, reply with a concise question to the user.
+const ANALYZE_SYSTEM = `You are Orchestra, the boss. Decide if the user's goal can be acted on
+right now. Default STRONGLY to action — your specialists can fill reasonable
+gaps with sensible defaults.
 
-Keep questions brief and professional. Do not write a plan yet.`;
+Reply with exactly "CLEAR" UNLESS the goal is genuinely impossible to start
+without one specific missing fact (e.g. no subject for a profile, no
+language for a translation, no destination for a delivery). Surface
+phrasing, informality, brevity, or ambiguity about style / tone / length /
+format are NOT reasons to ask — pick a sensible default and proceed.
+
+When in doubt, reply "CLEAR". Only if execution is truly blocked, reply
+with ONE concise question (no preface, no plan).`;
 
 async function analyzeRun(runId, goal, opts = {}) {
   setRunPhase(runId, 'plan'); // Reuse plan phase for analysis
@@ -766,11 +772,67 @@ async function executeStep(runId, goal, step, idx, prior, opts = {}) {
   // Echo (Emi) is an image persona, not an LLM persona. Calling query()
   // would hang because persona.model is null. Route to the image adapter
   // (Nano Banana 2) directly and write the URL into result.image.
+  //
+  // Earlier steps (research / writing) often contain the actual visual
+  // subject — we used to drop that context and send only step.instruction,
+  // which is why generated images were generic. Now we (a) distill priors
+  // + instruction into a focused visual prompt via a cheap LLM call, and
+  // (b) fall back to a direct concat if the distillation fails.
   if (personaId === 'echo') {
     let imageOut = null;
     let imageError = '';
+    let imagePrompt = step.instruction;
+    if (prior.length > 0) {
+      const priorText = prior
+        .map((p) => `[${p.persona}]\n${p.text}`)
+        .join('\n\n')
+        .slice(0, 6000);
+      const composerSystem = `You compose vivid image-generation prompts for diffusion models.
+Read the research / writing context and the assignment, then output ONE
+self-contained English image prompt (~80-160 words). Include subject,
+setting, lighting, composition, mood, and any concrete product / brand /
+visual cue that appeared in the context. No preface, no JSON, no quotes —
+just the prompt text.`;
+      const composerPrompt = `Assignment: ${step.instruction}\n\nContext from earlier steps:\n${priorText}\n\nWrite the image prompt now.`;
+      try {
+        let composed = '';
+        for await (const message of callOrchLLM({
+          phase: 'execute',
+          prompt: composerPrompt,
+          systemPrompt: composerSystem,
+          model: 'claude-haiku-4-5-20251001',
+          opts,
+        })) {
+          if (message.type === 'assistant') composed += textFromAssistant(message) + '\n';
+          if (message.type === 'result') {
+            recordPhaseCost(runId, 'execute', 'claude-haiku-4-5-20251001', message.usage);
+            recordUsage({
+              model: 'claude-haiku-4-5-20251001',
+              usage: message.usage,
+              dedupeKey: `usage:run:${runId}:${toolUseId}:imgcompose:${message.uuid}`,
+              sessionId: runId,
+            });
+          }
+        }
+        const trimmed = composed.trim();
+        if (trimmed.length > 40) {
+          imagePrompt = trimmed;
+        } else {
+          // Composer returned nothing useful — fall back to direct concat.
+          imagePrompt = `${step.instruction}\n\nVisualize using these details from earlier research:\n${priorText.slice(0, 2000)}`;
+        }
+      } catch (composeErr) {
+        // LLM unreachable — use direct concat so the image still reflects priors.
+        imagePrompt = `${step.instruction}\n\nVisualize using these details from earlier research:\n${priorText.slice(0, 2000)}`;
+      }
+    }
+    imagePrompt = imagePrompt.slice(0, 4000);
+    appendScratchpad(runId, {
+      persona: personaId,
+      kind: 'image-prompt',
+      text: imagePrompt,
+    });
     try {
-      const imagePrompt = `${step.instruction}${priorBlock ? '\n\n(Context: based on earlier persona outputs)' : ''}`.slice(0, 4000);
       imageOut = await generateImage({ prompt: imagePrompt, persona: `${runId}-echo-${idx}` });
     } catch (err) {
       imageError = err?.message || String(err);
@@ -822,6 +884,11 @@ Original goal: ${goal}
 
 Your assignment: ${step.instruction}${priorBlock}
 
+TOOL BUDGET (hard limit): you may make at most 6 tool calls total. After
+the 6th tool call — or sooner if you have enough — STOP calling tools and
+write your final answer as a plain assistant text message. Do not exceed
+the budget; partial information is acceptable.
+
 FORMATTING REQUIREMENTS:
 - Use clear Markdown headers (##, ###) for sections.
 - Use bullet points or numbered lists for details.
@@ -840,17 +907,40 @@ Return the artifact only — no preface or conversational filler.`;
 
   // Codex / Gemini route through providers-llm.js (no SDK tools support).
   if (provider === 'codex' || provider === 'gemini') {
-    const r = await callLLM({ provider, systemPrompt, prompt, model });
+    const ms = PHASE_TIMEOUTS_MS.execute;
+    const call = callLLM({ provider, systemPrompt, prompt, model });
+    let r;
+    if (ms && ms > 0) {
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new PhaseTimeoutError('execute', ms)), ms);
+      });
+      try {
+        r = await Promise.race([call, timeout]);
+      } catch (err) {
+        if (err instanceof PhaseTimeoutError) {
+          stepError = err.message;
+          r = { ok: false };
+        } else {
+          throw err;
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    } else {
+      r = await call;
+    }
     if (r.ok) outText = r.text;
-    else stepError = r.error + (r.hint ? ` (${r.hint})` : '');
+    else if (!stepError) stepError = (r.error || '') + (r.hint ? ` (${r.hint})` : '');
   } else {
     // Claude path — SDK with tools support. Personas with a non-empty
     // toolsAllowed list need multiple turns (call tool → read result →
-    // write text); maxTurns=1 produced error_max_turns failures.
+    // write text). Research personas (WebSearch, WebFetch) often need
+    // several search iterations + a synthesis turn, so we budget 20.
     const personaTools = Array.isArray(persona.toolsAllowed) ? persona.toolsAllowed
       : Array.isArray(persona.tools) ? persona.tools
       : [];
-    const maxTurns = personaTools.length > 0 ? 6 : 1;
+    const maxTurns = personaTools.length > 0 ? 30 : 1;
     try {
       const sdkOpts = {
         model,
@@ -862,20 +952,59 @@ Return the artifact only — no preface or conversational filler.`;
         sdkOpts.tools = personaTools;
         sdkOpts.allowedTools = personaTools;
       }
+      let hitMaxTurns = false;
       for await (const message of withPhaseTimeout(query({ prompt, options: sdkOpts }), 'execute')) {
-      if (message.type === 'assistant') outText += textFromAssistant(message) + '\n';
-      if (message.type === 'result') {
-        recordPhaseCost(runId, 'execute', model, message.usage);
-        recordUsage({
-          model,
-          usage: message.usage,
-          dedupeKey: `usage:run:${runId}:${toolUseId}:${message.uuid}`,
-          sessionId: runId,
-        });
-        if (message.is_error || message.subtype !== 'success') {
-          stepError = (message.errors || []).join('\n') || message.subtype || 'step failed';
+        if (message.type === 'assistant') {
+          outText += textFromAssistant(message) + '\n';
+        }
+        if (message.type === 'result') {
+          recordPhaseCost(runId, 'execute', model, message.usage);
+          recordUsage({
+            model,
+            usage: message.usage,
+            dedupeKey: `usage:run:${runId}:${toolUseId}:${message.uuid}`,
+            sessionId: runId,
+          });
+          if (message.is_error || message.subtype !== 'success') {
+            if (message.subtype === 'error_max_turns') {
+              hitMaxTurns = true;
+            } else {
+              stepError = (message.errors || []).join('\n') || message.subtype || 'step failed';
+            }
+          }
         }
       }
+      // If we hit max turns BUT the agent produced enough accumulated text,
+      // accept the partial result. Only fail if we got nothing usable.
+      if (hitMaxTurns && !stepError) {
+        if (outText.trim().length < 100) {
+          // Force a final synthesis turn with no tools — agent must reply now.
+          try {
+            const synthPrompt = `You exhausted your tool budget before producing a final answer. ` +
+              `Based on whatever you have so far, write your best final answer as plain text now. ` +
+              `No more tool calls. If you have nothing, say so explicitly.\n\nOriginal assignment: ${step.instruction}${priorBlock}`;
+            for await (const m2 of withPhaseTimeout(query({
+              prompt: synthPrompt,
+              options: { model, maxTurns: 1, systemPrompt, permissionMode: 'dontAsk' },
+            }), 'execute')) {
+              if (m2.type === 'assistant') outText += textFromAssistant(m2) + '\n';
+              if (m2.type === 'result') {
+                recordPhaseCost(runId, 'execute', model, m2.usage);
+                recordUsage({
+                  model,
+                  usage: m2.usage,
+                  dedupeKey: `usage:run:${runId}:${toolUseId}:synth:${m2.uuid}`,
+                  sessionId: runId,
+                });
+              }
+            }
+          } catch (synthErr) {
+            stepError = `error_max_turns; synthesis failed: ${synthErr.message || synthErr}`;
+          }
+          if (!stepError && outText.trim().length < 20) {
+            stepError = 'error_max_turns (no usable output even after synthesis)';
+          }
+        }
       }
     } catch (error) {
       stepError = error.message || String(error);
@@ -934,7 +1063,26 @@ async function* callOrchLLM({ phase, prompt, systemPrompt, model, opts }) {
       },
     }), phase);
   } else {
-    const r = await callLLM({ provider, systemPrompt: finalSystemPrompt, prompt, model: m });
+    // Non-claude providers go through callLLM() which has no internal
+    // streaming. Race against the same per-phase wall-clock budget that
+    // withPhaseTimeout enforces on the claude path, otherwise an
+    // unresponsive provider hangs the pipeline indefinitely.
+    const ms = PHASE_TIMEOUTS_MS[phase];
+    const call = callLLM({ provider, systemPrompt: finalSystemPrompt, prompt, model: m });
+    let r;
+    if (ms && ms > 0) {
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new PhaseTimeoutError(phase, ms)), ms);
+      });
+      try {
+        r = await Promise.race([call, timeout]);
+      } finally {
+        clearTimeout(timer);
+      }
+    } else {
+      r = await call;
+    }
     if (r.ok) {
       yield { type: 'assistant', message: { content: [{ type: 'text', text: r.text }] } };
       yield { type: 'result', usage: { input_tokens: 0, output_tokens: 0 }, uuid: crypto.randomBytes(4).toString('hex'), subtype: 'success' };
@@ -1194,8 +1342,12 @@ function requiresApproval(opts, phase) {
 }
 
 async function runPipeline(runId, goal, opts = {}) {
-  // Phase 0: Initial Analysis / Clarification
-  const analysis = await analyzeRun(runId, goal, opts);
+  // Phase 0: Initial Analysis / Clarification.
+  // Skip when the user has already supplied follow-up feedback — at that
+  // point the goal has been augmented with the user's answer and re-asking
+  // would just re-loop the same question. Treat resumed runs (existingRunId)
+  // as already-clarified.
+  const analysis = opts.existingRunId ? 'CLEAR' : await analyzeRun(runId, goal, opts);
   if (analysis !== 'CLEAR') {
     appendScratchpad(runId, {
       persona: ORCHESTRA_PERSONA,

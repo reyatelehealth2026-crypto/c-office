@@ -15,6 +15,38 @@ const IMAGE_PROMPT_PRESETS = [
   },
 ];
 
+// Top-level visual style — applied in EITHER mode. The `modifier` is appended
+// to the prompt before sending. Order matters: photo realism first since it
+// is the most-requested option but was missing from the original UI.
+const IMAGE_STYLES = [
+  { id: 'photorealistic', label: 'Photorealistic (เหมือนภาพถ่ายจริง)', modifier: 'photorealistic, hyper-detailed, professional photography, natural lighting, realistic skin texture, depth of field, shot on full-frame DSLR, no illustration look' },
+  { id: 'cinematic',      label: 'Cinematic Film',                       modifier: 'cinematic still frame, movie production lighting, anamorphic lens, color graded, dramatic atmosphere, film grain' },
+  { id: 'anime',          label: 'Anime / JRPG',                         modifier: 'high-quality anime illustration, vibrant cel shading, expressive linework, JRPG character art style' },
+  { id: 'manga',          label: 'Manga (ขาว-ดำ)',                        modifier: 'black and white manga panel, screen-tone shading, dynamic ink lines, Japanese comic style' },
+  { id: '3d-render',      label: '3D Render (Unreal-style)',              modifier: 'modern 3D game render, Unreal Engine 5 lookdev, octane render, ray-traced lighting, subsurface scattering' },
+  { id: 'pixel',          label: 'Pixel Art (16/32-bit)',                 modifier: 'detailed 32-bit pixel art, retro game sprite aesthetic, sharp limited palette' },
+  { id: 'oil-painting',   label: 'Oil Painting (คลาสสิก)',                modifier: 'classical oil painting, visible brushstrokes, rich pigments, museum-quality canvas texture' },
+  { id: 'watercolor',     label: 'Watercolor (สีน้ำ)',                    modifier: 'soft watercolor painting, paper texture, gentle bleeding pigments, light pastel tones' },
+  { id: 'concept-art',    label: 'Concept Art',                           modifier: 'professional concept art, matte painting, atmospheric perspective, environment design' },
+  { id: 'flat',           label: 'Flat Vector / Illustration',            modifier: 'clean flat vector illustration, minimal shading, geometric shapes, modern editorial style' },
+];
+
+const ASPECT_RATIOS = [
+  { id: '1:1',  label: 'Square 1:1',      size: '1024x1024' },
+  { id: '4:3',  label: 'Standard 4:3',    size: '1408x1024' },
+  { id: '3:4',  label: 'Portrait 3:4',    size: '1024x1408' },
+  { id: '16:9', label: 'Widescreen 16:9', size: '1792x1024' },
+  { id: '9:16', label: 'Vertical 9:16',   size: '1024x1792' },
+  { id: '21:9', label: 'Cinematic 21:9',  size: '2048x880'  },
+];
+
+const RESOLUTIONS = [
+  { id: '1k', label: '1K (fast, draft)',  modifier: 'high quality 1K resolution',                                                                       quality: 'medium' },
+  { id: '2k', label: '2K (balanced)',     modifier: '2K resolution, sharp details',                                                                      quality: 'high'   },
+  { id: '4k', label: '4K (high detail)',  modifier: '4K ultra-sharp resolution, fine detail',                                                            quality: 'high'   },
+  { id: '8k', label: '8K (max detail)',   modifier: '8K resolution, masterwork-level detail, every fine texture rendered crisply',                       quality: 'high'   },
+];
+
 const ImageStudioPage = () => {
   window.useCOfficeRefresh?.();
   const [status, setStatus] = React.useState(null);
@@ -26,6 +58,11 @@ const ImageStudioPage = () => {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [selected, setSelected] = React.useState(null);
+
+  // Top-level look-lock controls — apply to both general & character modes
+  const [imgStyle, setImgStyle] = React.useState(IMAGE_STYLES[0].id);
+  const [aspectRatio, setAspectRatio] = React.useState(ASPECT_RATIOS[0].id);
+  const [resolution, setResolution] = React.useState('4k');
 
   // Character Builder State
   const [charGender, setCharGender] = React.useState('หญิง');
@@ -46,6 +83,8 @@ const ImageStudioPage = () => {
       '3D Render': 'modern 3D game render, Unreal Engine 5 style, octane render, cinematic'
     };
 
+    const resMod = (RESOLUTIONS.find(r => r.id === resolution) || RESOLUTIONS[2]).modifier;
+    const aspect = ASPECT_RATIOS.find(a => a.id === aspectRatio) || ASPECT_RATIOS[0];
     const promptText = [
       `A highly detailed ${styleMap[charStyle] || charStyle} character concept illustration.`,
       `Gender: ${charGender}.`,
@@ -54,9 +93,10 @@ const ImageStudioPage = () => {
       `Weapon/Equipment: ${charWeapon}.`,
       `Signature theme color: ${charColor}.`,
       `Pose: heroic professional stance, expressive facial features, full body composition, centered portrait.`,
-      `Quality: masterwork, crisp lines, vivid accents, game-ready art, 8k resolution.`
+      `Aspect ratio: ${aspect.id} (${aspect.label}).`,
+      `Quality: masterwork, crisp lines, vivid accents, game-ready art, ${resMod}.`
     ].join(' ');
-    
+
     setPrompt(promptText);
   };
 
@@ -110,20 +150,40 @@ const ImageStudioPage = () => {
     if (mode === 'character' && !agentId && agents[0]?.id) setAgentId(agents[0].id);
   }, [mode, agentId, agents.length]);
 
+  const decoratePrompt = (raw) => {
+    const style = IMAGE_STYLES.find(s => s.id === imgStyle);
+    const aspect = ASPECT_RATIOS.find(a => a.id === aspectRatio);
+    const res = RESOLUTIONS.find(r => r.id === resolution);
+    const tail = [
+      style && `Style: ${style.modifier}.`,
+      aspect && `Aspect ratio: ${aspect.id}.`,
+      res && `Quality: ${res.modifier}.`,
+    ].filter(Boolean).join(' ');
+    if (!tail) return raw;
+    return `${raw}\n\n--- LOOK LOCK ---\n${tail}`;
+  };
+
   const generate = async () => {
-    const bodyPrompt = prompt.trim();
-    if (!bodyPrompt || busy) return;
+    const bodyPromptRaw = prompt.trim();
+    if (!bodyPromptRaw || busy) return;
     setBusy(true);
     setError('');
     try {
+      const aspect = ASPECT_RATIOS.find(a => a.id === aspectRatio) || ASPECT_RATIOS[0];
+      const res = RESOLUTIONS.find(r => r.id === resolution) || RESOLUTIONS[2];
       const r = await fetch('/api/images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: bodyPrompt,
+          prompt: decoratePrompt(bodyPromptRaw),
           provider,
           mode,
           agentId: mode === 'character' ? agentId : undefined,
+          size: aspect.size,
+          quality: res.quality,
+          style: imgStyle,
+          aspectRatio: aspect.id,
+          resolution: res.id,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -170,6 +230,30 @@ const ImageStudioPage = () => {
           <div className="image-mode-row">
             <button className={'btn ' + (mode === 'general' ? 'primary' : '')} onClick={() => setMode('general')}>General Asset</button>
             <button className={'btn ' + (mode === 'character' ? 'primary' : '')} onClick={() => setMode('character')}>Staff Avatar</button>
+          </div>
+
+          <div style={{ background:'rgba(255,191,0,0.05)', border:'1px solid rgba(255,191,0,0.2)', borderRadius:8, padding:'10px 14px', marginBottom:12 }}>
+            <div style={{ fontSize:12, fontWeight:600, color:'var(--gold)', marginBottom:8 }}>🔒 Look Lock — กำหนดสไตล์ / อัตราส่วน / ความละเอียด</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+              <label className="image-field">
+                <span style={{ fontSize:11 }}>สไตล์ภาพ</span>
+                <select value={imgStyle} onChange={(e) => setImgStyle(e.target.value)}>
+                  {IMAGE_STYLES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </label>
+              <label className="image-field">
+                <span style={{ fontSize:11 }}>อัตราส่วน</span>
+                <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
+                  {ASPECT_RATIOS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                </select>
+              </label>
+              <label className="image-field">
+                <span style={{ fontSize:11 }}>ความละเอียด</span>
+                <select value={resolution} onChange={(e) => setResolution(e.target.value)}>
+                  {RESOLUTIONS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                </select>
+              </label>
+            </div>
           </div>
 
           <label className="image-field">

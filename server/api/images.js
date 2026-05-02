@@ -116,13 +116,16 @@ async function readImageMetadata(filePath, stat) {
 
 function buildImagePrompt({ prompt, note }) {
   const source = prompt || note?.body || note?.title || '';
+  // Pass through any prompt that already carries an explicit Look Lock from
+  // the UI, or looks like a long professional prompt. We only wrap short,
+  // unstyled freetext requests so the model has a coherent direction.
+  if (source.includes('--- LOOK LOCK ---')) return source;
   if (source.length > 100 && (source.includes('highly detailed') || source.includes('concept illustration'))) {
-    return source; // It's likely a professional prompt from the builder
+    return source;
   }
   return [
-    'Create a polished game-ready raster image from this user request.',
-    'Style: vivid fantasy game illustration, clean composition, high detail, no watermark.',
-    'Avoid: broken anatomy, unreadable UI text, extra logos, signatures, low-resolution artifacts.',
+    'Create a polished raster image from this user request.',
+    'Avoid: broken anatomy, unreadable UI text, extra logos, signatures, low-resolution artifacts, watermarks.',
     '',
     `User request: ${clip(source, 1800)}`,
   ].join('\n');

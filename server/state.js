@@ -3,7 +3,7 @@ import { Dedupe, RingBuffer } from './util/dedupe.js';
 import { listAgentsSync, getAgentSync, resolveAgentIdSync, mapAgentSync } from './store/agents.js';
 import { getTaskBoardSync } from './store/task-board.js';
 import { getThemeState, listThemes } from './store/theme.js';
-import { persistRun, findStaleRunningRuns } from './store/runs.js';
+import { persistRun, findStaleRunningRuns, listRunIds, loadRun } from './store/runs.js';
 import { costUsd } from './mapping/pricing.js';
 
 export const bus = new EventEmitter();
@@ -105,12 +105,18 @@ export function viewRun(run) {
 
 function emitRun(run) {
   bus.emit('run', viewRun(run));
-  try { persistRun(run); } catch { /* best effort */ }
+  persistRun(run);
 }
 
 // Boot-time sweep: mark any "running" runs from a prior process as failed
-// because we cannot resume them in Phase 1. Resume is Phase 2.
+// (resume is not implemented yet — reload persisted snapshots then fail stale).
 export function sweepStaleRuns() {
+  const allIds = listRunIds();
+  for (const id of allIds) {
+    const r = loadRun(id);
+    if (r) state.runs.set(id, r);
+  }
+
   let swept = 0;
   for (const stale of findStaleRunningRuns()) {
     stale.status = 'failed';
