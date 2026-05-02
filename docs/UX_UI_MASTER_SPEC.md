@@ -4,6 +4,26 @@
 
 ---
 
+## 0. Implementation Progress
+
+### Phase 1 Foundation — first pass shipped
+
+Implemented in this pass:
+
+- `public/ux-system.css` — UX design token layer, app shell polish, topbar styles, status chips, empty/error/skeleton primitives, responsive bottom-nav behavior
+- `public/ux-components.jsx` — shared dependency-free React primitives: `UXTopbar`, `UXStatusChip`, `UXEmptyState`, `UXErrorState`, `UXSkeleton`
+- `public/index.html` — loaded the UX layer after legacy CSS and inserted `UXTopbar` into the global app shell
+
+The legacy page components remain intact. This pass intentionally upgrades the shell and shared visual language first, without migrating the no-build frontend or rewriting every page at once.
+
+Next recommended pass:
+
+1. Redesign Dashboard cards and live feed using the UX primitives.
+2. Add Mission Control as a first-class visible route.
+3. Convert Notes into a three-panel workspace.
+
+---
+
 ## 1. Product Vision
 
 C-Office should feel like a premium **AI Command Center** for local-first agent work.
@@ -272,24 +292,24 @@ Use semantic tokens instead of hardcoded colors.
 
 ### 7.1 Foundation Components
 
-| Component | Purpose |
-|---|---|
-| `AppShell` | global layout wrapper |
-| `SidebarNav` | primary navigation |
-| `Topbar` | global status, command, provider summary |
-| `PageHeader` | title, description, actions |
-| `Panel` | reusable surface/card wrapper |
-| `StatusChip` | busy/active/idle/offline/provider states |
-| `MetricCard` | numeric summary cards |
-| `ActionButton` | consistent primary/secondary/ghost actions |
-| `IconButton` | compact actions |
-| `Tabs` | page sections |
-| `Drawer` | contextual inspector |
-| `Modal` | destructive or focused flows |
-| `Toast` | success/error feedback |
-| `Skeleton` | loading state |
-| `EmptyState` | no data yet state |
-| `ErrorState` | readable failure state |
+| Component | Purpose | Status |
+|---|---|---|
+| `AppShell` | global layout wrapper | partial via `index.html` shell |
+| `SidebarNav` | primary navigation | legacy sidebar polished by UX CSS |
+| `Topbar` | global status, command, provider summary | shipped as `UXTopbar` |
+| `PageHeader` | title, description, actions | pending |
+| `Panel` | reusable surface/card wrapper | CSS utility `ux-panel` shipped |
+| `StatusChip` | busy/active/idle/offline/provider states | shipped as `UXStatusChip` |
+| `MetricCard` | numeric summary cards | pending |
+| `ActionButton` | consistent primary/secondary/ghost actions | partial CSS shipped |
+| `IconButton` | compact actions | pending |
+| `Tabs` | page sections | pending |
+| `Drawer` | contextual inspector | pending |
+| `Modal` | destructive or focused flows | pending |
+| `Toast` | success/error feedback | pending |
+| `Skeleton` | loading state | shipped as `UXSkeleton` |
+| `EmptyState` | no data yet state | shipped as `UXEmptyState` |
+| `ErrorState` | readable failure state | shipped as `UXErrorState` |
 
 ### 7.2 Product Components
 
@@ -741,16 +761,16 @@ Deliverables:
 
 ### Foundation
 
-- [ ] Define CSS variables for tokens
-- [ ] Create base layout shell
-- [ ] Create sidebar
-- [ ] Create topbar
-- [ ] Create reusable panel/card styles
-- [ ] Create status chips
+- [x] Define CSS variables for tokens
+- [x] Create base layout shell
+- [x] Create sidebar polish layer
+- [x] Create topbar
+- [x] Create reusable panel/card styles
+- [x] Create status chips
 - [ ] Create metric cards
-- [ ] Create empty states
-- [ ] Create error states
-- [ ] Create skeleton loading states
+- [x] Create empty states
+- [x] Create error states
+- [x] Create skeleton loading states
 - [ ] Create drawer pattern
 
 ### Dashboard
