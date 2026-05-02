@@ -606,134 +606,6 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; letter-spac
   .cmd-grid { grid-template-columns: 1fr; }
 }
 
-/* ===== Agent Shop ===== */
-.shop-wallet {
-  display: inline-flex;
-  align-items: center;
-  padding: 7px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(240,180,41,0.3);
-  background: rgba(240,180,41,0.1);
-  color: var(--gold);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-}
-.shop-layout {
-  display: grid;
-  grid-template-columns: minmax(360px, 0.95fr) minmax(420px, 1.05fr);
-  gap: 14px;
-  align-items: start;
-}
-.shop-agent-grid,
-.shop-loadout,
-.shop-slot-list,
-.shop-skill-catalog {
-  display: grid;
-  gap: 10px;
-}
-.shop-agent-card {
-  width: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-2);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 140ms, background 140ms, transform 140ms;
-}
-.shop-agent-card:hover,
-.shop-agent-card.active {
-  border-color: var(--coral);
-  background: var(--bg-3);
-}
-.shop-agent-card:hover {
-  transform: translateY(-1px);
-}
-.shop-agent-main {
-  min-width: 0;
-}
-.shop-agent-name {
-  font-weight: 700;
-  font-size: 14px;
-}
-.shop-agent-role,
-.shop-agent-tags {
-  margin-top: 4px;
-}
-.shop-agent-role {
-  color: var(--text-3);
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.shop-agent-tags {
-  display: flex;
-  gap: 6px;
-}
-.shop-agent-buy {
-  display: flex;
-  justify-content: flex-end;
-}
-.shop-selected-agent {
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  gap: 14px;
-  align-items: center;
-  padding: 12px;
-  border-radius: 10px;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-}
-.shop-selected-agent h2 {
-  font-size: 22px;
-  margin-bottom: 3px;
-}
-.shop-slot {
-  display: grid;
-  grid-template-columns: 72px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: rgba(0,0,0,0.12);
-}
-.shop-install-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-}
-.shop-skill-card {
-  border: 1px solid var(--border);
-  background: var(--bg-2);
-  border-radius: 10px;
-  padding: 12px;
-}
-.shop-skill-card.installed {
-  border-color: rgba(46,204,113,0.4);
-  background: rgba(46,204,113,0.06);
-}
-.shop-skill-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 5px;
-}
-
-@media (max-width: 1180px) {
-  .shop-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* ============ DYNAMIC TASK BOARD ============ */
 .task-board-compose {
   display: grid;
@@ -859,6 +731,153 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; letter-spac
 @media (max-width: 720px) {
   .task-board-grid,
   .task-board-compose { grid-template-columns: 1fr; }
+}
+
+/* ============ IMAGE STUDIO ============ */
+.image-studio-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(420px, 1.1fr);
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+.image-generator-panel,
+.image-preview-panel,
+.image-library-panel {
+  border-color: rgba(0,240,255,0.18);
+}
+.image-mode-row,
+.image-presets,
+.image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.image-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.image-field select,
+.image-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--text);
+  padding: 10px 12px;
+  outline: none;
+  font: 13px var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.image-field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.image-presets button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-2);
+  padding: 6px 10px;
+  font: 11px var(--font-mono);
+  cursor: pointer;
+}
+.image-generate-btn {
+  width: 100%;
+  justify-content: center;
+}
+.image-error {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(248,113,113,0.35);
+  background: rgba(248,113,113,0.08);
+  color: var(--red);
+  font-size: 12px;
+}
+.image-preview-frame {
+  display: grid;
+  place-items: center;
+  min-height: 420px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(45deg, rgba(255,255,255,0.035) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255,255,255,0.035) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.035) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.035) 75%),
+    var(--bg-2);
+  background-size: 28px 28px;
+  background-position: 0 0, 0 14px, 14px -14px, -14px 0;
+  overflow: hidden;
+}
+.image-preview-frame img {
+  max-width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+}
+.image-meta {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+}
+.image-meta b {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.image-meta span,
+.image-meta p {
+  color: var(--text-3);
+  font-size: 12px;
+  margin: 0;
+}
+.image-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+}
+.image-library-card {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  cursor: pointer;
+  text-align: left;
+}
+.image-library-card.is-selected {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px rgba(0,240,255,0.18);
+}
+.image-library-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 7px;
+  background: rgba(0,0,0,0.24);
+}
+.image-library-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+  font: 10px var(--font-mono);
+  text-transform: uppercase;
+}
+@media (max-width: 980px) {
+  .image-studio-layout { grid-template-columns: 1fr; }
+  .image-preview-frame { min-height: 300px; }
 }
 
 /* ============ AGENT CATEGORY STYLES ============ */

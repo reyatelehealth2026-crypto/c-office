@@ -36,7 +36,7 @@
 <script type="text/babel" src="guild-icons.jsx"></script>
 <script type="text/babel" src="page-guild.jsx"></script>
 <script type="text/babel" src="page-agents.jsx"></script>
-<script type="text/babel" src="page-shop.jsx"></script>
+<script type="text/babel" src="page-images.jsx"></script>
 <script type="text/babel" src="page-dashboard.jsx"></script>
 <script type="text/babel" src="page-detail.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-memory.jsx?v=20260502a"></script>
@@ -45,8 +45,28 @@
 <script type="text/babel" src="run-window.jsx"></script>
 
 <script type="text/babel">
+/* Each .jsx file is its own scope; route components live on window — bind here for the router. */
+const Sidebar = window.Sidebar;
+const Dashboard = window.Dashboard;
+const GuildHall = window.GuildHall;
+const AgentsPage = window.AgentsPage;
+const ImageStudioPage = window.ImageStudioPage;
+const AgentDetail = window.AgentDetail;
+const TasksPage = window.TasksPage;
+const SkillsPage = window.SkillsPage;
+const MemoryPanel = window.MemoryPanel;
+const SettingsPage = window.SettingsPage;
+const NotesPage = window.NotesPage;
+const RunDock = window.RunDock;
+
+const initialPage = () => {
+  const p = localStorage.getItem('c-office-page') || 'dashboard';
+  if (p === 'shop') return 'skills';
+  return p;
+};
+
 const App = () => {
-  const [page, setPage] = React.useState(() => localStorage.getItem('c-office-page') || 'dashboard');
+  const [page, setPage] = React.useState(initialPage);
   const [activeAgent, setActiveAgent] = React.useState(null);
   const [dashLayout, setDashLayout] = React.useState('overview');
   useCOfficeRefresh();
@@ -65,7 +85,7 @@ const App = () => {
   }, []);
 
   const openAgent = (id) => { setActiveAgent(id); setPage('agent-detail'); };
-  const agent = AGENTS.find(a => a.id === activeAgent);
+  const agent = (window.AGENTS || []).find(a => a.id === activeAgent);
 
   return (
     <div className="app" data-screen-label={page}>
@@ -74,7 +94,7 @@ const App = () => {
         {page === 'dashboard' && <Dashboard layout={dashLayout} setLayout={setDashLayout} onOpenAgent={openAgent}/>}
         {page === 'guild' && <GuildHall onOpenAgent={openAgent}/>}
         {page === 'agents' && <AgentsPage onOpenAgent={openAgent} setPage={setPage}/>}
-        {page === 'shop' && <AgentShopPage onOpenAgent={openAgent}/>}
+        {page === 'images' && <ImageStudioPage/>}
         {page === 'agent-detail' && agent && <AgentDetail agent={agent} onBack={() => setPage('agents')} onOpenAgent={openAgent}/>}
         {page === 'tasks' && <TasksPage onOpenAgent={openAgent}/>}
         {page === 'skills' && <SkillsPage onOpenAgent={openAgent}/>}

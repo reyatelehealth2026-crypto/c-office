@@ -13,10 +13,8 @@ import taskRoute from './api/task.js';
 import projectsRoute from './api/projects.js';
 import taskBoardRoute from './api/task-board.js';
 import themeRoute from './api/theme.js';
-import shopRoute from './api/shop.js';
-import { getInventory } from './orchestration/shop.js';
 import { getSettings } from './api/settings.js';
-import { imageStatusRoute, generateImageRoute } from './api/images.js';
+import { imageStatusRoute, imageLibraryRoute, deleteImageRoute, generateImageRoute } from './api/images.js';
 import {
   listRoute as notesList, getOneRoute as notesGet, createRoute as notesCreate,
   patchRoute as notesPatch, deleteRoute as notesDelete,
@@ -65,17 +63,18 @@ app.patch ('/api/notes/:id',               notesPatch);
 app.delete('/api/notes/:id',               notesDelete);
 app.post  ('/api/notes/:id/message',       notesMessage);
 app.post  ('/api/notes/:id/dispatch',      notesDispatch);
-app.get   ('/api/shop',                    shopRoute);
-app.post  ('/api/shop/buy',                shopRoute);
-app.post  ('/api/shop/unequip',            shopRoute);
-app.post  ('/api/shop/use',                shopRoute);
-app.post  ('/api/shop/grant-victory',      shopRoute);
 app.get   ('/api/images/status',           imageStatusRoute);
+app.get   ('/api/images/library',          imageLibraryRoute);
+app.delete('/api/images/library/:name',    deleteImageRoute);
 app.post  ('/api/images/generate',         generateImageRoute);
 
 app.use(express.static(PUBLIC_DIR, {
+  cacheControl: false,
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.jsx')) res.setHeader('Content-Type', 'text/babel; charset=utf-8');
+    if (filePath.endsWith('.jsx')) {
+      res.setHeader('Content-Type', 'text/babel; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+    }
   },
 }));
 
@@ -89,12 +88,6 @@ app.listen(PORT, HOST, async () => {
   } catch (e) { console.error('[c-office] sweep stale runs failed:', e.message); }
   try { await startSessionsWatcher();    console.log('[c-office] sessions watcher up'); } catch (e) { console.error('[c-office] sessions watcher failed:', e.message); }
   try { await startTranscriptsWatcher(); console.log('[c-office] transcripts watcher up'); } catch (e) { console.error('[c-office] transcripts watcher failed:', e.message); }
-  try {
-    const inv = await getInventory();
-    console.log(`[c-office] shop inventory hydrated: ${inv.gold} gold, ${Object.keys(inv.skills).length} agents with skills`);
-  } catch (e) {
-    console.error('[c-office] inventory hydrate failed:', e.message);
-  }
 });
 
 process.on('uncaughtException',  e => console.error('[c-office] uncaught:', e));

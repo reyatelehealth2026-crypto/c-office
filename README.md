@@ -1,6 +1,6 @@
 # C-Office
 
-> ศูนย์สั่งงาน + แดชบอร์ดเรียลไทม์สำหรับทีมเอเจนต์ AI ทั้ง 9 ตัว — ดูได้ว่าใครกำลังทำงาน, สั่งงานผ่าน chat ในตัว, ใช้ CLI provider ไหนก็ได้ (Claude / Codex / GPT / Echo demo) และวัดผลแบบ JRPG (level up, gold, shop, boss fight)
+> ศูนย์สั่งงาน + แดชบอร์ดเรียลไทม์สำหรับทีมเอเจนต์ AI ทั้ง 9 ตัว — ดูได้ว่าใครกำลังทำงาน, สั่งงานผ่าน chat ในตัว, ใช้ CLI provider ไหนก็ได้ (Claude / Codex / GPT / Echo demo) และ progression แบบ JRPG (level up, boss fight / adventure overlay)
 
 ![status: personal-project](https://img.shields.io/badge/status-personal-purple)
 ![stack: node+react+sse](https://img.shields.io/badge/stack-node%20%7C%20react%20%7C%20sse-9d5cff)
@@ -26,8 +26,8 @@
 
 **RPG progression**
 - **Levels** — เอเจนต์ +1 level ทุก task ที่สำเร็จ
-- **Gold + Shop** (`/#/shop`) — ซื้อ skill / item / unlock เอเจนต์ใหม่ ผ่าน reward จาก usage จริง
-- **Skills tree** — ดู skill mastery ของแต่ละเอเจนต์
+- **Learned skills** — Orchestrator บันทึก pattern จากรัน multi-step ไปที่ `~/.c-office/skills/`; ดูสรุปผ่าน `GET /api/skills`
+- **Playbooks (SOP matrix)** — ดู skill mastery ของแต่ละเอเจนต์ในหน้า Playbooks
 
 **Auth ที่ไม่ต้องตั้ง env var**
 - **OAuth-first credential store** (`~/.c-office/credentials.json`) AES-256-GCM ที่เครื่อง
@@ -116,7 +116,7 @@ claude
 │ ~/.claude/       │ ────────────────────► │     - events RingBuffer     │
 │  projects/**/    │                       │     - runs (orchestrator)   │
 │  *.jsonl         │                       │     - notes inbox           │
-└──────────────────┘                       │     - inventory (gold/lvl)  │
+└──────────────────┘                       │                             │
                                            │                             │
 ┌──────────────────┐  POST /api/task       │   • SSE bus  → /api/stream  │
 │ Browser UI       │ ────────────────────► │   • OAuth creds store       │
@@ -131,7 +131,7 @@ claude
                                            │   - Guild Hall (default)    │
                                            │   - Mission Control         │
                                            │   - Notes inbox + chat      │
-                                           │   - Shop / Skills / Memory  │
+                                           │   - Skills / Memory         │
                                            │   - Adventure (boss fight)  │
                                            └─────────────────────────────┘
 ```
@@ -141,13 +141,12 @@ claude
 | Path | หน้าที่ |
 |---|---|
 | `server/index.js` | Express + SSE bootstrap, รวม route ทุกตัว |
-| `server/state.js` | In-memory state · event bus · busy decay · runs / dispatches / inventory |
+| `server/state.js` | In-memory state · event bus · busy decay · runs / dispatches |
 | `server/api/hooks.js` | POST /hooks/event — รับ Claude Code hook payload |
-| `server/api/stream.js` | SSE endpoint (`event`, `task`, `dispatch`, `run`, `auth.status`, `inventory`, …) |
+| `server/api/stream.js` | SSE endpoint (`event`, `task`, `dispatch`, `run`, `auth.status`, …) |
 | `server/api/notes.js` | Notes inbox CRUD + dispatch |
 | `server/api/task.js` | `/api/task` — server-side multi-agent run (Send to Orchestra) |
 | `server/api/auth.js` | OAuth + paste-token endpoints (`/auth/*`, `/api/auth/*`) |
-| `server/api/shop.js` | Buy / equip / use / grant-victory |
 | `server/agents/runner.js` | Orchestra orchestrator loop (Anthropic Agent SDK + delegate tool) |
 | `server/agents/personas.js` | System prompts + tool allowlists ของแต่ละ persona |
 | `server/agents/image.js` | Image-gen adapter (Gemini / Replicate / OpenAI) |
@@ -156,7 +155,6 @@ claude
 | `server/runner/notes.js` | Notes persistence (JSON file) |
 | `server/runner/providers.js` | CLI provider abstraction (echo / claude / codex / gpt) |
 | `server/runner/scene.js` | Scene script builder (legacy; ใช้ใน export ของ dispatch แต่ overlay ปิดแล้ว) |
-| `server/orchestration/shop.js` | Inventory + level + reward bookkeeping |
 | `server/watchers/sessions.js` | Watch session files |
 | `server/watchers/transcripts.js` | Tail JSONL transcripts |
 | `server/mapping/personas.js` | **9 personas + regex routing rules** |
@@ -185,8 +183,8 @@ Background tick (ทุก 2 วิ) re-broadcast สถานะเมื่อ
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/` | GET | Dashboard |
-| `/api/state` | GET | Snapshot ทั้งระบบ (personas, sessions, events, tasks, runs, dispatches, stats, inventory, edges) |
-| `/api/stream` | GET (SSE) | Live events: `event`, `session.start`, `session.end`, `task`, `dispatch`, `run`, `stats`, `persona.status`, `persona.levels`, `auth.status`, `inventory` |
+| `/api/state` | GET | Snapshot ทั้งระบบ (personas, sessions, events, tasks, runs, dispatches, stats, edges) |
+| `/api/stream` | GET (SSE) | Live events: `event`, `session.start`, `session.end`, `task`, `dispatch`, `run`, `stats`, `persona.status`, `persona.levels`, `auth.status`, … |
 | `/api/agents/:id/history?limit=N` | GET | ประวัติ event ของ persona |
 | `/api/memory` | GET | Memory graph (cached 30s) |
 | `/api/notes` | GET | Notes inbox |
@@ -194,7 +192,7 @@ Background tick (ทุก 2 วิ) re-broadcast สถานะเมื่อ
 | `/api/notes/providers` | GET | Provider catalog (echo/claude/codex/gpt) + default + available |
 | `/api/auth/status` | GET | สถานะ connection ทุก provider |
 | `/api/settings` | GET | Safe view ของ ~/.claude/settings.json |
-| `/api/shop` | GET | Inventory + catalog |
+| `/api/skills` | GET | Learned skill summaries (`~/.c-office/skills`) |
 | `/api/tasks` | GET | Recent orchestrator runs |
 | `/api/task/:run_id` | GET | Run detail |
 
@@ -216,8 +214,6 @@ Background tick (ทุก 2 วิ) re-broadcast สถานะเมื่อ
 | `/auth/anthropic/connect` | GET | mirror `~/.claude/.credentials.json` เข้า store |
 | `/auth/google/start` | GET | PKCE OAuth flow |
 | `/auth/google/callback` | GET | OAuth callback |
-| `/api/shop/buy` | POST | ซื้อจาก catalog |
-| `/api/shop/unequip` / `/api/shop/use` / `/api/shop/grant-victory` | POST | management |
 
 ---
 

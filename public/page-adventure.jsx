@@ -199,11 +199,6 @@ const AdventurePage = ({ onOpenAgent }) => {
     if (bossHp === 0 && victoryKeyRef.current !== bossText) {
       victoryKeyRef.current = bossText;
       setShowVictory(true);
-      fetch('/api/shop/grant-victory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: tier.name }),
-      }).then(() => window.fetchCOfficeShop?.()).catch(() => {});
       const t = setTimeout(() => setShowVictory(false), 2500);
       return () => clearTimeout(t);
     }

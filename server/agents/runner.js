@@ -33,6 +33,7 @@ import { getAgentSync, listAgentsSync, resolveAgentIdSync } from '../store/agent
 import { costUsd } from '../mapping/pricing.js';
 import { recallSkills, persistSkill, degradeSkill, forkSkill, listSkills } from './skills.js';
 import { generateImage } from './image.js';
+import { callLLM } from './providers-llm.js';
 import { getWorkflow } from './workflows.js';
 import { getProject } from '../store/projects.js';
 import { appendAudit } from './audit.js';
@@ -211,18 +212,61 @@ function recalledSkillsBlock(skills) {
   return `\n\nPrior similar runs (from skill library — adapt only what fits):\n${lines.join('\n')}`;
 }
 
-// ---------- Phase 1: Plan ----------
+const ANALYZE_SYSTEM = `You are Orchestra, the boss. Analyze the user's goal. 
+Is it clear enough to execute a multi-agent plan?
+If you have enough information, reply with exactly "CLEAR".
+If you are missing crucial details or the goal is too vague, reply with a concise question to the user.
+
+Keep questions brief and professional. Do not write a plan yet.`;
+
+async function analyzeRun(runId, goal, opts = {}) {
+  setRunPhase(runId, 'plan'); // Reuse plan phase for analysis
+  const orch = orchestratorAgent();
+  const model = orch.model || 'claude-sonnet-4-5';
+  let text = '';
+  try {
+    for await (const message of callOrchLLM({
+      phase: 'plan',
+      prompt: `Goal: ${goal}\n\nAnalyze this goal. Is it clear or do you need more info?`,
+      systemPrompt: ANALYZE_SYSTEM,
+      model,
+      opts,
+    })) {
+      if (message.type === 'assistant') text += textFromAssistant(message) + '\n';
+    }
+  } catch (error) {
+    return 'CLEAR'; // Fallback
+  }
+  return text.trim();
+}
+
+// ---------- Phase 1: Planning ----------
 
 const PLANNER_SYSTEM = `You are Orchestra in PLAN mode. Decompose the user goal into the
 SHORTEST possible sequence of delegations to specialist personas. Each step must
-be self-contained — the executing persona has no shared memory beyond the
-scratchpad summary you give them.
+be self-contained.
 
 Available personas:
 {ROSTER}
 
-Reply with ONLY a JSON array, no prose. Schema:
-[{"persona":"<id>","instruction":"<self-contained brief>","depends_on":<index|null>}]
+--- IMPORTANT INSTRUCTIONS FOR 2026 REAL-TIME DATA ---
+1. Your internal knowledge is OUTDATED (it stops at 2024). 
+2. If the goal involves "latest trends", "news", "current events", or anything regarding the year 2026, you MUST start by delegating a research task to 'nana' (NOT nyx, NOT lumen, NOT yourself).
+3. The instruction for 'nana' MUST include the phrase "Search the internet for current May 2026 information".
+4. DO NOT assign research or drafting of current events to 'orchestra'. Orchestra only synthesizes.
+5. You are FORBIDDEN from hallucinating 2026 facts. Use 'nana' first.
+-------------------------------------------------------
+
+You MUST reply with exactly and only a JSON array. DO NOT wrap the array in an object.
+DO NOT use keys like "step", "task", or "description".
+Use EXACTLY this schema:
+[
+  {
+    "persona": "<id>",
+    "instruction": "<self-contained brief>",
+    "depends_on": <index|null>
+  }
+]
 
 Constraints:
 - 1 to 6 steps. Fewer is better.
@@ -234,19 +278,43 @@ function extractJsonArray(text) {
   if (!text) return null;
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1].trim() : trimmed;
-  const start = candidate.indexOf('[');
-  const end = candidate.lastIndexOf(']');
-  if (start === -1 || end === -1 || end <= start) return null;
+  let candidate = fenced ? fenced[1].trim() : trimmed;
+  
+  let rawArray = null;
+
+  // Try parsing the whole thing first
   try {
-    const parsed = JSON.parse(candidate.slice(start, end + 1));
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
+    const parsed = JSON.parse(candidate);
+    if (Array.isArray(parsed)) {
+      rawArray = parsed;
+    } else if (parsed && Array.isArray(parsed.plan)) {
+      rawArray = parsed.plan;
+    }
+  } catch {}
+
+  // Fallback: try finding the first [ to the last ]
+  if (!rawArray) {
+    const start = candidate.indexOf('[');
+    const end = candidate.lastIndexOf(']');
+    if (start !== -1 && end !== -1 && end > start) {
+      try {
+        const parsed = JSON.parse(candidate.slice(start, end + 1));
+        if (Array.isArray(parsed)) rawArray = parsed;
+      } catch {}
+    }
   }
+
+  if (!rawArray) return null;
+
+  // Normalize the array to the expected schema
+  return rawArray.map((s, idx) => ({
+    persona: s.persona || s.agent || s.agentId || s.role || 'orchestra',
+    instruction: s.instruction || s.description || s.task || s.action || JSON.stringify(s),
+    depends_on: s.depends_on !== undefined ? s.depends_on : (idx > 0 ? idx - 1 : null)
+  }));
 }
 
-async function planRun(runId, goal) {
+async function planRun(runId, goal, opts = {}) {
   setRunPhase(runId, 'plan');
 
   let recalled = [];
@@ -281,15 +349,13 @@ async function planRun(runId, goal) {
   const model = orch.model || 'claude-sonnet-4-5';
   let planText = '';
   try {
-    for await (const message of withPhaseTimeout(query({
+    for await (const message of callOrchLLM({
+      phase: 'plan',
       prompt: `Goal: ${goal}${recalledSkillsBlock(recalled)}\n\nReturn the JSON plan now.`,
-      options: {
-        model,
-        maxTurns: 1,
-        systemPrompt: PLANNER_SYSTEM.replace('{ROSTER}', rosterText()),
-        permissionMode: 'dontAsk',
-      },
-    }), 'plan')) {
+      systemPrompt: PLANNER_SYSTEM.replace('{ROSTER}', rosterText()),
+      model,
+      opts,
+    })) {
       if (message.type === 'assistant') planText += textFromAssistant(message) + '\n';
       if (message.type === 'result') {
         recordPhaseCost(runId, 'plan', model, message.usage);
@@ -420,7 +486,7 @@ function validatePlanLocally(plan, validPersonaIds) {
   return issues;
 }
 
-export async function critiquePlan(runId, goal, plan) {
+export async function critiquePlan(runId, goal, plan, opts = {}) {
   const orch = orchestratorAgent();
   const model = orch.model || 'claude-sonnet-4-5';
   const validIds = listAgentsSync({ includeDisabled: false }).map((a) => a.id);
@@ -440,18 +506,13 @@ export async function critiquePlan(runId, goal, plan) {
 
   try {
     let raw = '';
-    for await (const message of withPhaseTimeout(
-      query({
-        prompt: `Audit this plan now.\n\n${planJson}`,
-        options: {
-          model,
-          maxTurns: 1,
-          systemPrompt,
-          permissionMode: 'dontAsk',
-        },
-      }),
-      'plan',
-    )) {
+    for await (const message of callOrchLLM({
+      phase: 'plan',
+      prompt: `Audit this plan now.\n\n${planJson}`,
+      systemPrompt,
+      model,
+      opts,
+    })) {
       if (message.type === 'assistant') raw += textFromAssistant(message) + '\n';
       if (message.type === 'result') {
         recordPhaseCost(runId, 'plan', model, message.usage);
@@ -489,7 +550,7 @@ export async function critiquePlan(runId, goal, plan) {
   return { verdict, issues };
 }
 
-async function rewritePlan(runId, goal, plan, issues) {
+async function rewritePlan(runId, goal, plan, issues, opts = {}) {
   const orch = orchestratorAgent();
   const model = orch.model || 'claude-sonnet-4-5';
   const planJson = JSON.stringify(
@@ -505,18 +566,13 @@ async function rewritePlan(runId, goal, plan, issues) {
 
   let rewriteText = '';
   try {
-    for await (const message of withPhaseTimeout(
-      query({
-        prompt: `Original plan:\n${planJson}\n\nReturn the corrected JSON plan now.`,
-        options: {
-          model,
-          maxTurns: 1,
-          systemPrompt,
-          permissionMode: 'dontAsk',
-        },
-      }),
-      'plan',
-    )) {
+    for await (const message of callOrchLLM({
+      phase: 'plan',
+      prompt: `Original plan:\n${planJson}\n\nReturn the corrected JSON plan now.`,
+      systemPrompt,
+      model,
+      opts,
+    })) {
       if (message.type === 'assistant') rewriteText += textFromAssistant(message) + '\n';
       if (message.type === 'result') {
         recordPhaseCost(runId, 'plan', model, message.usage);
@@ -677,10 +733,11 @@ deliverable as your last assistant message — no tool call.`;
 // Direct sequential execution: iterate plan, call query() once per step.
 // Avoids the SDK Task-tool / nested-agents path which doesn't propagate the
 // OAuth beta header and hangs sub-agent calls indefinitely on OAuth tokens.
-async function executeStep(runId, goal, step, idx, prior) {
+async function executeStep(runId, goal, step, idx, prior, opts = {}) {
   const personaId = step.persona;
   const persona = getAgentSync(personaId) || { id: personaId, name: personaId, role: 'agent' };
-  const model = persona.model || 'claude-sonnet-4-6';
+  const provider = opts.provider || 'claude';
+  const model = persona.model || (provider === 'codex' ? 'gpt-4o' : provider === 'gemini' ? 'gemini-3.1-pro-preview' : 'claude-sonnet-4-6');
   const toolUseId = `step_${runId}_${idx}_${crypto.randomBytes(3).toString('hex')}`;
 
   startTask({
@@ -759,22 +816,53 @@ async function executeStep(runId, goal, step, idx, prior) {
     };
   }
 
-  const prompt = `Original goal: ${goal}\n\nYour assignment: ${step.instruction}${priorBlock}\n\nReturn the artifact only — no preface.`;
-  const systemPrompt = persona.systemPrompt
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const prompt = `[CURRENT DATE: ${dateStr}]
+Original goal: ${goal}
+
+Your assignment: ${step.instruction}${priorBlock}
+
+FORMATTING REQUIREMENTS:
+- Use clear Markdown headers (##, ###) for sections.
+- Use bullet points or numbered lists for details.
+- Add double line breaks between paragraphs for readability.
+- If providing data/tables, use Markdown table format.
+- Ensure the output is clean and ready for professional use.
+
+Return the artifact only — no preface or conversational filler.`;
+  
+  const baseSystemPrompt = persona.systemPrompt
     || `You are ${persona.name || personaId}. ${persona.role || ''}\nReturn a concise, self-contained artifact for the assigned task.`;
+  const systemPrompt = baseSystemPrompt + `\n\nIMPORTANT TEMPORAL CONTEXT: Today is ${dateStr} (Simulation Year 2026). All your responses, research, and data processing MUST be relative to this date. If you search the internet, look for 2026 data. Do not treat 2024 or 2025 as the present; they are the past.`;
 
   let outText = '';
   let stepError = '';
-  try {
-    for await (const message of withPhaseTimeout(query({
-      prompt,
-      options: {
+
+  // Codex / Gemini route through providers-llm.js (no SDK tools support).
+  if (provider === 'codex' || provider === 'gemini') {
+    const r = await callLLM({ provider, systemPrompt, prompt, model });
+    if (r.ok) outText = r.text;
+    else stepError = r.error + (r.hint ? ` (${r.hint})` : '');
+  } else {
+    // Claude path — SDK with tools support. Personas with a non-empty
+    // toolsAllowed list need multiple turns (call tool → read result →
+    // write text); maxTurns=1 produced error_max_turns failures.
+    const personaTools = Array.isArray(persona.toolsAllowed) ? persona.toolsAllowed
+      : Array.isArray(persona.tools) ? persona.tools
+      : [];
+    const maxTurns = personaTools.length > 0 ? 6 : 1;
+    try {
+      const sdkOpts = {
         model,
-        maxTurns: 1,
+        maxTurns,
         systemPrompt,
         permissionMode: 'dontAsk',
-      },
-    }), 'execute')) {
+      };
+      if (personaTools.length > 0) {
+        sdkOpts.tools = personaTools;
+        sdkOpts.allowedTools = personaTools;
+      }
+      for await (const message of withPhaseTimeout(query({ prompt, options: sdkOpts }), 'execute')) {
       if (message.type === 'assistant') outText += textFromAssistant(message) + '\n';
       if (message.type === 'result') {
         recordPhaseCost(runId, 'execute', model, message.usage);
@@ -788,9 +876,10 @@ async function executeStep(runId, goal, step, idx, prior) {
           stepError = (message.errors || []).join('\n') || message.subtype || 'step failed';
         }
       }
+      }
+    } catch (error) {
+      stepError = error.message || String(error);
     }
-  } catch (error) {
-    stepError = error.message || String(error);
   }
 
   outText = outText.trim();
@@ -823,7 +912,39 @@ async function executeStep(runId, goal, step, idx, prior) {
   return { ok, persona: personaId, personaName: persona.name || personaId, text: outText, error: stepError };
 }
 
-async function executeRun(runId, goal, plan, critique) {
+async function* callOrchLLM({ phase, prompt, systemPrompt, model, opts }) {
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const finalSystemPrompt = systemPrompt + `\n\nIMPORTANT TEMPORAL CONTEXT: Today is ${dateStr} (Simulation Year 2026). All your responses, research, and data processing MUST be relative to this date. If you search the internet, look for 2026 data. Do not treat 2024 or 2025 as the present; they are the past.`;
+  const provider = opts.provider || 'claude';
+  let m = model;
+  if (provider !== 'claude' && typeof m === 'string' && m.includes('claude')) {
+    m = undefined; // allow provider-specific defaults
+  } else if (provider === 'claude' && !m) {
+    m = 'claude-sonnet-4-5';
+  }
+
+  if (provider === 'claude') {
+    yield* withPhaseTimeout(query({
+      prompt,
+      options: {
+        model: m,
+        maxTurns: 1,
+        systemPrompt: finalSystemPrompt,
+        permissionMode: 'dontAsk',
+      },
+    }), phase);
+  } else {
+    const r = await callLLM({ provider, systemPrompt: finalSystemPrompt, prompt, model: m });
+    if (r.ok) {
+      yield { type: 'assistant', message: { content: [{ type: 'text', text: r.text }] } };
+      yield { type: 'result', usage: { input_tokens: 0, output_tokens: 0 }, uuid: crypto.randomBytes(4).toString('hex'), subtype: 'success' };
+    } else {
+      throw new Error(r.error + (r.hint ? ` (${r.hint})` : ''));
+    }
+  }
+}
+
+async function executeRun(runId, goal, plan, critique, opts = {}) {
   setRunPhase(runId, 'execute');
   const prior = [];
   let firstError = '';
@@ -841,7 +962,7 @@ async function executeRun(runId, goal, plan, critique) {
       return { status: 'failed', final: '', error: 'Run cancelled by user' };
     }
     const step = plan[i];
-    const out = await executeStep(runId, goal, step, i, prior);
+    const out = await executeStep(runId, goal, step, i, prior, opts);
     if (out.ok) {
       prior.push({ persona: out.personaName, text: out.text });
     } else if (!firstError) {
@@ -873,7 +994,7 @@ Reply format:
 
 Be decisive. No preface.`;
 
-async function critiqueRun(runId, goal, finalText) {
+async function critiqueRun(runId, goal, finalText, opts = {}) {
   setRunPhase(runId, 'critique');
   pushEvent({
     sessionId: runId,
@@ -889,15 +1010,13 @@ async function critiqueRun(runId, goal, finalText) {
   const model = critic.model || 'claude-sonnet-4-5';
   let text = '';
   try {
-    for await (const message of withPhaseTimeout(query({
+    for await (const message of callOrchLLM({
+      phase: 'critique',
       prompt: `Goal:\n${goal}\n\nArtifact under review:\n${finalText}\n\nReturn your verdict now.`,
-      options: {
-        model,
-        maxTurns: 1,
-        systemPrompt: CRITIQUE_SYSTEM,
-        permissionMode: 'dontAsk',
-      },
-    }), 'critique')) {
+      systemPrompt: CRITIQUE_SYSTEM,
+      model,
+      opts,
+    })) {
       if (message.type === 'assistant') text += textFromAssistant(message) + '\n';
       if (message.type === 'result') {
         recordPhaseCost(runId, 'critique', model, message.usage);
@@ -943,13 +1062,12 @@ async function critiqueRun(runId, goal, finalText) {
 const VERIFY_SYSTEM = `You are Orchestra in VERIFY mode. Compare the artifact to the original
 goal and judge: does it actually deliver what was asked?
 
-Reply with EXACTLY one of:
-- "PASS — <one-line justification>"
-- "FAIL — <one-line reason what's missing>"
+Reply with exactly and only a JSON object. Do not include any prose.
+Schema: {"passed": boolean, "reason": "string"}
 
 Do NOT rewrite or improve. Verifier only.`;
 
-async function verifyRun(runId, goal, finalText) {
+async function verifyRun(runId, goal, finalText, opts = {}) {
   setRunPhase(runId, 'verify');
   pushEvent({
     sessionId: runId,
@@ -965,15 +1083,13 @@ async function verifyRun(runId, goal, finalText) {
   const model = orch.model || 'claude-sonnet-4-5';
   let text = '';
   try {
-    for await (const message of withPhaseTimeout(query({
+    for await (const message of callOrchLLM({
+      phase: 'verify',
       prompt: `Goal:\n${goal}\n\nArtifact:\n${finalText}\n\nReturn your one-line verdict now.`,
-      options: {
-        model,
-        maxTurns: 1,
-        systemPrompt: VERIFY_SYSTEM,
-        permissionMode: 'dontAsk',
-      },
-    }), 'verify')) {
+      systemPrompt: VERIFY_SYSTEM,
+      model,
+      opts,
+    })) {
       if (message.type === 'assistant') text += textFromAssistant(message) + '\n';
       if (message.type === 'result') {
         recordPhaseCost(runId, 'verify', model, message.usage);
@@ -990,9 +1106,28 @@ async function verifyRun(runId, goal, finalText) {
   }
 
   const trimmed = text.trim();
-  const passed = /^PASS\b/i.test(trimmed);
-  setRunVerification(runId, { passed, text: trimmed });
-  appendAudit(runId, 'verify-done', { passed, text: trimmed.slice(0, 200) });
+  let passed = false;
+  let reason = trimmed;
+
+  try {
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const candidate = fenced ? fenced[1].trim() : trimmed;
+    const start = candidate.indexOf('{');
+    const end = candidate.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+      const parsed = JSON.parse(candidate.slice(start, end + 1));
+      if (typeof parsed.passed === 'boolean') {
+        passed = parsed.passed;
+        reason = parsed.reason || trimmed;
+      }
+    }
+  } catch {
+    // Fallback if JSON parsing fails
+    passed = /\bPASS\b/i.test(trimmed) || /successfully fulfills/i.test(trimmed);
+  }
+
+  setRunVerification(runId, { passed, text: reason });
+  appendAudit(runId, 'verify-done', { passed, text: reason.slice(0, 200) });
   pushEvent({
     sessionId: runId,
     personaId: ORCHESTRA_PERSONA,
@@ -1002,7 +1137,7 @@ async function verifyRun(runId, goal, finalText) {
     status: passed ? 'ok' : 'err',
     dedupeKey: `verify:done:${runId}:${Date.now()}`,
   });
-  return { passed, text: trimmed };
+  return { passed, text: reason };
 }
 
 // ---------- Pipeline ----------
@@ -1059,6 +1194,25 @@ function requiresApproval(opts, phase) {
 }
 
 async function runPipeline(runId, goal, opts = {}) {
+  // Phase 0: Initial Analysis / Clarification
+  const analysis = await analyzeRun(runId, goal, opts);
+  if (analysis !== 'CLEAR') {
+    appendScratchpad(runId, {
+      persona: ORCHESTRA_PERSONA,
+      kind: 'analysis',
+      text: analysis,
+    });
+    // Set run to awaiting-input state
+    const run = state.runs.get(runId);
+    if (run) {
+      run.status = 'awaiting-approval'; // Map to a state that pauses
+      run.phase = 'clarify';
+      appendAudit(runId, 'awaiting-clarification', { question: analysis });
+    }
+    // We wait for the user to 'chat' back, which resumes runOrchestrator
+    return; 
+  }
+
   const workflow = opts.workflow ? getWorkflow(opts.workflow) : null;
   if (opts.workflow && !workflow) {
     finishRun(runId, { status: 'failed', error: `Unknown workflow '${opts.workflow}'` });
@@ -1066,7 +1220,7 @@ async function runPipeline(runId, goal, opts = {}) {
   }
   let plan = workflow
     ? planFromTemplate(runId, goal, workflow)
-    : await planRun(runId, goal);
+    : await planRun(runId, goal, opts);
   if (!plan) {
     finishRun(runId, { status: 'failed', error: 'Planner produced no usable plan.' });
     return;
@@ -1076,7 +1230,7 @@ async function runPipeline(runId, goal, opts = {}) {
   // Workflows skip critique — they are pre-validated templates.
   if (!workflow) {
     try {
-      const planCritique = await critiquePlan(runId, goal, plan);
+      const planCritique = await critiquePlan(runId, goal, plan, opts);
       appendScratchpad(runId, {
         persona: ORCHESTRA_PERSONA,
         kind: 'plan-critique',
@@ -1085,7 +1239,7 @@ async function runPipeline(runId, goal, opts = {}) {
           : `Plan critique: REWRITE — ${planCritique.issues.join('; ')}`,
       });
       if (planCritique.verdict === 'REWRITE' && planCritique.issues.length > 0) {
-        const rewrittenPlan = await rewritePlan(runId, goal, plan, planCritique.issues);
+        const rewrittenPlan = await rewritePlan(runId, goal, plan, planCritique.issues, opts);
         if (rewrittenPlan && rewrittenPlan.length > 0) {
           plan = rewrittenPlan;
           setRunPlan(runId, plan);
@@ -1140,13 +1294,13 @@ async function runPipeline(runId, goal, opts = {}) {
   }
 
   let attempt = 0;
-  let exec = await executeRun(runId, goal, plan, null);
+  let exec = await executeRun(runId, goal, plan, null, opts);
 
   while (exec.status === 'done' && exec.final && attempt < MAX_REVISIONS) {
-    const critique = await critiqueRun(runId, goal, exec.final);
+    const critique = await critiqueRun(runId, goal, exec.final, opts);
     if (critique.severity !== 'critical' && critique.severity !== 'high') break;
     attempt = bumpRunRevision(runId);
-    exec = await executeRun(runId, goal, plan, critique);
+    exec = await executeRun(runId, goal, plan, critique, opts);
   }
 
   if (exec.status === 'done' && exec.final) {
@@ -1167,13 +1321,13 @@ async function runPipeline(runId, goal, opts = {}) {
       }
     }
 
-    const verdict = await verifyRun(runId, goal, exec.final);
+    const verdict = await verifyRun(runId, goal, exec.final, opts);
     if (!verdict.passed && attempt < MAX_REVISIONS) {
       attempt = bumpRunRevision(runId);
       const fixCritique = { text: `Verifier rejected: ${verdict.text}`, severity: 'high' };
-      exec = await executeRun(runId, goal, plan, fixCritique);
+      exec = await executeRun(runId, goal, plan, fixCritique, opts);
       if (exec.status === 'done' && exec.final) {
-        await verifyRun(runId, goal, exec.final);
+        await verifyRun(runId, goal, exec.final, opts);
       }
     }
   }
@@ -1330,21 +1484,33 @@ export async function runOrchestrator(goal, opts = {}) {
     const project = getProject(opts.projectId);
     if (!project) throw new Error(`Unknown project '${opts.projectId}'`);
   }
-  const runId = newId('run');
-  const run = startRun(runId, goal);
+  const runId = opts.existingRunId || newId('run');
+  const run = opts.existingRunId ? state.runs.get(runId) : startRun(runId, goal);
+  if (!run) throw new Error(`Run ${runId} not found`);
+
+  if (opts.existingRunId) {
+    run.goal = goal; // Update to augmented goal
+    run.status = 'running';
+    run.endedAt = null;
+    run.error = null;
+  }
+
   if (opts.workflow) {
     run.workflow = String(opts.workflow);
   }
   if (opts.projectId) {
     run.projectId = String(opts.projectId);
   }
+  if (opts.provider) {
+    run.provider = String(opts.provider);
+  }
   pushEvent({
     sessionId: runId,
     personaId: ORCHESTRA_PERSONA,
-    verb: 'prompt',
+    verb: opts.existingRunId ? 'chat' : 'prompt',
     text: summarize(goal),
     status: 'ok',
-    dedupeKey: `prompt:run:${runId}`,
+    dedupeKey: `prompt:run:${runId}:${Date.now()}`,
   });
 
   runPipeline(runId, goal, opts).catch((error) => {

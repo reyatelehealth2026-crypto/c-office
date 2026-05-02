@@ -12,8 +12,6 @@
   window.AUTH_STATUS    = null;
   window.STATE_EDGES    = [];
   window.STATE_SESSIONS = [];
-  window.INVENTORY      = { gold: 0, ownedAgents: ['orchestra'], skills: {}, items: {} };
-  window.SHOP_CATALOG   = { skills: [], items: [], agents: [] };
   window.STATS = { tokensToday: 0, spendToday: 0, agentsOnline: 0, tasksRunning: 0 };
   window.NOTES          = [];
   window.PROVIDERS      = { providers: [], default: 'claude' };
@@ -84,29 +82,6 @@
     fire();
   }
 
-  function applyInventory(inv) {
-    if (!inv || typeof inv !== 'object') return;
-    window.INVENTORY = {
-      gold: Number.isFinite(inv.gold) ? inv.gold : 0,
-      ownedAgents: Array.isArray(inv.ownedAgents) ? inv.ownedAgents : ['orchestra'],
-      skills: inv.skills && typeof inv.skills === 'object' ? inv.skills : {},
-      items: inv.items && typeof inv.items === 'object' ? inv.items : {},
-    };
-    stateVersion++;
-    fire();
-  }
-
-  function applyShopCatalog(catalog) {
-    if (!catalog || typeof catalog !== 'object') return;
-    window.SHOP_CATALOG = {
-      skills: Array.isArray(catalog.skills) ? catalog.skills : [],
-      items: Array.isArray(catalog.items) ? catalog.items : [],
-      agents: Array.isArray(catalog.agents) ? catalog.agents : [],
-    };
-    stateVersion++;
-    fire();
-  }
-
   function pushEvent(ev) {
     window.ACTIVITY = [ev, ...window.ACTIVITY].slice(0, 50);
     stateVersion++;
@@ -134,16 +109,6 @@
   }
   window.refreshProviders = refreshProviders;
 
-  async function refreshShop() {
-    try {
-      const r = await fetch('/api/shop');
-      const j = await r.json();
-      applyShopCatalog(j.catalog || { skills: [], items: [], agents: [] });
-      applyInventory(j.inventory || { gold: 0, ownedAgents: ['orchestra'], skills: {}, items: {} });
-    } catch (e) { /* ignore */ }
-  }
-  window.refreshShop = refreshShop;
-
   async function fetchMemory() {
     try {
       const r = await fetch('/api/memory');
@@ -167,7 +132,6 @@
     fetchMemory();
     refreshNotes();
     refreshProviders();
-    refreshShop();
     if (es) try { es.close(); } catch {}
     es = new EventSource('/api/stream');
     window._cofficeStream = es;             // exposed so live UI (note chat indicator) can listen too
@@ -194,7 +158,6 @@
       fire();
     });
     es.addEventListener('auth.status',    e => { window.AUTH_STATUS = JSON.parse(e.data); stateVersion++; fire(); });
-    es.addEventListener('inventory',      e => applyInventory(JSON.parse(e.data)));
     es.addEventListener('task',           () => {
       fetch('/api/state').then(r => r.json()).then(applySnapshot).catch(()=>{});
     });
@@ -215,7 +178,6 @@
   };
 
   Object.assign(window, {
-    fetchCOfficeShop: refreshShop,
     fetchCOfficeNotes: refreshNotes,
     fetchCOfficeProviders: refreshProviders,
     fetchCOfficeState: () => fetch('/api/state').then(r => r.json()).then(applySnapshot),

@@ -16,7 +16,6 @@ const EVENT_TYPES = [
   'task-board',
   'theme',
   'auth.status',
-  'inventory',
 ];
 
 export default function streamRoute(req, res) {

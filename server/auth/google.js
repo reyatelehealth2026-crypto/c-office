@@ -8,8 +8,12 @@
 // On Connect → /auth/google/start redirects to Google's authorize endpoint
 // with PKCE. /auth/google/callback exchanges the code for tokens and stores them.
 
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { pkce, newState, consumeState, normalizeTokens } from './oauth.js';
 import { getCreds, setCreds, clearCreds } from './credentials.js';
+
+const execAsync = promisify(exec);
 
 const PROVIDER = 'google';
 const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -122,31 +126,79 @@ export async function setApiKey(apiKey) {
   return { ok: true };
 }
 
+export function clearCliToken() {
+  cachedCliToken = null;
+  cliTokenExpiresAt = 0;
+}
+
 export async function disconnect() {
   await clearCreds(PROVIDER);
+  clearCliToken();
+}
+
+// In-memory cache for the CLI token to avoid spawning processes on every API call.
+let cachedCliToken = null;
+let cliTokenExpiresAt = 0;
+
+async function getCliToken() {
+  if (cachedCliToken && Date.now() < cliTokenExpiresAt) {
+    return cachedCliToken;
+  }
+  try {
+    const { stdout } = await execAsync('gcloud auth print-access-token');
+    const token = stdout.trim();
+    if (token) {
+      cachedCliToken = token;
+      // gcloud tokens are typically valid for ~1 hour. Cache for 45 minutes to be safe.
+      cliTokenExpiresAt = Date.now() + 45 * 60 * 1000;
+      return token;
+    }
+  } catch (err) {
+    // Silently ignore if gcloud is not installed or not authenticated
+  }
+  return null;
 }
 
 export async function getGoogleAuth() {
   const c = await getCreds(PROVIDER);
-  if (!c) return { connected: false };
-  if (c.apiKey) return { connected: true, mode: 'api-key', apiKey: c.apiKey };
-  const fresh = await refreshIfNeeded(c);
-  return {
-    connected: !!fresh.accessToken,
-    mode: 'oauth',
-    accessToken: fresh.accessToken,
-    expiresAt: fresh.expiresAt,
-  };
+  if (c?.apiKey) return { connected: true, mode: 'api-key', apiKey: c.apiKey };
+  
+  if (c?.refreshToken) {
+    const fresh = await refreshIfNeeded(c);
+    if (fresh.accessToken) {
+      return {
+        connected: true,
+        mode: 'oauth',
+        accessToken: fresh.accessToken,
+        expiresAt: fresh.expiresAt,
+      };
+    }
+  }
+
+  // Fallback to gcloud CLI
+  const cliToken = await getCliToken();
+  if (cliToken) {
+    return { connected: true, mode: 'cli', accessToken: cliToken };
+  }
+
+  return { connected: false };
 }
 
 export async function statusOf() {
-  const c = await getCreds(PROVIDER);
-  if (!c) return { connected: false, hasClientId: false };
+  const c = await getCreds(PROVIDER) || {};
   if (c.apiKey) return { connected: true, mode: 'api-key', hasClientId: !!c.clientId };
-  return {
-    connected: !!c.accessToken,
+  if (c.accessToken) return {
+    connected: true,
     mode: 'oauth',
     expiresAt: c.expiresAt || null,
     hasClientId: !!c.clientId,
   };
+
+  // Check if CLI is available for the status response without forcing a cache refresh if not needed
+  const cliToken = await getCliToken();
+  if (cliToken) {
+     return { connected: true, mode: 'cli', hasClientId: !!c.clientId };
+  }
+
+  return { connected: false, hasClientId: !!c.clientId };
 }

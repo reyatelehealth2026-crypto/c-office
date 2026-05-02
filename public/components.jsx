@@ -6,13 +6,13 @@ const NAV = [
   { id: 'agents',     label: 'Agents',      icon: 'AG', color: 'var(--accent-cyan)' },
   { id: 'notes',      label: 'Notes',       icon: 'NT', color: 'var(--accent-gold)' },
   { id: 'tasks',      label: 'Tasks',       icon: 'TS', color: 'var(--accent-magenta)' },
-  { id: 'shop',       label: 'Shop',        icon: 'SH', color: 'var(--accent-gold)' },
-  { id: 'skills',     label: 'Skills',      icon: 'SK', color: 'var(--accent-cyan)' },
-  { id: 'memory',     label: 'Memory',      icon: 'MM', color: 'var(--accent-violet)' },
+  { id: 'images',     label: 'Images',      icon: 'IM', color: 'var(--accent-lime)' },
+  { id: 'skills',     label: 'Playbooks',   icon: 'SK', color: 'var(--accent-cyan)' },
+  { id: 'memory',     label: 'Archive',     icon: 'MM', color: 'var(--accent-violet)' },
   { id: 'settings',   label: 'Settings',    icon: 'ST', color: 'var(--text-secondary)' },
   // Hidden legacy fallback
-  { id: 'mission-control', label: 'Mission Control', icon: '▤', hidden: true },
-  { id: 'guild', label: 'Guild', icon: '🏰', hidden: true },
+  { id: 'mission-control', label: 'Ops Control', icon: '▤', hidden: true },
+  { id: 'guild', label: 'Legacy Hall', icon: '🏢', hidden: true },
 ];
 
 const Sidebar = ({ page, setPage }) => {
@@ -42,7 +42,6 @@ const Sidebar = ({ page, setPage }) => {
           {n.id === 'notes' && (window.NOTES?.length || 0) > 0 && (
             <span className="badge cyan" style={{marginLeft:'auto', fontSize:9}}>{window.NOTES.length}</span>
           )}
-          {n.id === 'shop' && <span className="badge gold" style={{marginLeft:'auto', fontSize:9}}>New</span>}
           {n.id === 'tasks' && TASKS.filter(t=>t.status==='running').length > 0 && (
             <span className="badge gold" style={{marginLeft:'auto', fontSize:9}}>{TASKS.filter(t=>t.status==='running').length}</span>
           )}
@@ -224,4 +223,124 @@ const Radar = ({ data, size = 220, color = 'var(--coral)' }) => {
   );
 };
 
-Object.assign(window, { AgentCard, AgentDot, Sparkline, Radar });
+const safeArray = (value) => (Array.isArray(value) ? value : []);
+
+const toTime = (value) => {
+  if (value == null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getProviderHealth = () => {
+  const runs = safeArray(window.RUNS);
+  const activeRuns = runs.filter(r => r && r.status === 'running');
+  const failedRuns = runs.filter(r => r && r.status === 'failed');
+  const latestRunTs = activeRuns
+    .map(r => toTime(r.updatedAt ?? r.startedAt ?? r.createdAt))
+    .filter(Boolean)
+    .sort((a, b) => b - a)[0] || null;
+
+  return {
+    healthy: activeRuns.length > 0 || failedRuns.length === 0,
+    activeRuns: activeRuns.length,
+    failedRuns: failedRuns.length,
+    lastRunAt: latestRunTs,
+  };
+};
+
+const getHandoffStats = () => {
+  const dispatches = safeArray(window.DISPATCHES);
+  const active = dispatches.filter(d => d && d.status !== 'done');
+  const waiting = active.filter(d => ['queued', 'pending'].includes(d.status)).length;
+  const chatting = active.filter(d => d.status === 'chatting').length;
+  return {
+    total: dispatches.length,
+    active: active.length,
+    waiting,
+    chatting,
+  };
+};
+
+const getAgentCurrentWork = (agentId) => {
+  if (!agentId) return null;
+  const tasks = safeArray(window.TASKS);
+  const activity = safeArray(window.ACTIVITY);
+  const dispatches = safeArray(window.DISPATCHES);
+
+  const activeTask = tasks.find(t =>
+    t && (t.personaId === agentId || t.agentId === agentId || t.agent === agentId) &&
+    ['running', 'queued', 'pending'].includes(t.status)
+  );
+  if (activeTask) {
+    return {
+      source: 'task',
+      label: activeTask.title || activeTask.goal || activeTask.prompt || 'Active task',
+      status: activeTask.status || 'running',
+      updatedAt: toTime(activeTask.updatedAt ?? activeTask.startedAt ?? activeTask.createdAt),
+    };
+  }
+
+  const openDispatch = dispatches.find(d =>
+    d && d.personaId === agentId && d.status !== 'done'
+  );
+  if (openDispatch) {
+    return {
+      source: 'dispatch',
+      label: openDispatch.title || openDispatch.prompt || 'Work order note',
+      status: openDispatch.status || 'queued',
+      updatedAt: toTime(openDispatch.updatedAt ?? openDispatch.createdAt),
+    };
+  }
+
+  const lastAction = activity
+    .filter(a => a && (a.personaId === agentId || a.agent === agentId))
+    .sort((a, b) => (toTime(b.ts ?? b.t) || 0) - (toTime(a.ts ?? a.t) || 0))[0];
+  if (lastAction) {
+    return {
+      source: 'activity',
+      label: lastAction.text || lastAction.verb || 'Recent activity',
+      status: lastAction.status || null,
+      updatedAt: toTime(lastAction.ts ?? lastAction.t),
+    };
+  }
+
+  return null;
+};
+
+const getAgentPresenceLabel = (agent, now = Date.now()) => {
+  if (!agent) return { key: 'offline', label: 'Offline' };
+  if (agent.status === 'offline') return { key: 'offline', label: 'Offline' };
+  if (agent.status === 'busy') return { key: 'active', label: 'Working' };
+
+  const current = getAgentCurrentWork(agent.id);
+  const ageMs = current?.updatedAt ? Math.max(0, now - current.updatedAt) : null;
+  if (ageMs == null) return { key: agent.status || 'idle', label: 'Idle' };
+  if (ageMs > 15 * 60 * 1000) return { key: 'stale', label: 'Stale' };
+  if (ageMs > 5 * 60 * 1000) return { key: 'idle', label: 'Idle' };
+  return { key: 'active', label: 'Active' };
+};
+
+const getAgentActivitySummary = (agent, now = Date.now()) => {
+  const current = getAgentCurrentWork(agent?.id);
+  const presence = getAgentPresenceLabel(agent, now);
+  return {
+    agentId: agent?.id || null,
+    presence,
+    currentWork: current,
+    hasHandoff: safeArray(window.DISPATCHES).some(d => d && d.personaId === agent?.id && d.status !== 'done'),
+  };
+};
+
+Object.assign(window, {
+  Sidebar,
+  AgentCard,
+  AgentDot,
+  Sparkline,
+  Radar,
+  getProviderHealth,
+  getHandoffStats,
+  getAgentCurrentWork,
+  getAgentPresenceLabel,
+  getAgentActivitySummary,
+});

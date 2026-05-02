@@ -104,15 +104,15 @@ const draftPayload = (draft) => ({
 const characterPromptPreview = (agent) => {
   if (!agent) return '';
   return [
-    `Create a full-body game character concept illustration for "${agent.name}".`,
-    `Role/class fantasy: ${agent.role || 'AI teammate'}. Team category: ${inferCategoryKey(agent)}. Signature accent color: ${agent.color || '#00f0ff'}.`,
-    `Character personality and visual cues: ${agent.systemPrompt || agent.tagline || 'capable, focused, dependable'}.`,
-    'Visual direction: general MMORPG guild party style, premium fantasy adventure game, heroic but practical outfit, readable silhouette, expressive face, detailed costume materials, natural pose, game lobby lighting.',
-    'Asset target: transparent-background character cutout PNG for an in-game HUD roster, not an illustration card and not an environment scene.',
-    'Canvas: portrait 9:16 or 2:3 ratio, head-to-toe full body, feet visible, centered on the vertical axis, 8-12% empty margin around the silhouette.',
-    'If a reference image is supplied, preserve the same character identity, body proportion, full-body framing, costume direction, and roster-friendly silhouette while improving quality.',
-    'Composition: one isolated full-body character only, alpha/transparent background preferred, no room, no landscape, no scenery, no pedestal baked into the image.',
-    'Avoid: trading card layout, card frame, stats box, text labels, watermark, logo, signature, cropped head or feet, duplicate limbs, landscape 16:9 image.',
+    `Create a full-body staff avatar illustration for "${agent.name}".`,
+    `Work role: ${agent.role || 'AI teammate'}. Team category: ${inferCategoryKey(agent)}.`,
+    `Profile cues: ${agent.systemPrompt || agent.tagline || 'capable, focused, dependable'}.`,
+    'Visual direction: professional digital art style, clean silhouette, expressive face, detailed fabric/materials, natural standing pose, clean studio lighting.',
+    'Asset target: transparent-background full-body PNG for a staff roster UI.',
+    'Canvas: portrait ratio, head-to-toe full body, feet visible, centered.',
+    'Composition: one isolated full-body staff avatar only, alpha/transparent background preferred.',
+    'Quality: high detail, clean anatomy, polished 3D-game-key-art feel.',
+    'Avoid: watermark, logo, signature, cropped limbs, landscape orientation.',
   ].join('\n');
 };
 
@@ -223,8 +223,8 @@ const AgentEditorPanel = ({ selected, onOpenAgent }) => {
 
   return (
     <aside className="agent-brief-panel agent-editor-panel" style={{ '--cat-color': draft.color || 'var(--accent-cyan)' }}>
-      <div className="brief-kicker">Dynamic Agent JSON</div>
-      <h2>{draft.id ? 'Edit Agent' : 'New Agent'}</h2>
+      <div className="brief-kicker">Dynamic Staff JSON</div>
+      <h2>{draft.id ? 'Edit Staff Profile' : 'New Staff Profile'}</h2>
 
       <label>Name<input value={draft.name} onChange={(e) => set('name', e.target.value)} placeholder="Agent name"/></label>
       <label>Role<input value={draft.role} onChange={(e) => set('role', e.target.value)} placeholder="Role / responsibility"/></label>
@@ -263,6 +263,64 @@ const CharacterImagePanel = ({ agent }) => {
   const [busy, setBusy] = React.useState(false);
   const preview = characterPromptPreview(agent);
   const defaultImage = defaultImageForAgent(agent);
+
+  // Character Builder State
+  const [charGender, setCharGender] = React.useState('หญิง');
+  const [charStyle, setCharStyle] = React.useState('อนิเมะญี่ปุ่นแฟนตาซี');
+  const [charRole, setCharRole] = React.useState('นักเวทย์ (Mage)');
+  const [charOutfit, setCharOutfit] = React.useState('ชุดผ้าไหมพริ้วไหวประดับอัญมณี');
+  const [charWeapon, setCharWeapon] = React.useState('คทาเวทย์มนต์เรืองแสง');
+  const [charColor, setCharColor] = React.useState('สีทองสว่าง (Bright Gold)');
+
+  const CHAR_OPTIONS = {
+    gender: ['ชาย (Male)', 'หญิง (Female)', 'Androgynous (ไร้เพศ)', 'หุ่นยนต์/จักรกล', 'สัตว์ป่ากึ่งมนุษย์'],
+    style: ['อนิเมะญี่ปุ่นแฟนตาซี', 'แฟนตาซีตะวันตก', 'จอมยุทธ์จีน', 'ไทยประยุกต์แฟนตาซี', 'ไซไฟโลกอนาคต', 'พิกเซลอาร์ต', '3D Render'],
+    role: [
+      'นักดาบ (Swordsman)', 'อัศวินเกราะหนัก (Knight)', 'นักเวทย์ (Mage)', 'มือสังหาร (Assassin)', 
+      'สไนเปอร์ (Sniper)', 'หมอ/นักบุญ (Healer)', 'พ่อค้า (Merchant)', 'วิศวกร (Engineer)',
+      'นินจา (Ninja)', 'ซามูไร (Samurai)', 'นักล่า (Hunter)', 'กัปตันเรือ (Captain)'
+    ],
+    outfit: [
+      'ชุดผ้าไหมพริ้วไหวประดับอัญมณี', 'เกราะเหล็กเต็มตัวขัดเงา', 'ชุดหนังรัดรูปสีดำสไตล์สายลับ',
+      'เสื้อคลุมยาวขอบทองดูหรูหรา', 'ชุดสตรีทแวร์ล้ำยุคมีไฟนีออน', 'ชุดไทยประยุกต์เครื่องทองจัดเต็ม',
+      'ผ้าคลุมขาดๆ ลุคนักเดินทาง', 'ชุดสูททางการมาดเนี้ยบ', 'เกราะเบาประดับขนนก'
+    ],
+    weapon: [
+      'คทาเวทย์มนต์เรืองแสง', 'ดาบใหญ่สองมือ (Greatsword)', 'ปืนคู่สไตล์เลเซอร์',
+      'ธนูไม้มงคลประดับมนต์', 'มีดสั้นคู่สีเงิน', 'ขลุ่ยหยกบรรเลงเพลงยุทธ์',
+      'โดรนจิ๋วบินรอบตัว', 'โล่ขนาดยักษ์', 'พัดเหล็กประดับลวดลาย', 'ไม่มีอาวุธ (มือเปล่า)'
+    ],
+    themeColor: [
+      'สีทองสว่าง (Bright Gold)', 'สีแดงเพลิง (Crimson Red)', 'สีน้ำเงินเข้ม (Deep Blue)',
+      'สีเขียวมรกต (Emerald Green)', 'สีม่วงลึกลับ (Mystic Purple)', 'สีชมพูซากุระ (Sakura Pink)',
+      'สีดำรัตติกาล (Obsidian Black)', 'สีเงินโครเมียม (Chrome Silver)', 'สีขาวบริสุทธิ์ (Pure White)'
+    ]
+  };
+
+  const compilePrompt = () => {
+    const styleMap = {
+      'อนิเมะญี่ปุ่นแฟนตาซี': 'high-quality JRPG anime style, vibrant colors, detailed cel shading',
+      'แฟนตาซีตะวันตก': 'epic western fantasy, semi-realistic, oil painting texture, dramatic lighting',
+      'จอมยุทธ์จีน': 'elegant Wuxia style, flowing ink aesthetics, traditional Chinese elements',
+      'ไทยประยุกต์แฟนตาซี': 'modern Thai fantasy fusion, intricate golden ornaments, tropical mythical atmosphere',
+      'ไซไฟโลกอนาคต': 'cyberpunk sci-fi, neon glows, metallic surfaces, high-tech intricate details',
+      'พิกเซลอาร์ต': 'detailed 32-bit pixel art style, retro game aesthetic, sharp colors',
+      '3D Render': 'modern 3D game render, Unreal Engine 5 style, octane render, cinematic'
+    };
+
+    const promptText = [
+      `A highly detailed ${styleMap[charStyle] || charStyle} character concept illustration for "${agent.name}".`,
+      `Gender: ${charGender}.`,
+      `Role/Profession: ${charRole}.`,
+      `Outfit and Appearance: ${charOutfit}.`,
+      `Weapon/Equipment: ${charWeapon}.`,
+      `Signature theme color: ${charColor}.`,
+      `Pose: heroic professional stance, expressive facial features, full body composition, centered portrait.`,
+      `Quality: masterwork, crisp lines, vivid accents, game-ready art, 8k resolution.`
+    ].join(' ');
+    
+    setPrompt(promptText);
+  };
 
   React.useEffect(() => setPrompt(''), [agent?.id]);
 
@@ -314,10 +372,10 @@ const CharacterImagePanel = ({ agent }) => {
 
   return (
     <div className="character-image-panel">
-      <div className="brief-kicker">Character Generator</div>
+      <div className="brief-kicker">Avatar Generator</div>
       <div className="character-generator-head">
-        <strong>Character Cutout</strong>
-        <span>{imageProvider === 'codex-image2' ? 'Codex Image Edit' : imageProvider === '3.1flashgen' ? '3.1 Flash Gen' : 'Gemini 3 Pro Image'}</span>
+        <strong>Staff Avatar Cutout</strong>
+        <span>{imageProvider === 'codex-image2' ? 'Codex Image Edit' : imageProvider === '3.1flashgen' ? '3.1 Flash Gen' : 'Nano Banana 2 · Gemini 3.1 Flash Image Preview'}</span>
       </div>
       <div className="character-compare">
         <div>
@@ -334,7 +392,67 @@ const CharacterImagePanel = ({ agent }) => {
         <button className={imageProvider === '3.1flashgen' ? 'active' : ''} onClick={() => setImageProvider('3.1flashgen')}>3.1 Flash Gen</button>
         <button className={imageProvider === 'nanobanana-2-pro' ? 'active' : ''} onClick={() => setImageProvider('nanobanana-2-pro')}>Nano Banana 2 Pro</button>
       </div>
-      <textarea value={prompt || preview} onChange={(e) => setPrompt(e.target.value)} rows="7"/>
+      
+      <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: 8, padding: '12px 16px', marginBottom: 12, marginTop: 12, fontSize: 13, color: 'var(--text-1)' }}>
+        <div style={{ fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 16 }}>✨</span> ระบบปั้นตัวละคร (Pro Character Builder)
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 10 }}>
+            <label className="image-field">
+              <span>เพศ:</span>
+              <select value={charGender} onChange={e => setCharGender(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
+                {CHAR_OPTIONS.gender.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+            <label className="image-field">
+              <span>สไตล์ภาพ:</span>
+              <select value={charStyle} onChange={e => setCharStyle(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
+                {CHAR_OPTIONS.style.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+          </div>
+          
+          <label className="image-field">
+            <span>อาชีพ / บทบาท:</span>
+            <select value={charRole} onChange={e => setCharRole(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
+              {CHAR_OPTIONS.role.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </label>
+
+          <label className="image-field">
+            <span>ชุดและรูปลักษณ์:</span>
+            <select value={charOutfit} onChange={e => setCharOutfit(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
+              {CHAR_OPTIONS.outfit.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </label>
+
+          <label className="image-field">
+            <span>อาวุธและอุปกรณ์:</span>
+            <select value={charWeapon} onChange={e => setCharWeapon(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
+              {CHAR_OPTIONS.weapon.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </label>
+
+          <label className="image-field">
+            <span>โทนสีหลัก (Theme):</span>
+            <select value={charColor} onChange={e => setCharColor(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
+              {CHAR_OPTIONS.themeColor.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </label>
+
+          <button className="btn gold" style={{ marginTop: 8, height: 40, fontWeight: 700 }} onClick={compilePrompt}>
+            อัปเกรดเป็น Pro Prompt และสรุปด้านล่าง 👇
+          </button>
+        </div>
+      </div>
+
+      <textarea 
+        value={prompt || preview} 
+        onChange={(e) => setPrompt(e.target.value)} 
+        rows="7"
+        placeholder="พิมพ์รายละเอียดเพิ่มเติมที่ต้องการปรับแต่งที่นี่..."
+      />
       <div className="character-actions">
         <button className="btn ghost" disabled={busy || !agent?.generatedImage} onClick={applyGenerated}>Apply Generated</button>
         <button className="btn ghost" disabled={busy || !defaultImage} onClick={restoreDefault}>Restore Default</button>

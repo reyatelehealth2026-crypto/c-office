@@ -1,7 +1,7 @@
 /* ===== GUILD HALL — Adventurer's Guild × Command Deck home page =================
    Replaces the legacy Dashboard as the default 'dashboard' route.
-   Reads window globals (AGENTS, NOTES, INVENTORY, SHOP_CATALOG, STATS) populated
-   by data.js via SSE. Reuses .office-card states from cards.css for live status,
+   Reads window globals (AGENTS, NOTES, STATS) populated by data.js via SSE.
+   Reuses .office-card states from cards.css for live status,
    .note-status from notes.css for quest pills. Quest sortie hands off to the
    Notes page via the c-office:navigate event for inline dispatch.
    =============================================================================== */
@@ -23,38 +23,6 @@ function isOpenQuest(note) {
   const s = questStatusOf(note);
   return s !== 'done' && s !== 'archived';
 }
-
-// ── 2-letter skill code (e.g. "Double Edge" → "DE") ──────────────────────────
-function skillInitials(name) {
-  const words = String(name || '').trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '·';
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
-
-// ── SkillSlots — small chip stack overlaid on a roster card ──────────────────
-const SkillSlots = ({ personaId }) => {
-  const inv = window.INVENTORY || {};
-  const owned = (inv.skills && inv.skills[personaId]) || [];
-  const catalog = (window.SHOP_CATALOG && window.SHOP_CATALOG.skills) || [];
-  // Always render 3 slots — fill with chips, leave empty placeholder dot
-  const slots = [0, 1, 2].map((i) => owned[i] || null);
-  return (
-    <div className="skill-slots">
-      {slots.map((skillId, i) => {
-        if (!skillId) return <span key={i} className="skill-chip tier-empty" title="ช่องว่าง">·</span>;
-        const skill = catalog.find((s) => s.id === skillId);
-        const tier = skill?.tier || 'common';
-        const tierClass = tier === 'rare' ? 'tier-rare' : tier === 'epic' ? 'tier-epic' : '';
-        const code = skill ? skillInitials(skill.name) : '··';
-        const tip = skill ? `${skill.name} — ${skill.desc}` : skillId;
-        return (
-          <span key={i} className={`skill-chip ${tierClass}`.trim()} title={tip}>{code}</span>
-        );
-      })}
-    </div>
-  );
-};
 
 // ── RosterCard — extends .office-card with state animations ──────────────────
 const RosterCard = ({ agent, onClick }) => {
@@ -84,7 +52,6 @@ const RosterCard = ({ agent, onClick }) => {
           ? <img src={agent.image} alt={agent.name}/>
           : <div className="of-initials">{agent.avatarInitials}</div>}
       </div>
-      <SkillSlots personaId={agent.id}/>
       <div className="of-busy-dots"><span/><span/><span/></div>
       <div className="of-name">{agent.name} · Lv.{agent.level || 1}</div>
       <div className="of-status">
@@ -197,7 +164,6 @@ const GuildHall = ({ onOpenAgent }) => {
 
   const agents = window.AGENTS || [];
   const notes = window.NOTES || [];
-  const inventory = window.INVENTORY || { gold: 0, skills: {}, items: {}, ownedAgents: ['orchestra'] };
   const stats = window.STATS || { agentsOnline: 0 };
 
   const openQuests = notes.filter(isOpenQuest);
@@ -230,11 +196,6 @@ const GuildHall = ({ onOpenAgent }) => {
           </div>
         </div>
         <div className="guild-hero-stats">
-          <span className="guild-gold-pip">
-            <span style={{ fontSize: 16 }}>⛁</span>
-            <span className="num">{(inventory.gold || 0).toLocaleString()}</span>
-            <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>Credits</span>
-          </span>
           <span className="chip">
             <span className="dot"/> live
           </span>
@@ -284,4 +245,4 @@ const GuildHall = ({ onOpenAgent }) => {
   );
 };
 
-Object.assign(window, { GuildHall, QuestCard, RosterCard, SkillSlots, AfterActionPanel });
+Object.assign(window, { GuildHall, QuestCard, RosterCard, AfterActionPanel });

@@ -1,4 +1,4 @@
-/* ===== NOTES PAGE — capture ideas, pick agent, chat or dispatch ===== */
+/* ===== NOTES PAGE — inbox/work-order desk ===== */
 
 const NOTE_STATUS_TH = {
   idea:     'ไอเดีย',
@@ -67,8 +67,8 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>Notes <span className="accent">All</span></h1>
-          <div className="sub">Capture ideas · Assign agents · Chat before dispatch</div>
+          <h1>Work Inbox <span className="accent">Desk</span></h1>
+          <div className="sub">Capture requests · assign owner · chat before dispatch</div>
         </div>
         <div className="topbar-actions">
           <span className="chip"><span className="dot"/> {notes.length} โน้ต</span>
@@ -156,7 +156,7 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
                   )}
                   {n.tag && <span className="badge slate" style={{fontSize: 9}}>{n.tag}</span>}
                   <span className="mono-s" style={{marginLeft: 'auto'}}>
-                    {n.messages?.length || 0} msg
+                    {(Array.isArray(n.messages) ? n.messages.length : 0)} msg
                   </span>
                 </div>
                 {lastMsg && (
@@ -459,7 +459,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
             <div className="note-msg-bubble">
               <div className="note-msg-meta">
                 <b>{agent?.name || 'Agent'}</b>
-                <span className="mono-s">typing</span>
+                <span className="mono-s">working...</span>
               </div>
               <div className="note-msg-content">
                 กำลังพิมพ์<span className="typing-dots">...</span>
@@ -474,7 +474,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
         <textarea
           className="note-input"
           rows={3}
-          placeholder={`คุยกับ ${agent?.name || 'เอเจนท์'}...`}
+          placeholder={`Message ${agent?.name || 'assigned agent'}...`}
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -486,7 +486,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
         />
         <div className="row" style={{gap: 8, marginTop: 8, justifyContent: 'flex-end'}}>
           <span className="mono-s" style={{marginRight: 'auto'}}>
-            Ctrl/⌘+Enter เพื่อส่ง · ใช้ <b>{provider}</b>
+            Ctrl/⌘+Enter to dispatch · provider <b>{provider}</b>
           </span>
           <button
             className="btn gold"
@@ -497,7 +497,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
             {imageBusy ? 'กำลังสร้างภาพ...' : 'สร้างภาพจริง'}
           </button>
           <button className="btn primary" disabled={busy || !draft.trim()} onClick={() => dispatch()}>
-            {busy ? 'รอคำตอบจริง...' : 'ส่งคุยกับเอเจนท์'}
+            {busy ? 'Waiting for provider response...' : 'Dispatch Message'}
           </button>
         </div>
       </div>

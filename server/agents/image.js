@@ -36,10 +36,10 @@ async function persist(buffer, slug) {
 }
 
 // ─── Gemini · Nano Banana 2 ──────────────────────────────────────────────────
-// Uses gemini-3-pro-image-preview (Nano Banana 2, the latest image model)
+// Uses gemini-3.1-flash-image-preview (Nano Banana 2, the latest image model)
 // via the generateContent API. The legacy imagen-3.0 / "3.1flashgen"
 // paths are not supported by this codebase — only Nano Banana 2.
-const NANO_BANANA_2_MODEL = 'gemini-3-pro-image-preview';
+const NANO_BANANA_2_MODEL = 'gemini-3.1-flash-image-preview';
 
 async function generateGemini({ prompt, slug }) {
   const auth = await getGoogleAuth();

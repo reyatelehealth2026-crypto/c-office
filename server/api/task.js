@@ -15,7 +15,7 @@
 //   GET    /api/evals/:id/grades → list grades for eval
 
 import { Router } from 'express';
-import { state, approveRunPhase, rejectRunPhase, requestRunCancellation } from '../state.js';
+import { state, approveRunPhase, rejectRunPhase, requestRunCancellation, appendScratchpad } from '../state.js';
 import { runOrchestrator } from '../agents/runner.js';
 import { listSkills } from '../agents/skills.js';
 import { listWorkflows } from '../agents/workflows.js';
@@ -124,10 +124,12 @@ router.post('/api/task', async (req, res) => {
   if (goal.length > 4000) return res.status(400).json({ error: 'goal too long (max 4000 chars)' });
   const workflow = req.body?.workflow ? String(req.body.workflow).trim() : '';
   const projectId = req.body?.projectId ? String(req.body.projectId).trim() : '';
+  const provider = req.body?.provider ? String(req.body.provider).trim() : '';
   try {
     const opts = {};
     if (workflow) opts.workflow = workflow;
     if (projectId) opts.projectId = projectId;
+    if (provider) opts.provider = provider;
     const { runId } = await runOrchestrator(goal, opts);
     res.json({ run_id: runId });
   } catch (e) {
@@ -171,6 +173,40 @@ router.post('/api/task/:run_id/cancel', (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/api/task/:run_id/chat', async (req, res) => {
+  const { text } = req.body || {};
+  if (!text) return res.status(400).json({ error: 'text required' });
+  const run = state.runs.get(req.params.run_id);
+  if (!run) return res.status(404).json({ error: 'unknown run' });
+
+  try {
+    const feedback = String(text).trim();
+    const runId = req.params.run_id;
+
+    // Inject feedback into scratchpad for agent awareness
+    appendScratchpad(runId, {
+      persona: 'user',
+      kind: 'note',
+      text: `User Follow-up: ${feedback}`,
+    });
+
+    // Reset status to allow the background worker to pick it up again
+    // We update the goal to include context for the planner
+    const augmentedGoal = `${run.goal}\n\n[FOLLOW-UP FEEDBACK]: ${feedback}`;
+    
+    // Trigger re-run in background
+    runOrchestrator(augmentedGoal, { 
+      existingRunId: runId,
+      projectId: run.projectId,
+      provider: run.provider || undefined 
+    }).catch(e => console.error('[c-office] chat re-run failed:', e));
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/api/task/:run_id/trace', (req, res) => {
   const run = state.runs.get(req.params.run_id);
   if (!run) return res.status(404).json({ error: 'unknown run' });
@@ -188,6 +224,7 @@ router.get('/api/skills', (req, res) => {
       revisions: s.revisions || 0,
       tokens: s.tokens || 0,
       createdAt: s.createdAt,
+      preview: String(s.body || '').slice(0, 1200),
     }));
     res.json({ skills });
   } catch (e) {

@@ -1,4 +1,4 @@
-/* ===== TASKS / MISSION LOG ===== */
+/* ===== TASKS / OPERATIONS BOARD ===== */
 const TasksPage = ({ onOpenAgent }) => {
   const [filter, setFilter] = React.useState('ALL');
   const statuses = ['ALL', 'running', 'done', 'failed'];
@@ -24,8 +24,8 @@ const TasksPage = ({ onOpenAgent }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>Mission <span className="accent">Log</span></h1>
-          <div className="sub">{TASKS.length} subagent spawns · {TASKS.filter(t=>t.status==='running').length} running</div>
+          <h1>Operations <span className="accent">Log</span></h1>
+          <div className="sub">{TASKS.length} task runs · {TASKS.filter(t=>t.status==='running').length} active</div>
         </div>
       </div>
 
@@ -53,7 +53,7 @@ const TasksPage = ({ onOpenAgent }) => {
         </div>
         {filtered.length === 0 && (
           <div className="muted" style={{padding:'30px 18px', fontSize:12, textAlign:'center'}}>
-            No tasks yet. Spawn a subagent in any Claude Code session.
+            No operation records yet. Start a run from any active session.
           </div>
         )}
         {filtered.map((t,i) => {
@@ -237,8 +237,8 @@ const ConnectionsPanel = () => {
 
   return (
     <div className="panel" style={{gridColumn:'span 2'}}>
-      <div className="panel-head"><h3>Connections</h3>
-        <div className="right">OAuth where supported · paste token elsewhere</div>
+      <div className="panel-head"><h3>Provider Connections</h3>
+        <div className="right">OAuth / CLI where supported · paste token elsewhere</div>
       </div>
       <div className="stack" style={{gap:8}}>
         <Row label="Anthropic" state={status?.anthropic} hint="reads ~/.claude/.credentials.json after `claude login`"
@@ -251,23 +251,32 @@ const ConnectionsPanel = () => {
         <TestResult provider="anthropic"/>
         {!status?.anthropic?.connected && <TokenField provider="anthropic" placeholder="…or paste sk-ant-… key"/>}
 
-        <Row label="Google (Nano Banana 2 Pro)" state={status?.google}
-          hint={status?.google?.connected ? 'ready for Gemini image generation' : 'connect OAuth or paste Gemini API key'}
+        <Row label="Google (Gemini)" state={status?.google}
+          hint={status?.google?.connected ? (status?.google?.mode === 'cli' ? 'connected via local gcloud CLI' : 'ready for Gemini requests') : 'connect OAuth, configure gcloud CLI, or paste Gemini API key'}
           action={<div style={{display:'flex', gap:6}}>
             <TestButton provider="google" disabled={!status?.google?.connected}/>
-            {status?.google?.connected
+            {status?.google?.connected && status?.google?.mode !== 'cli'
               ? <button disabled={busy==='google'} onClick={()=>disconnect('google')} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg-3)', color:'var(--text)', fontSize:12, cursor:'pointer'}}>Disconnect</button>
-              : <button disabled={!status?.google?.hasClientId} onClick={connectGoogle} style={{padding:'6px 14px', borderRadius:6, border:'none', background: status?.google?.hasClientId ? 'var(--gold)' : 'var(--bg-3)', color:'#000', fontSize:12, fontWeight:600, cursor: status?.google?.hasClientId ? 'pointer' : 'not-allowed'}}>Connect</button>}
+              : status?.google?.mode === 'cli'
+                ? <span className="badge slate">CLI MANAGED</span>
+                : <button disabled={!status?.google?.hasClientId} onClick={connectGoogle} style={{padding:'6px 14px', borderRadius:6, border:'none', background: status?.google?.hasClientId ? 'var(--gold)' : 'var(--bg-3)', color:'#000', fontSize:12, fontWeight:600, cursor: status?.google?.hasClientId ? 'pointer' : 'not-allowed'}}>Connect OAuth</button>}
           </div>}/>
         <TestResult provider="google"/>
-        {!status?.google?.hasClientId && (
+        
+        {(!status?.google?.connected || status?.google?.mode === 'cli') && (
+           <div className="mono-s" style={{marginLeft: 12, marginBottom: 8, marginTop: -4, color: 'var(--text-secondary)'}}>
+              <b>CLI Setup:</b> Ensure the Google Cloud SDK is installed. Run <span className="mono" style={{color:'var(--gold)'}}>gcloud auth login</span> or <span className="mono" style={{color:'var(--gold)'}}>gcloud auth application-default login</span> in your terminal to automatically authenticate via CLI.
+           </div>
+        )}
+
+        {!status?.google?.hasClientId && status?.google?.mode !== 'cli' && (
           <div style={{display:'flex', gap:6, marginLeft:12}}>
             <input type="text" placeholder="Google OAuth client_id (Desktop or Web)" value={googleClientId} onChange={e=>setGoogleClientId(e.target.value)}
               style={{padding:'6px 10px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-3)', color:'var(--text)', fontSize:12, fontFamily:'var(--font-mono)', flex:1}}/>
             <button disabled={busy==='google' || !googleClientId} onClick={() => submitToken('google', { clientId: googleClientId })} style={{padding:'6px 12px', borderRadius:6, border:'1px solid var(--border)', background:'var(--coral)', color:'#fff', fontSize:12, cursor:'pointer'}}>Save</button>
           </div>
         )}
-        {!status?.google?.connected && <TokenField provider="google" placeholder="Gemini API key for Nano Banana 2 Pro"/>}
+        {!status?.google?.connected && <TokenField provider="google" placeholder="Gemini API key"/>}
 
         <Row label="Replicate" state={status?.replicate} hint="paste an r8_… API token"
           action={<div style={{display:'flex', gap:6}}>
@@ -315,7 +324,7 @@ const ThemeEnginePanel = () => {
   };
   return (
     <div className="panel" style={{gridColumn:'span 2'}}>
-      <div className="panel-head"><h3>Theme Engine</h3><div className="right">event-driven progress · not locked to one game skin</div></div>
+      <div className="panel-head"><h3>Workspace Theme</h3><div className="right">office UI presets for different operation modes</div></div>
       <div style={{display:'flex', flexWrap:'wrap', gap:8}}>
         {(state.themes || []).map((theme) => (
           <button key={theme} className={'btn ' + (state.theme === theme ? 'primary' : '')} onClick={() => setTheme(theme)}>
@@ -346,8 +355,8 @@ const SettingsPage = () => {
     <div>
       <div className="topbar">
         <div>
-          <h1>Orchestration <span className="accent">Settings</span></h1>
-          <div className="sub">Hook status · sessions · pricing</div>
+          <h1>Control Room <span className="accent">Settings</span></h1>
+          <div className="sub">Hook status · sessions · provider ops</div>
         </div>
       </div>
       <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap: 18}}>
@@ -401,8 +410,8 @@ const SettingsPage = () => {
 
         <div className="panel" style={{gridColumn:'span 2'}}>
           <div className="panel-head">
-            <h3>CLI Providers</h3>
-            <div className="right">install one to dispatch real LLM responses</div>
+            <h3>Provider Runtimes</h3>
+            <div className="right">install one to dispatch real model responses</div>
           </div>
           <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap: 10}}>
             {((window.PROVIDERS?.providers) || []).map(p => (
@@ -526,13 +535,13 @@ const DynamicTasksPage = ({ onOpenAgent }) => {
     <div>
       <div className="topbar">
         <div>
-          <h1>Task <span className="accent">Board</span></h1>
-          <div className="sub">{(board.tasks || []).length} cards · {TASKS.filter(t=>t.status==='running').length} live running</div>
+          <h1>Operations <span className="accent">Board</span></h1>
+          <div className="sub">{(Array.isArray(board.tasks) ? board.tasks.length : 0)} work cards · {TASKS.filter(t=>t.status==='running').length} active</div>
         </div>
       </div>
 
       <div className="task-board-compose">
-        <input value={draft.title} onChange={(e)=>setDraft({...draft, title:e.target.value})} placeholder="Create task card"/>
+        <input value={draft.title} onChange={(e)=>setDraft({...draft, title:e.target.value})} placeholder="Create work card"/>
         <select value={draft.agentId} onChange={(e)=>setDraft({...draft, agentId:e.target.value})}>
           {(AGENTS || []).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
         </select>
@@ -561,13 +570,13 @@ const DynamicTasksPage = ({ onOpenAgent }) => {
                       <strong>{task.title || task.description || 'Untitled task'}</strong>
                       <span>{task.runStatus || status}</span>
                     </div>
-                    <p>{task.description || (live ? 'Live runtime task from agent events' : 'Manual board task')}</p>
+                    <p>{task.description || (live ? 'Live operation from runtime events' : 'Manual operations card')}</p>
                     <div className="row" style={{gap: 8}}>
                       <AgentDot agent={agent} size={24}/>
                       <button className="task-agent-link" onClick={() => agent && onOpenAgent(agent.id)}>{agent?.name || task.agentId || 'Unassigned'}</button>
                     </div>
                     <div className="task-board-events">
-                      {(task.events || []).slice(-3).map((event) => (
+                      {(Array.isArray(task.events) ? task.events : []).slice(-3).map((event) => (
                         <span key={event.id}>{event.text}</span>
                       ))}
                     </div>

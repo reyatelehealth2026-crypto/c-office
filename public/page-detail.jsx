@@ -4,28 +4,33 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
   const [chatInput, setChatInput] = React.useState('');
   const [chatMessages, setChatMessages] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
+  if (!agent) return null;
+  const traits = Array.isArray(agent.traits) ? agent.traits : [];
+  const stats = agent.stats || { tasks: 0, success: 0, uptime: '-', tokens: 0 };
+  const personality = (agent.personality && typeof agent.personality === 'object') ? agent.personality : {};
+  const skills = Array.isArray(agent.skills) ? agent.skills : [];
 
   const tabs = [
-    { id: 'chat',         label: 'Chat' },
+    { id: 'chat',         label: 'Desk Chat' },
     { id: 'personality',  label: 'Profile' },
     { id: 'skills',       label: 'Skills' },
     { id: 'history',      label: 'History' },
   ];
 
-  // Quick action buttons based on agent role
+  // Quick action buttons based on staff role
   const quickActions = React.useMemo(() => {
     const id = agent.id;
     const actions = [];
     if (id === 'nana' || id === 'mira') {
-      actions.push({ label: 'Trending Content', prompt: 'Research trending content in our niche' });
-      actions.push({ label: 'Analytics', prompt: 'Analyze our recent marketing performance' });
-      actions.push({ label: 'Campaign', prompt: 'Draft a marketing campaign brief' });
+      actions.push({ label: 'Content Queue', prompt: 'Review today\'s content queue and propose priorities' });
+      actions.push({ label: 'Analytics', prompt: 'Analyze this week\'s performance and suggest adjustments' });
+      actions.push({ label: 'Campaign Brief', prompt: 'Draft a campaign brief with owner, timeline, and KPI targets' });
     } else if (id === 'emi' || id === 'vex' || id === 'kai') {
       actions.push({ label: 'Bug Report', prompt: 'Investigate and fix the reported bug' });
-      actions.push({ label: 'Feature', prompt: 'Implement the new feature as described' });
+      actions.push({ label: 'Implementation', prompt: 'Implement the requested feature with a clear rollout plan' });
       actions.push({ label: 'Tests', prompt: 'Write tests for the specified module' });
     } else if (id === 'luna' || id === 'lumen' || id === 'astra') {
-      actions.push({ label: 'Draft Post', prompt: 'Draft a blog post on the specified topic' });
+      actions.push({ label: 'Draft Memo', prompt: 'Draft a clear internal memo on the specified topic' });
       actions.push({ label: 'Summary', prompt: 'Summarize the provided document' });
       actions.push({ label: 'Email', prompt: 'Write a professional email' });
     } else if (id === 'nyx') {
@@ -35,10 +40,10 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
       actions.push({ label: 'Design', prompt: 'Create a design concept' });
       actions.push({ label: 'Visual', prompt: 'Generate a visual asset' });
     } else if (id === 'orchestra') {
-      actions.push({ label: 'Orchestrate', prompt: 'Break down this goal and delegate to specialist agents' });
+      actions.push({ label: 'Orchestrate', prompt: 'Break down this work order and delegate to specialist agents' });
       actions.push({ label: 'Status', prompt: 'Summarize current status of all active tasks' });
     } else {
-      actions.push({ label: 'Task', prompt: 'Help me with this task' });
+      actions.push({ label: 'Work Order', prompt: 'Help me complete this work order' });
     }
     return actions;
   }, [agent.id]);
@@ -86,7 +91,7 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
             <div className="mono-s" style={{color:'var(--coral)', letterSpacing:'0.12em', marginBottom: 8}}>{agent.role}</div>
             <div style={{fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 12}}>{agent.tagline}</div>
             <div style={{display:'flex', gap:4, flexWrap:'wrap', justifyContent:'center'}}>
-              {agent.traits.map(t => <span key={t} className="badge" style={{fontSize:9}}>{t}</span>)}
+              {traits.map(t => <span key={t} className="badge" style={{fontSize:9}}>{t}</span>)}
             </div>
           </div>
 
@@ -94,17 +99,17 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
           <div className="panel">
             <div className="panel-head"><h3>Performance</h3><div className="right">lifetime</div></div>
             <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap:8}}>
-              <PerfStat label="Tasks" value={agent.stats.tasks}/>
-              <PerfStat label="Success" value={agent.stats.success + '%'}/>
-              <PerfStat label="Uptime" value={agent.stats.uptime}/>
-              <PerfStat label="Tokens" value={agent.stats.tokens}/>
+              <PerfStat label="Tasks" value={stats.tasks}/>
+              <PerfStat label="Success" value={stats.success + '%'}/>
+              <PerfStat label="Uptime" value={stats.uptime}/>
+              <PerfStat label="Tokens" value={stats.tokens}/>
             </div>
           </div>
 
-          {/* Current task */}
+          {/* Current assignment */}
           <div className="panel">
-            <div className="panel-head"><h3>Current Task</h3><div className="right">{agent.status}</div></div>
-            <div style={{fontSize:12, lineHeight:1.5}}>{agent.currentTask || 'No active task'}</div>
+            <div className="panel-head"><h3>Current Assignment</h3><div className="right">{agent.status}</div></div>
+            <div style={{fontSize:12, lineHeight:1.5}}>{agent.currentTask || 'No active assignment'}</div>
           </div>
         </div>
 
@@ -165,7 +170,7 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
               }}>
                 {chatMessages.length === 0 && (
                   <div className="muted" style={{textAlign:'center', padding:'40px 20px', fontSize:13}}>
-                    Send a message or use a quick action above to start working with {agent.name}
+                    Send a message or use a quick action above to start a desk run with {agent.name}
                   </div>
                 )}
                 {chatMessages.map((m, i) => (
@@ -215,7 +220,7 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
-                  placeholder={`Message ${agent.name}...`}
+                  placeholder={`Send work request to ${agent.name}...`}
                   style={{
                     flex: 1,
                     padding: '10px 14px',
@@ -235,8 +240,8 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
             </div>
           )}
 
-          {tab === 'personality' && <PersonalityPanel agent={agent}/>}
-          {tab === 'skills' && <SkillsPanel agent={agent}/>}
+          {tab === 'personality' && <PersonalityPanel agent={agent} personality={personality}/>}
+          {tab === 'skills' && <SkillsPanel agent={agent} skills={skills}/>}
           {tab === 'history' && <HistoryPanel agent={agent}/>}
         </div>
       </div>
@@ -251,18 +256,18 @@ const PerfStat = ({ label, value }) => (
   </div>
 );
 
-const PersonalityPanel = ({ agent }) => (
+const PersonalityPanel = ({ agent, personality }) => (
   <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap: 16}}>
     <div className="panel">
       <div className="panel-head"><h3>Personality Matrix</h3><div className="right">radar</div></div>
       <div style={{display:'flex', justifyContent:'center'}}>
-        <Radar data={agent.personality} size={300} color="var(--coral)"/>
+        <Radar data={personality} size={300} color="var(--coral)"/>
       </div>
     </div>
     <div className="stack">
       <div className="panel">
         <div className="panel-head"><h3>Trait Breakdown</h3></div>
-        {Object.entries(agent.personality).map(([k,v]) => (
+        {Object.entries(personality).map(([k,v]) => (
           <div key={k} style={{marginBottom: 10}}>
             <div style={{display:'flex', justifyContent:'space-between', marginBottom: 4}}>
               <span style={{fontSize:12, textTransform:'capitalize'}}>{k}</span>
@@ -282,15 +287,15 @@ const PersonalityPanel = ({ agent }) => (
   </div>
 );
 
-const SkillsPanel = ({ agent }) => {
-  const cats = [...new Set(agent.skills.map(s => s.cat))];
+const SkillsPanel = ({ agent, skills }) => {
+  const cats = [...new Set(skills.map(s => s.cat))];
   return (
     <div className="stack" style={{gap:14}}>
       {cats.map(c => (
         <div key={c} className="panel">
-          <div className="panel-head"><h3>{c}</h3><div className="right">{agent.skills.filter(s=>s.cat===c).length} skills</div></div>
+          <div className="panel-head"><h3>{c}</h3><div className="right">{skills.filter(s=>s.cat===c).length} skills</div></div>
           <div className="grid" style={{gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:8}}>
-            {agent.skills.filter(s => s.cat === c).map(s => (
+            {skills.filter(s => s.cat === c).map(s => (
               <div key={s.name} style={{padding:10, background:'var(--bg-2)', borderRadius:8, border:'1px solid var(--border)'}}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom: 6}}>
                   <div style={{fontSize:12, fontWeight:600}}>{s.name}</div>

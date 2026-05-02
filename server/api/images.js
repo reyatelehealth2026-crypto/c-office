@@ -15,17 +15,18 @@ const PUBLIC_DIR = path.resolve(__dirname, '../../public');
 const IMAGE_DIR = path.join(PUBLIC_DIR, 'generated', 'images');
 
 const DEFAULT_MODEL = process.env.C_OFFICE_IMAGE_MODEL || 'gpt-image-1.5';
-const DEFAULT_GOOGLE_IMAGE_MODEL = process.env.C_OFFICE_GOOGLE_IMAGE_MODEL || 'gemini-3-pro-image-preview';
+const DEFAULT_GOOGLE_IMAGE_MODEL = process.env.C_OFFICE_GOOGLE_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
 const DEFAULT_GOOGLE_FLASH_IMAGE_MODEL = process.env.C_OFFICE_GOOGLE_FLASH_IMAGE_MODEL || 'gemini-2.0-flash-preview-image-generation';
 const DEFAULT_SIZE = process.env.C_OFFICE_IMAGE_SIZE || '1024x1024';
 const DEFAULT_CHARACTER_SIZE = process.env.C_OFFICE_CHARACTER_IMAGE_SIZE || '1024x1536';
 const DEFAULT_QUALITY = process.env.C_OFFICE_IMAGE_QUALITY || 'medium';
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
 export const googleImageModelInfo = {
   provider: 'google',
-  display: 'Nano Banana 2 Pro',
+  display: 'Nano Banana 2',
   model: DEFAULT_GOOGLE_IMAGE_MODEL,
-  officialName: 'Gemini 3 Pro Image Preview',
+  officialName: 'Gemini 3.1 Flash Image Preview',
 };
 
 export const googleFlashImageModelInfo = {
@@ -60,8 +61,64 @@ function safeFilename(title) {
     .slice(0, 60) || 'image';
 }
 
+function metadataPathFor(filePath) {
+  return `${filePath}.json`;
+}
+
+function publicUrlForImageName(name) {
+  return `/generated/images/${path.basename(name)}`;
+}
+
+async function writeImageMetadata(filePath, metadata) {
+  const safe = {
+    id: metadata.id || path.basename(filePath),
+    name: path.basename(filePath),
+    imageUrl: publicUrlForImageName(filePath),
+    prompt: metadata.prompt || '',
+    revisedPrompt: metadata.revisedPrompt || null,
+    provider: metadata.provider || null,
+    model: metadata.model || null,
+    source: metadata.source || null,
+    agentId: metadata.agentId || null,
+    noteId: metadata.noteId || null,
+    size: metadata.size || null,
+    quality: metadata.quality || null,
+    createdAt: metadata.createdAt || new Date().toISOString(),
+  };
+  await fs.writeFile(metadataPathFor(filePath), JSON.stringify(safe, null, 2), 'utf8');
+  return safe;
+}
+
+async function readImageMetadata(filePath, stat) {
+  const name = path.basename(filePath);
+  let meta = {};
+  try {
+    meta = JSON.parse(await fs.readFile(metadataPathFor(filePath), 'utf8'));
+  } catch {}
+  return {
+    id: meta.id || name,
+    name,
+    imageUrl: publicUrlForImageName(name),
+    prompt: meta.prompt || '',
+    revisedPrompt: meta.revisedPrompt || null,
+    provider: meta.provider || null,
+    model: meta.model || null,
+    source: meta.source || null,
+    agentId: meta.agentId || null,
+    noteId: meta.noteId || null,
+    size: meta.size || null,
+    quality: meta.quality || null,
+    bytes: stat?.size || 0,
+    createdAt: meta.createdAt || stat?.birthtime?.toISOString?.() || stat?.mtime?.toISOString?.() || null,
+    updatedAt: stat?.mtime?.toISOString?.() || null,
+  };
+}
+
 function buildImagePrompt({ prompt, note }) {
   const source = prompt || note?.body || note?.title || '';
+  if (source.length > 100 && (source.includes('highly detailed') || source.includes('concept illustration'))) {
+    return source; // It's likely a professional prompt from the builder
+  }
   return [
     'Create a polished game-ready raster image from this user request.',
     'Style: vivid fantasy game illustration, clean composition, high detail, no watermark.',
@@ -73,25 +130,39 @@ function buildImagePrompt({ prompt, note }) {
 
 export function buildCharacterImagePrompt(agent = {}, extraPrompt = '') {
   const name = clip(agent.name || 'AI Agent', 80);
+  
+  // If the user provided a substantial prompt (e.g. from the Pro Builder), 
+  // use it directly instead of wrapping it in the hardcoded "Office" style.
+  const isProPrompt = extraPrompt.length > 100 && (
+    extraPrompt.toLowerCase().includes('highly detailed') || 
+    extraPrompt.toLowerCase().includes('concept illustration') ||
+    extraPrompt.toLowerCase().includes('signature theme color')
+  );
+
+  if (isProPrompt) {
+    return extraPrompt;
+  }
+
   const role = clip(agent.role || 'AI teammate', 160);
   const category = clip(agent.category || 'guild member', 80);
-  const color = clip(agent.color || '#00f0ff', 32);
+  // Default to a neutral palette if no color is set, avoiding the "always blue" bias.
+  const color = agent.color ? clip(agent.color, 32) : 'a cohesive professional color palette';
   const personality = agent.systemPrompt
     ? clip(agent.systemPrompt, 700)
     : clip(agent.tagline || 'capable, focused, dependable', 240);
   const extra = extraPrompt ? `\nUser customization: ${clip(extraPrompt, 700)}` : '';
+  
   return [
-    `Create a full-body game character concept illustration for "${name}".`,
-    `Role/class fantasy: ${role}. Team category: ${category}. Signature accent color: ${color}.`,
-    `Character personality and visual cues: ${personality}.`,
+    `Create a full-body character concept illustration for "${name}".`,
+    `Role: ${role}. Category: ${category}. Theme: ${color}.`,
+    `Visual cues: ${personality}.`,
     '',
-    'Visual direction: general MMORPG guild party style, premium fantasy adventure game, heroic but practical outfit, readable silhouette, expressive face, detailed costume materials, natural pose, game lobby lighting.',
-    'Asset target: transparent-background character cutout PNG for an in-game HUD roster, not an illustration card and not an environment scene.',
-    'Canvas: portrait 9:16 or 2:3 ratio, head-to-toe full body, feet visible, centered on the vertical axis, 8-12% empty margin around the silhouette.',
-    'If a reference image is supplied, preserve the same character identity, body proportion, full-body framing, costume direction, and roster-friendly silhouette while improving quality.',
-    'Composition: one isolated full-body character only, alpha/transparent background preferred, no room, no landscape, no scenery, no pedestal baked into the image.',
-    'Quality bar: high detail, clean anatomy, crisp eyes, balanced armor/fabric/accessories, polished 3D-game-key-art feel, no UI overlays.',
-    'Avoid: trading card layout, card frame, stats box, text labels, watermark, logo, signature, cropped head or feet, duplicate limbs, unreadable symbols, landscape 16:9 image.',
+    'Visual direction: professional digital art style, clean silhouette, expressive face, detailed materials, natural standing pose, studio lighting.',
+    'Asset target: transparent-background character cutout PNG.',
+    'Canvas: portrait ratio, full body, centered.',
+    'Composition: one isolated character only, alpha/transparent background preferred, no scenery.',
+    'Quality: high detail, clean anatomy, polished 3D-game-key-art feel.',
+    'Avoid: watermark, logo, signature, cropped limbs, landscape orientation.',
     extra,
   ].filter(Boolean).join('\n');
 }
@@ -266,8 +337,8 @@ async function referenceImagePart(agent) {
 }
 
 async function callGoogleCharacterImage({ auth, prompt, agent, model }) {
-  const reference = await referenceImagePart(agent);
-  if (!reference) return callGoogleImage({ auth, prompt, model });
+  // Intentionally ignoring the old agent image (reference) as requested,
+  // to ensure completely fresh generations.
   return callGoogleImage({
     auth,
     model,
@@ -276,10 +347,9 @@ async function callGoogleCharacterImage({ auth, prompt, agent, model }) {
         text: [
           prompt,
           '',
-          'Use the attached current agent image as the visual reference. Return a portrait-ratio transparent character cutout if supported. Keep this as a game roster character, not a landscape scene and not a portrait card.',
+          'IMPORTANT: Generate a portrait-ratio character concept with a PURE SOLID WHITE or PURE SOLID GRAY background. This is for a transparent character cutout. Keep this as a game roster character, not a landscape scene and not a portrait card. No scenery, no background details, just the character on a solid color.',
         ].join('\n'),
-      },
-      reference,
+      }
     ],
   });
 }
@@ -421,6 +491,37 @@ export async function imageStatusRoute(_req, res) {
   });
 }
 
+export async function imageLibraryRoute(_req, res) {
+  await fs.mkdir(IMAGE_DIR, { recursive: true });
+  const entries = await fs.readdir(IMAGE_DIR, { withFileTypes: true });
+  const images = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!IMAGE_EXTS.has(ext)) continue;
+    const filePath = path.join(IMAGE_DIR, entry.name);
+    const stat = await fs.stat(filePath).catch(() => null);
+    if (!stat) continue;
+    images.push(await readImageMetadata(filePath, stat));
+  }
+  images.sort((a, b) => Date.parse(b.createdAt || b.updatedAt || 0) - Date.parse(a.createdAt || a.updatedAt || 0));
+  res.json({ ok: true, images, dir: '/generated/images' });
+}
+
+export async function deleteImageRoute(req, res) {
+  const name = path.basename(req.params.name || '');
+  if (!name || !IMAGE_EXTS.has(path.extname(name).toLowerCase())) {
+    return res.status(400).json({ error: 'invalid image name' });
+  }
+  const filePath = path.resolve(IMAGE_DIR, name);
+  if (!filePath.startsWith(IMAGE_DIR)) return res.status(400).json({ error: 'invalid image path' });
+  await fs.unlink(filePath).catch((error) => {
+    if (error?.code !== 'ENOENT') throw error;
+  });
+  await fs.unlink(metadataPathFor(filePath)).catch(() => {});
+  res.json({ ok: true, deleted: name });
+}
+
 export async function generateImageRoute(req, res) {
   const { noteId, prompt, size, quality, provider = 'openai', agentId, mode } = req.body || {};
   const note = noteId ? await getNote(noteId) : null;
@@ -493,6 +594,18 @@ export async function generateImageRoute(req, res) {
       : null;
     const finalFilePath = cutoutPath || filePath;
     const imageUrl = `/generated/images/${path.basename(finalFilePath)}`;
+    const libraryMeta = await writeImageMetadata(finalFilePath, {
+      id,
+      prompt: finalPrompt,
+      revisedPrompt: result.revisedPrompt,
+      provider: useGoogle ? googleDisplayForProvider(provider) : useTransparentOpenAI ? 'codex-image-edit' : 'openai-image',
+      model: result.model,
+      source: result.source,
+      agentId: agent?.id || null,
+      noteId: note?.id || null,
+      size: result.size,
+      quality: result.quality,
+    });
     if (agent?.id) updateAgent(agent.id, { generatedImage: imageUrl, lastImagePrompt: finalPrompt });
 
     const message = {
@@ -512,7 +625,7 @@ export async function generateImageRoute(req, res) {
       await appendMessage(note.id, message);
       await updateNote(note.id, { status: 'done' });
     }
-    res.json({ ok: true, imageUrl, agentId: agent?.id || null, ...result, prompt: finalPrompt });
+    res.json({ ok: true, imageUrl, image: libraryMeta, agentId: agent?.id || null, ...result, prompt: finalPrompt });
   } catch (e) {
     const response = useGoogle
       ? {

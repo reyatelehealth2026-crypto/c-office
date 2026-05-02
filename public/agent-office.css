@@ -897,6 +897,7 @@
     rgba(0,0,0,0.18);
 }
 
+.agent-office-room,
 .agent-party-stage {
   min-height: 720px;
   border-radius: 10px;
@@ -971,6 +972,7 @@
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 14px;
   padding: 172px 24px 32px;
+  align-items: start;
 }
 
 .agent-model-unit {
@@ -984,6 +986,11 @@
 .agent-model-unit:hover,
 .agent-model-unit.is-selected {
   transform: translateY(-5px);
+}
+
+.agent-model-unit.status-active {
+  opacity: 1;
+  filter: none;
 }
 
 .agent-model-stage {
@@ -1062,6 +1069,7 @@
   min-height: 50px;
   border-color: rgba(255,255,255,0.1);
   background: rgba(12,15,26,0.72);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
 }
 
 .agent-model-portrait {
@@ -1098,6 +1106,46 @@
   height: 8px;
 }
 
+.status-active .agent-desk {
+  border-color: rgba(125, 211, 252, 0.28);
+}
+
+.status-busy .agent-desk {
+  border-color: rgba(250, 204, 21, 0.4);
+}
+
+.status-offline .agent-desk,
+.status-offline .agent-back-screen {
+  filter: saturate(0.65) brightness(0.85);
+}
+
+.status-busy .agent-back-screen::before {
+  content: '';
+  position: absolute;
+  inset: 7px 7px auto 7px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(125,211,252,0.95), transparent);
+  animation: agent-monitor-scan 1.2s linear infinite;
+}
+
+.status-busy .desk-console {
+  animation: agent-typing 0.45s steps(2, end) infinite;
+}
+
+.status-busy .agent-model-portrait {
+  animation: agent-busy-bob 0.75s ease-in-out infinite;
+}
+
+.status-active .agent-model-portrait {
+  animation: agent-idle-breathe 3.8s ease-in-out infinite;
+}
+
+.status-offline .agent-model-portrait,
+.status-offline .agent-holo-ring {
+  opacity: 0.72;
+}
+
 .agent-unit-footer strong {
   font-size: 15px;
 }
@@ -1118,4 +1166,36 @@
 
 .agent-meter-row span:nth-child(3) {
   opacity: 0.5;
+}
+
+@keyframes agent-monitor-scan {
+  0% { transform: translateX(-42%); opacity: 0.2; }
+  35% { opacity: 1; }
+  100% { transform: translateX(42%); opacity: 0.22; }
+}
+
+@keyframes agent-typing {
+  0%, 100% { transform: translateX(-50%) skewX(-8deg); }
+  50% { transform: translateX(-50%) skewX(8deg); }
+}
+
+@keyframes agent-busy-bob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-2px); }
+}
+
+@keyframes agent-idle-breathe {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-1px); }
+}
+
+@media (max-width: 980px) {
+  .agent-party-lineup {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    padding: 146px 16px 24px;
+  }
+
+  .agent-model-unit {
+    min-height: 320px;
+  }
 }

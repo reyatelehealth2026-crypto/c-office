@@ -30,6 +30,20 @@ test('agents page is not locked to the original fixed persona id groups', () => 
   assert.match(page, /\/api\/agents/);
 });
 
+test('dashboard and office views rely on dynamic agent collections, not fixed nine slots', () => {
+  assert.match(page, /agents\.map/);
+  assert.match(page, /filtered\.map/);
+  assert.match(page, /new Set\(agents\.map/);
+  assert.doesNotMatch(page, /slice\(0,\s*9\)/);
+});
+
+test('dashboard rendering keeps defensive fallbacks for sparse agent or run data', () => {
+  assert.match(page, /agent\?\.id/);
+  assert.match(page, /agent\?\.generatedImage/);
+  assert.match(page, /agents\[0\]\?\.id \|\| ''/);
+  assert.match(page, /window\.PROVIDERS\?\.default \|\| 'claude'/);
+});
+
 test('agent office stylesheet is loaded and defines workroom pieces', () => {
   assert.match(html, /agent-office\.css/);
   assert.match(css, /\.agent-party-stage/);

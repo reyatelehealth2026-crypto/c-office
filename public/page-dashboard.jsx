@@ -52,6 +52,7 @@ const SendToOrchestra = () => {
   const [workflow, setWorkflow] = React.useState('');
   const [projects, setProjects] = React.useState([]);
   const [projectId, setProjectId] = React.useState('');
+  const [provider, setProvider] = React.useState('claude');
   const [showNewProject, setShowNewProject] = React.useState(false);
   const [newProjectName, setNewProjectName] = React.useState('');
 
@@ -73,6 +74,20 @@ const SendToOrchestra = () => {
   }, []);
 
   React.useEffect(() => {
+    const draft = sessionStorage.getItem('c-office-orchestra-draft');
+    if (draft) {
+      setGoal(draft);
+      sessionStorage.removeItem('c-office-orchestra-draft');
+    }
+    const onGoal = (e) => {
+      const g = e.detail?.goal;
+      if (typeof g === 'string' && g.trim()) setGoal(g.trim());
+    };
+    window.addEventListener('c-office:orchestra-goal', onGoal);
+    return () => window.removeEventListener('c-office:orchestra-goal', onGoal);
+  }, []);
+
+  React.useEffect(() => {
     fetch('/api/auth/status').then(r => r.json()).then(setAuthStatus).catch(()=>{});
     fetch('/api/tasks').then(r => r.json()).then(j => setRuns(j.runs || [])).catch(()=>{});
     fetch('/api/workflows').then(r => r.json()).then(j => setWorkflows(j.workflows || [])).catch(()=>{});
@@ -85,8 +100,6 @@ const SendToOrchestra = () => {
     return () => window.COfficeBus?.removeEventListener('refresh', refresh);
   }, []);
 
-  const connected = !!authStatus?.anthropic?.connected;
-
   const submit = async () => {
     if (!goal.trim() || busy) return;
     setBusy(true);
@@ -98,6 +111,7 @@ const SendToOrchestra = () => {
           goal: goal.trim(),
           workflow: workflow || undefined,
           projectId: projectId || undefined,
+          provider: provider || undefined,
         }),
       });
       const j = await r.json();
@@ -111,6 +125,14 @@ const SendToOrchestra = () => {
     } finally { setBusy(false); }
   };
 
+  const isProviderConnected = (p) => {
+    if (!authStatus) return false;
+    if (p === 'claude') return !!authStatus.anthropic?.connected;
+    if (p === 'gemini') return !!authStatus.google?.connected;
+    if (p === 'codex') return !!authStatus.openai?.connected;
+    return false;
+  };
+
   const liveRun = runs.find(r => r.status === 'running') || runs[0];
 
   return (
@@ -121,16 +143,31 @@ const SendToOrchestra = () => {
         value={goal}
         onChange={e => setGoal(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-        disabled={!connected || busy}
-        placeholder={connected ? placeholders[placeholderIdx] : 'Connect Anthropic in Settings first'}
+        disabled={busy}
+        placeholder={isProviderConnected(provider) ? placeholders[placeholderIdx] : `Connect ${provider} in Settings first`}
       />
+      <select
+        value={provider}
+        onChange={e => setProvider(e.target.value)}
+        disabled={busy}
+        title="AI Provider for this run"
+        style={{
+          background: 'var(--bg-2)', color: 'var(--text-1)',
+          border: '1px solid var(--border)', borderRadius: 6,
+          padding: '6px 8px', fontSize: 12,
+          fontFamily: 'var(--font-mono)',
+        }}>
+        <option value="claude">Claude</option>
+        <option value="gemini">Gemini</option>
+        <option value="codex">Codex</option>
+      </select>
       <select
         value={projectId}
         onChange={e => {
           if (e.target.value === '__new__') { setShowNewProject(true); return; }
           setProjectId(e.target.value);
         }}
-        disabled={!connected || busy}
+        disabled={busy}
         title="Group runs into a project (scopes the skill library)"
         style={{
           background: 'var(--bg-2)', color: 'var(--text-1)',
@@ -185,7 +222,7 @@ const SendToOrchestra = () => {
         <select
           value={workflow}
           onChange={e => setWorkflow(e.target.value)}
-          disabled={!connected || busy}
+          disabled={busy}
           title={workflow ? workflows.find(w => w.name === workflow)?.description : 'Auto-plan (LLM decomposes goal)'}
           style={{
             background: 'var(--bg-2)', color: 'var(--text-1)',
@@ -200,7 +237,7 @@ const SendToOrchestra = () => {
         </select>
       )}
       <button className="btn-primary-task"
-        onClick={submit} disabled={!connected || busy || !goal.trim()}>
+        onClick={submit} disabled={busy || !goal.trim() || !isProviderConnected(provider)}>
         {busy ? 'Sending...' : 'Send'}
       </button>
       {liveRun && (
@@ -229,6 +266,85 @@ const SendToOrchestra = () => {
 /* Multi-agent run timeline — plan / scratchpad / critique / verify */
 const PHASES = ['plan', 'execute', 'critique', 'verify', 'done'];
 
+// StepCard: A standalone component for each agent's turn
+const StepCard = ({ card, active, copiedKey, copy }) => {
+  const agent = (window.AGENTS || []).find((a) => a.id === card.plan.persona);
+  const status = !card.step ? 'pending'
+    : card.step.result?.ok ? 'done'
+    : card.step.result ? 'failed' : 'running';
+  
+  const statusColor = {
+    pending: 'var(--text-4)',
+    running: 'var(--gold)',
+    done: 'var(--green)',
+    failed: 'var(--red)',
+  }[status];
+
+  const output = card.step?.result?.text || card.step?.result?.error || '';
+
+  return (
+    <div className={`step-card ${active ? 'is-active' : ''}`} style={{
+      border: active ? '2px solid var(--gold)' : '1px solid var(--border)',
+      borderRadius: 12,
+      background: 'var(--bg-2)',
+      boxShadow: active ? '0 0 20px rgba(255, 191, 0, 0.2)' : '0 4px 12px rgba(0,0,0,0.1)',
+      overflow: 'hidden',
+      transition: 'all 0.3s ease',
+      transform: active ? 'scale(1.02)' : 'none',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 16px',
+        background: active ? 'rgba(255,191,0,0.05)' : 'rgba(255,255,255,0.03)',
+        borderBottom: '1px solid var(--border)',
+      }}>
+        <AgentDot agent={agent} size={36}/>
+        <div style={{flex: 1}}>
+          <div style={{fontSize: 14, fontWeight: 700, display:'flex', alignItems:'center', gap:8}}>
+            {agent?.name || card.plan.persona}
+            <span style={{fontSize: 10, padding: '2px 6px', borderRadius: 4, background: statusColor, color: 'var(--bg-0)', textTransform: 'uppercase', fontWeight: 600}}>
+              {status}
+            </span>
+            {active && <span className="pulse-text" style={{color: 'var(--gold)', fontSize: 10, fontWeight: 700}}>ACTIVE TURN ◀</span>}
+          </div>
+          <div style={{fontSize: 11, color: 'var(--text-3)', marginTop: 2}}>
+             {card.plan.instruction}
+          </div>
+        </div>
+      </div>
+      <div style={{padding: 16, background: active ? 'var(--bg-2)' : 'var(--bg-1)'}}>
+        {card.step ? (
+          output ? (
+            <div style={{
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: status === 'failed' ? 'var(--red)' : 'var(--text-1)',
+              whiteSpace: 'pre-wrap',
+            }}>
+               {output}
+            </div>
+          ) : (
+            <div style={{padding: 20, textAlign:'center'}}>
+              <div className="loader-dots"><span>Agent is working</span></div>
+            </div>
+          )
+        ) : (
+          <div style={{color: 'var(--text-4)', fontStyle: 'italic', fontSize: 13, textAlign: 'center', padding: '10px 0'}}>
+            Waiting for previous tasks...
+          </div>
+        )}
+      </div>
+      {card.step && output && (
+        <div style={{padding: '8px 16px', background: 'var(--bg-2)', borderTop: '1px solid var(--border)', display:'flex', justifyContent:'flex-end'}}>
+          <button className="btn-ghost" style={{fontSize: 11}} onClick={() => copy(output, `step-${card.idx}`)}>
+            {copiedKey === `step-${card.idx}` ? '✓ Copied' : '📋 Copy Output'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* Agent work-window: a full panel showing every delegation in detail
    with the artifacts each persona returned, plus run-level controls. */
 const TeamTimeline = () => {
@@ -237,6 +353,8 @@ const TeamTimeline = () => {
   const [collapsedSteps, setCollapsedSteps] = React.useState({});
   const [copiedKey, setCopiedKey] = React.useState(null);
   const [cancelling, setCancelling] = React.useState(false);
+  const [chatBackText, setChatBackText] = React.useState('');
+  const [chatting, setChatting] = React.useState(false);
 
   React.useEffect(() => {
     const refresh = () => setRuns(window.RUNS || []);
@@ -245,7 +363,6 @@ const TeamTimeline = () => {
   }, []);
 
   const run = runs.find(r => r.status === 'running') || runs[0];
-  if (!run) return null;
 
   const copy = async (text, key) => {
     try { await navigator.clipboard.writeText(text); }
@@ -255,7 +372,7 @@ const TeamTimeline = () => {
   };
 
   const cancelRun = async () => {
-    if (cancelling) return;
+    if (!run || cancelling) return;
     if (!window.confirm('Cancel this run? In-flight steps finish; remaining steps are skipped.')) return;
     setCancelling(true);
     try {
@@ -270,272 +387,132 @@ const TeamTimeline = () => {
   };
 
   const openInNotes = () => {
+    if (!run) return;
     window.dispatchEvent(new CustomEvent('c-office:navigate', {
       detail: { page: 'notes', preset: { title: run.goal, body: run.final || '' } },
     }));
   };
 
-  const isLive = run.status === 'running';
+  const sendChatBack = async () => {
+    if (!run || !chatBackText.trim()) return;
+    setChatting(true);
+    try {
+      const res = await fetch(`/api/task/${run.id}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: chatBackText.trim() }),
+      });
+      if (!res.ok) {
+        const j = await res.json();
+        alert(j.error || 'Failed to send chat');
+      } else {
+        setChatBackText('');
+      }
+    } catch (e) { alert(e.message); }
+    finally { setChatting(false); }
+  };
+
+  if (!run) return null;
+
+  const isLive = run.status === 'running' || run.status === 'awaiting-approval';
+  const isClarifying = run.phase === 'clarify';
 
   const phaseLabel = {
-    plan: 'Planning',
-    execute: 'Executing',
-    critique: 'Reviewing',
-    verify: 'Verifying',
-    done: 'Done',
+    plan: 'Boss Review',
+    clarify: 'Clarification Needed',
+    execute: 'Production',
+    critique: 'Quality Audit',
+    verify: 'Verification',
+    done: 'Finished',
   }[run.phase || 'execute'] || (isLive ? 'Working' : 'Done');
 
-  const phaseColor = run.status === 'failed'
-    ? 'var(--red)'
-    : run.phase === 'done' || run.status === 'done'
-      ? 'var(--green)'
-      : 'var(--gold)';
+  const phaseColor = run.status === 'failed' ? 'var(--red)' : run.status === 'done' ? 'var(--green)' : 'var(--gold)';
 
   const plan = Array.isArray(run.plan) ? run.plan : [];
   const critique = run.critique || null;
+  const scratch = Array.isArray(run.scratchpad) ? run.scratchpad : [];
 
   const sevColor = (sev) => {
-    if (sev === 'critical') return 'var(--red)';
-    if (sev === 'high') return 'var(--gold)';
-    if (sev === 'none') return 'var(--green)';
-    return 'var(--text-3)';
+    const s = String(sev || 'none').toLowerCase();
+    if (s === 'critical') return 'var(--red)';
+    if (s === 'high') return '#e85d04';
+    if (s === 'med') return 'var(--gold)';
+    if (s === 'low') return 'var(--text-3)';
+    return 'var(--green)';
   };
+  
+  const bossAnalysis = [...scratch].reverse().find(s => s.kind === 'analysis')?.text;
 
   // Build per-persona step cards: align plan entries with executed steps.
   const cards = plan.map((p, i) => {
-    const matched = (run.steps || []).find((s) => s.persona === p.persona);
+    const matched = (run.steps || []).find((s) => s.persona === p.persona && s.instruction === p.instruction);
     return { idx: i, plan: p, step: matched };
   });
-  // If steps exist that aren't in the plan (e.g. workflow-skipped planner),
-  // append them after.
-  for (const s of (run.steps || [])) {
-    if (!plan.some((p) => p.persona === s.persona)) {
-      cards.push({ idx: cards.length, plan: { persona: s.persona, instruction: s.instruction }, step: s });
-    }
-  }
 
-  const scratch = Array.isArray(run.scratchpad) ? run.scratchpad : [];
+  const activeStepIdx = cards.findIndex(c => !c.step || !c.step.result?.ok);
 
   return (
-    <div className="panel" style={{
-      marginBottom: 14,
-      padding: 0,
-      border: '1px solid var(--border)',
-      background: 'var(--bg-1)',
-    }}>
-      {/* === Header bar === */}
-      <div style={{
-        padding: '14px 16px',
-        borderBottom: '1px solid var(--border)',
-        background: 'linear-gradient(180deg, var(--bg-1), var(--bg-0))',
-      }}>
+    <div className="panel" style={{ marginBottom: 14, padding: 0, border: '1px solid var(--border)', background: 'var(--bg-1)' }}>
+      {/* Header bar */}
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', background: 'linear-gradient(180deg, var(--bg-1), var(--bg-0))' }}>
         <div style={{display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap'}}>
           <div style={{flex: 1, minWidth: 240}}>
             <div style={{display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap'}}>
               <span style={{color: phaseColor, fontSize: 14}}>{isLive ? '●' : run.status === 'failed' ? '✕' : '✓'}</span>
-              <h3 style={{margin: 0, fontSize: 14}}>Agent Workspace · {phaseLabel}</h3>
-              {run.workflow && (
-                <span className="chip" style={{
-                  fontSize: 10, padding: '2px 6px',
-                  background: 'var(--bg-2)', fontFamily: 'var(--font-mono)',
-                }}>{run.workflow}</span>
-              )}
-              {run.projectId && (
-                <span className="chip" style={{
-                  fontSize: 10, padding: '2px 6px',
-                  background: 'var(--gold)', color: 'var(--bg-0)',
-                }}>📁 {run.projectId.replace(/^proj_/, '').slice(0, 24)}</span>
-              )}
-              {run.revisions > 0 && (
-                <span className="chip" style={{fontSize: 10, padding: '2px 6px'}}>rev {run.revisions}</span>
-              )}
-              {run.cancelRequested && (
-                <span className="chip" style={{fontSize: 10, padding: '2px 6px', background: 'var(--red)', color: 'var(--bg-0)'}}>cancel requested</span>
-              )}
+              <h3 style={{margin: 0, fontSize: 14}}>{phaseLabel}</h3>
+              {run.revisions > 0 && <span className="chip" style={{fontSize: 10}}>rev {run.revisions}</span>}
             </div>
-            <div style={{fontSize: 13, color: 'var(--text-1)', lineHeight: 1.4}}>{run.goal}</div>
+            <div style={{fontSize: 13, color: 'var(--text-1)', fontWeight: 600}}>{run.goal}</div>
           </div>
-          <div style={{display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap'}}>
-            <button className="btn-ghost" style={{fontSize: 11, padding: '6px 10px'}}
-              onClick={() => copy(run.goal, 'goal')}>
-              {copiedKey === 'goal' ? '✓ copied' : '📋 goal'}
-            </button>
-            <button className="btn-ghost" style={{fontSize: 11, padding: '6px 10px'}}
-              onClick={() => typeof window.openRunWindow === 'function' && window.openRunWindow(run.id)}
-              title="Open this run in a floating chat window">
-              ↗ window
-            </button>
-            <a href={`/api/task/${run.id}/trace`} target="_blank" rel="noreferrer"
-              style={{
-                fontSize: 11, padding: '6px 10px',
-                border: '1px solid var(--border)', borderRadius: 6,
-                color: 'var(--text-2)', textDecoration: 'none',
-                fontFamily: 'var(--font-mono)',
-              }}>↗ trace.md</a>
-            {isLive && (
-              <button onClick={cancelRun} disabled={cancelling || run.cancelRequested}
-                style={{
-                  fontSize: 11, padding: '6px 12px',
-                  border: '1px solid var(--red)', borderRadius: 6,
-                  background: 'transparent', color: 'var(--red)',
-                  cursor: (cancelling || run.cancelRequested) ? 'not-allowed' : 'pointer',
-                  opacity: (cancelling || run.cancelRequested) ? 0.5 : 1,
-                }}>
-                {run.cancelRequested ? 'cancelling…' : cancelling ? '…' : '⏹ Cancel run'}
-              </button>
-            )}
-          </div>
+          <a href={`/api/task/${run.id}/trace`} target="_blank" rel="noreferrer" className="btn-ghost" style={{fontSize: 11, padding: '6px 10px', textDecoration:'none'}}>↗ Trace</a>
         </div>
-
-        {/* Phase pills + cost summary */}
-        <div style={{display: 'flex', gap: 4, marginTop: 10, flexWrap: 'wrap', alignItems: 'center'}}>
-          {PHASES.map((p, i) => {
-            const reached = PHASES.indexOf(run.phase || 'plan') >= i;
-            const isCurrent = run.phase === p;
-            return (
-              <span key={p} style={{
-                fontSize: 10,
-                padding: '3px 9px',
-                borderRadius: 12,
-                fontFamily: 'var(--font-mono)',
-                background: isCurrent ? phaseColor : reached ? 'var(--bg-2)' : 'transparent',
-                color: isCurrent ? 'var(--bg-0)' : reached ? 'var(--text-1)' : 'var(--text-3)',
-                border: `1px solid ${reached ? 'var(--border)' : 'var(--bg-2)'}`,
-                fontWeight: isCurrent ? 600 : 400,
-              }}>{p}</span>
-            );
-          })}
-          {run.phaseCosts && Object.keys(run.phaseCosts).length > 0 && (
-            <span className="mono-s" style={{
-              marginLeft: 'auto', fontSize: 10, color: 'var(--text-3)',
-            }}>
-              {Object.entries(run.phaseCosts).map(([ph, c]) =>
-                `${ph}: ${c.tokens.toLocaleString()}t / $${c.usd.toFixed(3)}`
-              ).join(' · ')}
-            </span>
-          )}
-        </div>
-
-        {/* Recalled skills strip */}
-        {Array.isArray(run.skillsRecalled) && run.skillsRecalled.length > 0 && (
-          <div style={{
-            display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10,
-            padding: '6px 8px', background: 'var(--bg-2)', borderRadius: 6,
-            fontSize: 11,
-          }}>
-            <span className="mono-s" style={{color: 'var(--text-3)'}}>↺ recalled:</span>
-            {run.skillsRecalled.map((s, i) => (
-              <span key={i} title={s.goal} style={{
-                padding: '1px 8px', background: 'var(--bg-0)',
-                borderRadius: 10, color: 'var(--text-2)',
-                border: '1px solid var(--border)',
-              }}>{s.id.replace(/^skill_/, '').slice(0, 32)}</span>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* === Step cards === */}
-      <div style={{padding: 16, display: 'flex', flexDirection: 'column', gap: 12}}>
-        <div className="mono-s" style={{color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 1}}>
-          Agent deliverables ({cards.filter((c) => c.step?.result?.ok).length} / {cards.length})
-        </div>
-        {cards.length === 0 && (
-          <div className="muted" style={{fontSize: 12, padding: 20, textAlign: 'center'}}>
-            Awaiting plan…
+      <div style={{padding: 16, display: 'flex', flexDirection: 'column', gap: 16}}>
+        {/* BossDesk Card (Initial Analysis) */}
+        {bossAnalysis && (
+          <div style={{
+            background: isClarifying ? 'rgba(255, 60, 0, 0.05)' : 'rgba(0, 240, 255, 0.05)',
+            border: `1px solid ${isClarifying ? 'var(--red)' : 'var(--accent-cyan)'}`,
+            borderRadius: 12, padding: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{fontWeight: 700, fontSize: 14, color: isClarifying ? 'var(--red)' : 'var(--accent-cyan)', marginBottom: 8, display:'flex', alignItems:'center', gap:8}}>
+              <span>{isClarifying ? '❓' : '👔'}</span> {isClarifying ? 'Boss needs clarification' : 'Boss Analysis'}
+            </div>
+            <div style={{fontSize: 14, lineHeight: 1.6, color: 'var(--text-1)'}}>
+              {bossAnalysis}
+            </div>
           </div>
         )}
-        {cards.map((card) => {
-          const agent = (window.AGENTS || []).find((a) => a.id === card.plan.persona);
-          const status = !card.step ? 'pending'
-            : card.step.result?.ok ? 'done'
-            : card.step.result ? 'failed' : 'running';
-          const statusColor = {
-            pending: 'var(--text-3)',
-            running: 'var(--gold)',
-            done: 'var(--green)',
-            failed: 'var(--red)',
-          }[status];
-          const collapsed = !!collapsedSteps[card.idx];
-          const output = card.step?.result?.text || card.step?.result?.error || '';
-          const dur = card.step?.durationMs;
 
-          return (
-            <div key={card.idx} style={{
-              border: '1px solid var(--border)',
-              borderLeft: `3px solid ${statusColor}`,
-              borderRadius: 8,
-              background: 'var(--bg-2)',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 14px',
-                background: 'var(--bg-1)',
-                cursor: card.step ? 'pointer' : 'default',
-              }}
-                onClick={() => card.step && setCollapsedSteps((s) => ({ ...s, [card.idx]: !collapsed }))}>
-                <span style={{
-                  display: 'inline-flex', justifyContent: 'center', alignItems: 'center',
-                  width: 22, height: 22, borderRadius: '50%',
-                  background: statusColor, color: 'var(--bg-0)',
-                  fontSize: 11, fontWeight: 700,
-                }}>{card.idx + 1}</span>
-                <div style={{flex: 1, minWidth: 0}}>
-                  <div style={{fontSize: 13, fontWeight: 600}}>
-                    {agent?.name || card.plan.persona}
-                    <span className="mono-s" style={{color: 'var(--text-3)', marginLeft: 8, fontWeight: 400}}>
-                      {card.plan.persona}
-                    </span>
-                  </div>
-                  <div style={{fontSize: 11, color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                    {card.plan.instruction}
-                  </div>
-                </div>
-                <span className="mono-s" style={{fontSize: 10, color: statusColor, textTransform: 'uppercase'}}>
-                  {status}{dur ? ` · ${(dur / 1000).toFixed(1)}s` : ''}
-                </span>
-                {card.step && (
-                  <span style={{fontSize: 10, color: 'var(--text-3)'}}>{collapsed ? '▸' : '▾'}</span>
-                )}
-              </div>
-              {!collapsed && card.step && (
-                <div style={{padding: 12, background: 'var(--bg-2)'}}>
-                  {output ? (
-                    <pre style={{
-                      margin: 0,
-                      padding: 10,
-                      background: 'var(--bg-0)',
-                      borderRadius: 4,
-                      fontSize: 12,
-                      lineHeight: 1.5,
-                      maxHeight: 360,
-                      overflowY: 'auto',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      color: status === 'failed' ? 'var(--red)' : 'var(--text-1)',
-                      fontFamily: 'inherit',
-                    }}>{output}</pre>
-                  ) : (
-                    <div className="muted" style={{fontSize: 12, fontStyle: 'italic'}}>(no output yet — agent still running)</div>
-                  )}
-                  <div style={{display: 'flex', gap: 6, marginTop: 8}}>
-                    <button className="btn-ghost" style={{fontSize: 11, padding: '4px 10px'}}
-                      disabled={!output}
-                      onClick={(e) => { e.stopPropagation(); copy(output, `step-${card.idx}`); }}>
-                      {copiedKey === `step-${card.idx}` ? '✓ copied' : '📋 Copy'}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {!card.step && (
-                <div style={{padding: '8px 14px', fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic'}}>
-                  awaiting earlier steps…
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {/* Turn Cards */}
+        {cards.map((card, i) => (
+          <StepCard 
+            key={i} 
+            card={card} 
+            active={isLive && !isClarifying && i === activeStepIdx}
+            copiedKey={copiedKey}
+            copy={copy}
+          />
+        ))}
+
+        {/* Chat Back / Interaction Box */}
+        <div style={{ marginTop: 8, padding: 16, background: 'var(--bg-2)', borderRadius: 12, border: isClarifying ? '2px solid var(--gold)' : '1px dashed var(--border)' }}>
+          <div style={{fontWeight: 600, fontSize: 13, marginBottom: 12, color: 'var(--accent-cyan)'}}>
+            {isClarifying ? '👉 ตอบกลับคำถามของหัวหน้า:' : '💬 คุยต่อ/สั่งงานเพิ่ม:'}
+          </div>
+          <div style={{display:'flex', gap:10}}>
+            <textarea 
+              value={chatBackText}
+              onChange={e => setChatBackText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatBack(); } }}
+              placeholder={isClarifying ? "พิมพ์คำตอบของคุณที่นี่..." : "ต้องการให้แก้ไขหรือทำอะไรต่อ..."}
+              disabled={chatting}
+              style={{ flex: 1, height: 70, padding: 12, borderRadius: 8, background: 'var(--bg-0)', color: 'var(--text-1)', border: '1px solid var(--border)', fontSize: 13, resize: 'none' }}
+            />
+            <button className="btn gold" onClick={sendChatBack} disabled={chatting || !chatBackText.trim()} style={{width: 80, fontWeight: 700}}>ส่ง</button>
+          </div>
+        </div>
       </div>
 
       {/* === Critique === */}
@@ -616,11 +593,6 @@ const TeamTimeline = () => {
               style={{fontSize: 12, padding: '6px 12px', textDecoration: 'none', color: 'var(--text-1)'}}>
               ↗ Download trace.md
             </a>
-            {run.skillsRecalled?.length === 0 && cards.filter((c) => c.step?.result?.ok).length >= 2 && (
-              <span className="mono-s" style={{fontSize: 10, color: 'var(--text-3)', alignSelf: 'center'}}>
-                (auto-saved as a skill on success)
-              </span>
-            )}
           </div>
         </div>
       )}

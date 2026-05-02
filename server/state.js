@@ -265,7 +265,6 @@ export function recordUsage({ model, usage, dedupeKey, sessionId }) {
   state.stats.tokensToday += tokensCounted;
   state.stats.spendToday += costUsd(model, usage);
   broadcastStats();
-  if (tokensCounted > 0) bus.emit('reward.usage', { tokens: tokensCounted });
 }
 
 // ---------- Tasks (Task tool spawns) ----------
@@ -303,7 +302,6 @@ export function finishTask({ tool_use_id, status = 'done' }) {
   if (status === 'done' && t.personaId) {
     const cur = state.personaLevels.get(t.personaId) ?? 1;
     state.personaLevels.set(t.personaId, cur + 1);
-    bus.emit('reward.task', { personaId: t.personaId, taskId: t.id });
     bus.emit('persona.levels', Object.fromEntries(state.personaLevels));
   }
   recomputePersonaStatus();

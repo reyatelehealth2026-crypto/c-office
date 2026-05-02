@@ -32,3 +32,19 @@ test('dashboard first screen exposes sim office workfloor cues', () => {
   assert.match(dashboard, /office-room-backdrop/);
   assert.match(dashboard, /AgentModelUnit/);
 });
+
+test('dashboard keeps OpenClaw-style operations summary cues', () => {
+  assert.match(dashboard, /Office floor/);
+  assert.match(dashboard, /sessions/);
+  assert.match(dashboard, /Tokens today/);
+  assert.match(dashboard, /Running tasks/);
+  assert.match(dashboard, /Agents online/);
+  assert.match(dashboard, /Spend today/);
+  assert.match(dashboard, /Live Activity/);
+  assert.match(dashboard, /Active Agents/);
+});
+
+test('dashboard does not reintroduce scene or adventure launch controls', () => {
+  assert.doesNotMatch(dashboard, /SceneOverlay|openScene|SceneLaunchPage/);
+  assert.doesNotMatch(dashboard, /AdventurePage|page-adventure|adventure mode/i);
+});
