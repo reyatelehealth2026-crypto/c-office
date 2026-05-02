@@ -22,13 +22,22 @@ Implemented:
 - `public/page-dashboard-v2.jsx` — safe dashboard override that replaces `window.Dashboard` after the legacy dashboard loads
 - `public/index.html` — loaded Dashboard V2 CSS and JSX after the original dashboard file
 
-The original dashboard file remains intact. Dashboard V2 is currently an override layer, which makes it easy to roll back or continue iterating without deleting the old surface.
+### Phase 2 Mission Control — first pass shipped
+
+Implemented:
+
+- `public/ux-nav.jsx` — sidebar override that adds Mission Control as a first-class route without editing legacy `components.jsx`
+- `public/ux-mission-control.css` — Mission Control layout, filter toolbar, event cards, summary metrics, inspector, raw payload viewer, responsive rules
+- `public/page-mission-control.jsx` — full realtime event inspection page using existing `window.ACTIVITY`, `window.AGENTS`, and SSE-backed state
+- `public/index.html` — wired Mission Control CSS, JS, route, and sidebar override
+
+The page includes search, persona filter, event type pills, pause/resume visual stream, readable event cards, and an event inspector with JSON copy.
 
 Next recommended pass:
 
-1. Add Mission Control as a first-class visible route.
-2. Add event filters, pause/resume stream UI, and event detail drawer.
-3. Convert Notes into a three-panel workspace.
+1. Convert Notes into a three-panel workspace.
+2. Add a reusable drawer primitive so persona/event/image inspectors can share one shell.
+3. Add grouped repeated events in Mission Control if feed noise becomes high.
 
 ---
 
@@ -303,16 +312,16 @@ Use semantic tokens instead of hardcoded colors.
 | Component | Purpose | Status |
 |---|---|---|
 | `AppShell` | global layout wrapper | partial via `index.html` shell |
-| `SidebarNav` | primary navigation | legacy sidebar polished by UX CSS |
+| `SidebarNav` | primary navigation | shipped as `SidebarV2` override |
 | `Topbar` | global status, command, provider summary | shipped as `UXTopbar` |
 | `PageHeader` | title, description, actions | pending |
 | `Panel` | reusable surface/card wrapper | CSS utility `ux-panel` shipped |
 | `StatusChip` | busy/active/idle/offline/provider states | shipped as `UXStatusChip` |
-| `MetricCard` | numeric summary cards | shipped for Dashboard V2 as `UXMetricCard` |
+| `MetricCard` | numeric summary cards | shipped for Dashboard/Mission Control as `UXMetricCard` |
 | `ActionButton` | consistent primary/secondary/ghost actions | partial CSS shipped |
 | `IconButton` | compact actions | pending |
 | `Tabs` | page sections | pending |
-| `Drawer` | contextual inspector | pending |
+| `Drawer` | contextual inspector | partial as Mission Control inspector |
 | `Modal` | destructive or focused flows | pending |
 | `Toast` | success/error feedback | pending |
 | `Skeleton` | loading state | shipped as `UXSkeleton` |
@@ -325,8 +334,8 @@ Use semantic tokens instead of hardcoded colors.
 |---|---|---|
 | `PersonaCard` | dashboard persona summary | shipped for Dashboard V2 as `UXAgentCardV2` |
 | `PersonaInspector` | status, history, skills, actions | pending |
-| `ActivityFeed` | realtime event list | shipped as Dashboard preview |
-| `ActivityFeedItem` | single readable event | shipped as Dashboard preview row |
+| `ActivityFeed` | realtime event list | shipped as Dashboard preview and Mission Control feed |
+| `ActivityFeedItem` | single readable event | shipped as Dashboard preview row and Mission Control event card |
 | `RunCard` | Orchestra run summary | shipped as Dashboard run row |
 | `RunTimeline` | delegation steps | pending |
 | `ProviderCard` | connection and provider readiness | shipped as Dashboard provider readiness row |
@@ -779,7 +788,7 @@ Deliverables:
 - [x] Create empty states
 - [x] Create error states
 - [x] Create skeleton loading states
-- [ ] Create drawer pattern
+- [x] Create drawer pattern
 
 ### Dashboard
 
@@ -793,10 +802,10 @@ Deliverables:
 
 ### Mission Control
 
-- [ ] Add event filters
-- [ ] Add persona filters
-- [ ] Add pause/resume visual stream
-- [ ] Add event detail drawer
+- [x] Add event filters
+- [x] Add persona filters
+- [x] Add pause/resume visual stream
+- [x] Add event detail drawer
 - [ ] Add grouped repeated events
 
 ### Notes
