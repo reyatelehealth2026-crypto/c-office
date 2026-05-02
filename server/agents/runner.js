@@ -27,6 +27,7 @@ import {
   setRunSkillsRecalled,
   runOverBudget,
   COST_CEILING_USD,
+  isRunCancellationRequested,
 } from '../state.js';
 import { getAgentSync, listAgentsSync, resolveAgentIdSync } from '../store/agents.js';
 import { costUsd } from '../mapping/pricing.js';
@@ -780,6 +781,9 @@ async function executeRun(runId, goal, plan, critique) {
   }
 
   for (let i = 0; i < plan.length; i++) {
+    if (isRunCancellationRequested(runId)) {
+      return { status: 'failed', final: '', error: 'Run cancelled by user' };
+    }
     const step = plan[i];
     const out = await executeStep(runId, goal, step, i, prior);
     if (out.ok) {

@@ -228,10 +228,14 @@ const SendToOrchestra = () => {
 /* Multi-agent run timeline — plan / scratchpad / critique / verify */
 const PHASES = ['plan', 'execute', 'critique', 'verify', 'done'];
 
+/* Agent work-window: a full panel showing every delegation in detail
+   with the artifacts each persona returned, plus run-level controls. */
 const TeamTimeline = () => {
   const [runs, setRuns] = React.useState(window.RUNS || []);
-  const [expanded, setExpanded] = React.useState(true);
-  const [openStep, setOpenStep] = React.useState(null);
+  const [scratchOpen, setScratchOpen] = React.useState(false);
+  const [collapsedSteps, setCollapsedSteps] = React.useState({});
+  const [copiedKey, setCopiedKey] = React.useState(null);
+  const [cancelling, setCancelling] = React.useState(false);
 
   React.useEffect(() => {
     const refresh = () => setRuns(window.RUNS || []);
@@ -242,12 +246,43 @@ const TeamTimeline = () => {
   const run = runs.find(r => r.status === 'running') || runs[0];
   if (!run) return null;
 
+  const copy = async (text, key) => {
+    try { await navigator.clipboard.writeText(text); }
+    catch { window.prompt('Copy', text); }
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1400);
+  };
+
+  const cancelRun = async () => {
+    if (cancelling) return;
+    if (!window.confirm('Cancel this run? In-flight steps finish; remaining steps are skipped.')) return;
+    setCancelling(true);
+    try {
+      await fetch(`/api/task/${run.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'user-cancelled' }),
+      });
+    } finally {
+      setTimeout(() => setCancelling(false), 1500);
+    }
+  };
+
+  const openInNotes = () => {
+    window.dispatchEvent(new CustomEvent('c-office:navigate', {
+      detail: { page: 'notes', preset: { title: run.goal, body: run.final || '' } },
+    }));
+  };
+
+  const isLive = run.status === 'running';
+
   const phaseLabel = {
     plan: 'Planning',
     execute: 'Executing',
     critique: 'Reviewing',
+    verify: 'Verifying',
     done: 'Done',
-  }[run.phase || 'execute'] || (run.status === 'running' ? 'Working' : 'Done');
+  }[run.phase || 'execute'] || (isLive ? 'Working' : 'Done');
 
   const phaseColor = run.status === 'failed'
     ? 'var(--red)'
@@ -256,7 +291,6 @@ const TeamTimeline = () => {
       : 'var(--gold)';
 
   const plan = Array.isArray(run.plan) ? run.plan : [];
-  const scratch = Array.isArray(run.scratchpad) ? run.scratchpad.slice(-12) : [];
   const critique = run.critique || null;
 
   const sevColor = (sev) => {
@@ -266,213 +300,265 @@ const TeamTimeline = () => {
     return 'var(--text-3)';
   };
 
+  // Build per-persona step cards: align plan entries with executed steps.
+  const cards = plan.map((p, i) => {
+    const matched = (run.steps || []).find((s) => s.persona === p.persona);
+    return { idx: i, plan: p, step: matched };
+  });
+  // If steps exist that aren't in the plan (e.g. workflow-skipped planner),
+  // append them after.
+  for (const s of (run.steps || [])) {
+    if (!plan.some((p) => p.persona === s.persona)) {
+      cards.push({ idx: cards.length, plan: { persona: s.persona, instruction: s.instruction }, step: s });
+    }
+  }
+
+  const scratch = Array.isArray(run.scratchpad) ? run.scratchpad : [];
+
   return (
-    <div className="panel" style={{marginBottom: 14, padding: 14}}>
-      <div className="panel-head" style={{marginBottom: 10}}>
-        <h3 style={{display: 'flex', gap: 8, alignItems: 'center'}}>
-          <span style={{color: phaseColor, fontSize: 14}}>●</span>
-          Agent Team · {phaseLabel}
-          {run.workflow && (
-            <span className="chip" style={{
-              fontSize: 10, padding: '2px 6px',
-              background: 'var(--bg-2)', fontFamily: 'var(--font-mono)',
-            }}>{run.workflow}</span>
-          )}
-          {run.projectId && (
-            <span className="chip" style={{
-              fontSize: 10, padding: '2px 6px',
-              background: 'var(--gold)', color: 'var(--bg-0)',
-            }}>📁 {run.projectId.replace(/^proj_/, '').slice(0, 24)}</span>
-          )}
-          {run.revisions > 0 && (
-            <span className="chip" style={{fontSize: 10, padding: '2px 6px'}}>rev {run.revisions}</span>
-          )}
-        </h3>
-        <div className="right" style={{display: 'flex', gap: 8, alignItems: 'center'}}>
-          <span className="mono-s" style={{color: 'var(--text-3)'}}>{run.summary || ''}</span>
-          <button className="btn-ghost" style={{fontSize: 11}} onClick={() => setExpanded(e => !e)}>
-            {expanded ? 'Collapse' : 'Expand'}
-          </button>
+    <div className="panel" style={{
+      marginBottom: 14,
+      padding: 0,
+      border: '1px solid var(--border)',
+      background: 'var(--bg-1)',
+    }}>
+      {/* === Header bar === */}
+      <div style={{
+        padding: '14px 16px',
+        borderBottom: '1px solid var(--border)',
+        background: 'linear-gradient(180deg, var(--bg-1), var(--bg-0))',
+      }}>
+        <div style={{display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap'}}>
+          <div style={{flex: 1, minWidth: 240}}>
+            <div style={{display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap'}}>
+              <span style={{color: phaseColor, fontSize: 14}}>{isLive ? '●' : run.status === 'failed' ? '✕' : '✓'}</span>
+              <h3 style={{margin: 0, fontSize: 14}}>Agent Workspace · {phaseLabel}</h3>
+              {run.workflow && (
+                <span className="chip" style={{
+                  fontSize: 10, padding: '2px 6px',
+                  background: 'var(--bg-2)', fontFamily: 'var(--font-mono)',
+                }}>{run.workflow}</span>
+              )}
+              {run.projectId && (
+                <span className="chip" style={{
+                  fontSize: 10, padding: '2px 6px',
+                  background: 'var(--gold)', color: 'var(--bg-0)',
+                }}>📁 {run.projectId.replace(/^proj_/, '').slice(0, 24)}</span>
+              )}
+              {run.revisions > 0 && (
+                <span className="chip" style={{fontSize: 10, padding: '2px 6px'}}>rev {run.revisions}</span>
+              )}
+              {run.cancelRequested && (
+                <span className="chip" style={{fontSize: 10, padding: '2px 6px', background: 'var(--red)', color: 'var(--bg-0)'}}>cancel requested</span>
+              )}
+            </div>
+            <div style={{fontSize: 13, color: 'var(--text-1)', lineHeight: 1.4}}>{run.goal}</div>
+          </div>
+          <div style={{display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap'}}>
+            <button className="btn-ghost" style={{fontSize: 11, padding: '6px 10px'}}
+              onClick={() => copy(run.goal, 'goal')}>
+              {copiedKey === 'goal' ? '✓ copied' : '📋 goal'}
+            </button>
+            <a href={`/api/task/${run.id}/trace`} target="_blank" rel="noreferrer"
+              style={{
+                fontSize: 11, padding: '6px 10px',
+                border: '1px solid var(--border)', borderRadius: 6,
+                color: 'var(--text-2)', textDecoration: 'none',
+                fontFamily: 'var(--font-mono)',
+              }}>↗ trace.md</a>
+            {isLive && (
+              <button onClick={cancelRun} disabled={cancelling || run.cancelRequested}
+                style={{
+                  fontSize: 11, padding: '6px 12px',
+                  border: '1px solid var(--red)', borderRadius: 6,
+                  background: 'transparent', color: 'var(--red)',
+                  cursor: (cancelling || run.cancelRequested) ? 'not-allowed' : 'pointer',
+                  opacity: (cancelling || run.cancelRequested) ? 0.5 : 1,
+                }}>
+                {run.cancelRequested ? 'cancelling…' : cancelling ? '…' : '⏹ Cancel run'}
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div style={{fontSize: 12, color: 'var(--text-2)', marginBottom: 8}}>
-        <b style={{color: 'var(--text-1)'}}>Goal:</b> {run.goal}
-      </div>
+        {/* Phase pills + cost summary */}
+        <div style={{display: 'flex', gap: 4, marginTop: 10, flexWrap: 'wrap', alignItems: 'center'}}>
+          {PHASES.map((p, i) => {
+            const reached = PHASES.indexOf(run.phase || 'plan') >= i;
+            const isCurrent = run.phase === p;
+            return (
+              <span key={p} style={{
+                fontSize: 10,
+                padding: '3px 9px',
+                borderRadius: 12,
+                fontFamily: 'var(--font-mono)',
+                background: isCurrent ? phaseColor : reached ? 'var(--bg-2)' : 'transparent',
+                color: isCurrent ? 'var(--bg-0)' : reached ? 'var(--text-1)' : 'var(--text-3)',
+                border: `1px solid ${reached ? 'var(--border)' : 'var(--bg-2)'}`,
+                fontWeight: isCurrent ? 600 : 400,
+              }}>{p}</span>
+            );
+          })}
+          {run.phaseCosts && Object.keys(run.phaseCosts).length > 0 && (
+            <span className="mono-s" style={{
+              marginLeft: 'auto', fontSize: 10, color: 'var(--text-3)',
+            }}>
+              {Object.entries(run.phaseCosts).map(([ph, c]) =>
+                `${ph}: ${c.tokens.toLocaleString()}t / $${c.usd.toFixed(3)}`
+              ).join(' · ')}
+            </span>
+          )}
+        </div>
 
-      {/* Phase pills */}
-      <div style={{display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap'}}>
-        {PHASES.map((p, i) => {
-          const reached = PHASES.indexOf(run.phase || 'plan') >= i;
-          const isCurrent = run.phase === p;
-          return (
-            <span key={p} style={{
-              fontSize: 10,
-              padding: '3px 9px',
-              borderRadius: 12,
-              fontFamily: 'var(--font-mono)',
-              background: isCurrent ? phaseColor : reached ? 'var(--bg-2)' : 'transparent',
-              color: isCurrent ? 'var(--bg-0)' : reached ? 'var(--text-1)' : 'var(--text-3)',
-              border: `1px solid ${reached ? 'var(--border)' : 'var(--bg-2)'}`,
-              fontWeight: isCurrent ? 600 : 400,
-            }}>{p}</span>
-          );
-        })}
-        {run.phaseCosts && Object.keys(run.phaseCosts).length > 0 && (
-          <span className="mono-s" style={{
-            marginLeft: 'auto',
-            fontSize: 10,
-            color: 'var(--text-3)',
+        {/* Recalled skills strip */}
+        {Array.isArray(run.skillsRecalled) && run.skillsRecalled.length > 0 && (
+          <div style={{
+            display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10,
+            padding: '6px 8px', background: 'var(--bg-2)', borderRadius: 6,
+            fontSize: 11,
           }}>
-            {Object.entries(run.phaseCosts).map(([ph, c]) =>
-              `${ph}: ${c.tokens.toLocaleString()}t / $${c.usd.toFixed(3)}`
-            ).join(' · ')}
-          </span>
+            <span className="mono-s" style={{color: 'var(--text-3)'}}>↺ recalled:</span>
+            {run.skillsRecalled.map((s, i) => (
+              <span key={i} title={s.goal} style={{
+                padding: '1px 8px', background: 'var(--bg-0)',
+                borderRadius: 10, color: 'var(--text-2)',
+                border: '1px solid var(--border)',
+              }}>{s.id.replace(/^skill_/, '').slice(0, 32)}</span>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Recalled skills strip */}
-      {Array.isArray(run.skillsRecalled) && run.skillsRecalled.length > 0 && (
-        <div style={{
-          display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10,
-          padding: '6px 8px', background: 'var(--bg-2)', borderRadius: 6,
-          fontSize: 11,
-        }}>
-          <span className="mono-s" style={{color: 'var(--text-3)'}}>↺ recalled:</span>
-          {run.skillsRecalled.map((s, i) => (
-            <span key={i} title={s.goal} style={{
-              padding: '1px 8px', background: 'var(--bg-0)',
-              borderRadius: 10, color: 'var(--text-2)',
+      {/* === Step cards === */}
+      <div style={{padding: 16, display: 'flex', flexDirection: 'column', gap: 12}}>
+        <div className="mono-s" style={{color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: 1}}>
+          Agent deliverables ({cards.filter((c) => c.step?.result?.ok).length} / {cards.length})
+        </div>
+        {cards.length === 0 && (
+          <div className="muted" style={{fontSize: 12, padding: 20, textAlign: 'center'}}>
+            Awaiting plan…
+          </div>
+        )}
+        {cards.map((card) => {
+          const agent = (window.AGENTS || []).find((a) => a.id === card.plan.persona);
+          const status = !card.step ? 'pending'
+            : card.step.result?.ok ? 'done'
+            : card.step.result ? 'failed' : 'running';
+          const statusColor = {
+            pending: 'var(--text-3)',
+            running: 'var(--gold)',
+            done: 'var(--green)',
+            failed: 'var(--red)',
+          }[status];
+          const collapsed = !!collapsedSteps[card.idx];
+          const output = card.step?.result?.text || card.step?.result?.error || '';
+          const dur = card.step?.durationMs;
+
+          return (
+            <div key={card.idx} style={{
               border: '1px solid var(--border)',
-            }}>{s.id.replace(/^skill_/, '').slice(0, 32)}</span>
-          ))}
-        </div>
-      )}
-
-      {expanded && (
-        <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14}}>
-          {/* Plan column */}
-          <div>
-            <div className="mono-s" style={{color: 'var(--text-3)', marginBottom: 6}}>PLAN</div>
-            {plan.length === 0 ? (
-              <div className="muted" style={{fontSize: 12}}>Awaiting plan...</div>
-            ) : (
-              <ol style={{margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.6}}>
-                {plan.map((step, i) => {
-                  const agent = (window.AGENTS || []).find(a => a.id === step.persona);
-                  const matchedStep = (run.steps || []).find(s => s.persona === step.persona);
-                  const done = matchedStep?.result?.ok;
-                  const open = openStep === i;
-                  return (
-                    <li key={i} style={{color: done ? 'var(--text-2)' : 'var(--text-1)', opacity: done ? 0.7 : 1}}>
-                      <span
-                        onClick={() => matchedStep && setOpenStep(open ? null : i)}
-                        style={{cursor: matchedStep ? 'pointer' : 'default'}}>
-                        <b>[{agent?.name || step.persona}]</b> {step.instruction}
-                        {step.depends_on != null && (
-                          <span style={{color: 'var(--text-3)'}}> ← step {step.depends_on}</span>
-                        )}
-                        {done && <span style={{color: 'var(--green)', marginLeft: 6}}>✓</span>}
-                        {matchedStep && (
-                          <span style={{color: 'var(--text-3)', marginLeft: 6, fontSize: 10}}>
-                            {open ? '▾' : '▸'}
-                          </span>
-                        )}
-                      </span>
-                      {open && matchedStep && (
-                        <pre style={{
-                          marginTop: 4,
-                          padding: 8,
-                          background: 'var(--bg-2)',
-                          borderRadius: 4,
-                          fontSize: 11,
-                          maxHeight: 200,
-                          overflowY: 'auto',
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-word',
-                          color: 'var(--text-2)',
-                        }}>
-                          {matchedStep.result?.text || matchedStep.result?.error || '(no output)'}
-                        </pre>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-          </div>
-
-          {/* Scratchpad column */}
-          <div>
-            <div className="mono-s" style={{color: 'var(--text-3)', marginBottom: 6}}>
-              SHARED SCRATCHPAD ({(run.scratchpad || []).length})
-            </div>
-            {scratch.length === 0 ? (
-              <div className="muted" style={{fontSize: 12}}>No notes yet.</div>
-            ) : (
-              <div style={{display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto'}}>
-                {scratch.map((entry, i) => {
-                  const kindColor = entry.kind === 'critique' ? 'var(--red)'
-                    : entry.kind === 'plan' ? 'var(--gold)'
-                    : entry.kind === 'finding' ? 'var(--green)'
-                    : entry.kind === 'error' ? 'var(--red)'
-                    : 'var(--text-3)';
-                  return (
-                    <div key={i} style={{
-                      fontSize: 11,
-                      padding: '4px 8px',
-                      background: 'var(--bg-2)',
-                      borderRadius: 4,
-                      borderLeft: `2px solid ${kindColor}`,
-                    }}>
-                      <div style={{display: 'flex', gap: 6, alignItems: 'baseline'}}>
-                        <b style={{color: 'var(--text-1)'}}>{entry.personaName}</b>
-                        <span className="mono-s" style={{color: kindColor, fontSize: 10}}>{entry.kind}</span>
-                      </div>
-                      <div style={{color: 'var(--text-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
-                        {entry.text}
-                      </div>
-                    </div>
-                  );
-                })}
+              borderLeft: `3px solid ${statusColor}`,
+              borderRadius: 8,
+              background: 'var(--bg-2)',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px',
+                background: 'var(--bg-1)',
+                cursor: card.step ? 'pointer' : 'default',
+              }}
+                onClick={() => card.step && setCollapsedSteps((s) => ({ ...s, [card.idx]: !collapsed }))}>
+                <span style={{
+                  display: 'inline-flex', justifyContent: 'center', alignItems: 'center',
+                  width: 22, height: 22, borderRadius: '50%',
+                  background: statusColor, color: 'var(--bg-0)',
+                  fontSize: 11, fontWeight: 700,
+                }}>{card.idx + 1}</span>
+                <div style={{flex: 1, minWidth: 0}}>
+                  <div style={{fontSize: 13, fontWeight: 600}}>
+                    {agent?.name || card.plan.persona}
+                    <span className="mono-s" style={{color: 'var(--text-3)', marginLeft: 8, fontWeight: 400}}>
+                      {card.plan.persona}
+                    </span>
+                  </div>
+                  <div style={{fontSize: 11, color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                    {card.plan.instruction}
+                  </div>
+                </div>
+                <span className="mono-s" style={{fontSize: 10, color: statusColor, textTransform: 'uppercase'}}>
+                  {status}{dur ? ` · ${(dur / 1000).toFixed(1)}s` : ''}
+                </span>
+                {card.step && (
+                  <span style={{fontSize: 10, color: 'var(--text-3)'}}>{collapsed ? '▸' : '▾'}</span>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
+              {!collapsed && card.step && (
+                <div style={{padding: 12, background: 'var(--bg-2)'}}>
+                  {output ? (
+                    <pre style={{
+                      margin: 0,
+                      padding: 10,
+                      background: 'var(--bg-0)',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      maxHeight: 360,
+                      overflowY: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      color: status === 'failed' ? 'var(--red)' : 'var(--text-1)',
+                      fontFamily: 'inherit',
+                    }}>{output}</pre>
+                  ) : (
+                    <div className="muted" style={{fontSize: 12, fontStyle: 'italic'}}>(no output yet — agent still running)</div>
+                  )}
+                  <div style={{display: 'flex', gap: 6, marginTop: 8}}>
+                    <button className="btn-ghost" style={{fontSize: 11, padding: '4px 10px'}}
+                      disabled={!output}
+                      onClick={(e) => { e.stopPropagation(); copy(output, `step-${card.idx}`); }}>
+                      {copiedKey === `step-${card.idx}` ? '✓ copied' : '📋 Copy'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!card.step && (
+                <div style={{padding: '8px 14px', fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic'}}>
+                  awaiting earlier steps…
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
-      {expanded && critique && (
+      {/* === Critique === */}
+      {critique && (
         <div style={{
-          marginTop: 12,
-          padding: 10,
-          background: 'var(--bg-2)',
-          borderRadius: 6,
+          margin: '0 16px 12px', padding: 12,
+          background: 'var(--bg-2)', borderRadius: 8,
           borderLeft: `3px solid ${sevColor(critique.severity)}`,
         }}>
-          <div style={{display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4}}>
-            <b style={{fontSize: 12}}>Vivi's review</b>
+          <div style={{display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6}}>
+            <b style={{fontSize: 13}}>Vivi's review</b>
             <span className="chip" style={{
               fontSize: 10, padding: '1px 6px',
-              background: sevColor(critique.severity),
-              color: 'var(--bg-0)',
+              background: sevColor(critique.severity), color: 'var(--bg-0)',
             }}>{critique.severity}</span>
           </div>
-          <div style={{fontSize: 12, color: 'var(--text-2)', whiteSpace: 'pre-wrap'}}>
-            {critique.text}
-          </div>
+          <div style={{fontSize: 12, color: 'var(--text-2)', whiteSpace: 'pre-wrap'}}>{critique.text}</div>
         </div>
       )}
 
-      {expanded && run.verification && (
+      {/* === Verification === */}
+      {run.verification && (
         <div style={{
-          marginTop: 12,
-          padding: 10,
-          background: 'var(--bg-2)',
-          borderRadius: 6,
+          margin: '0 16px 12px', padding: 12,
+          background: 'var(--bg-2)', borderRadius: 8,
           borderLeft: `3px solid ${run.verification.passed ? 'var(--green)' : 'var(--red)'}`,
         }}>
-          <div style={{display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4}}>
-            <b style={{fontSize: 12}}>Goal verification</b>
+          <div style={{display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6}}>
+            <b style={{fontSize: 13}}>Goal verification</b>
             <span className="chip" style={{
               fontSize: 10, padding: '1px 6px',
               background: run.verification.passed ? 'var(--green)' : 'var(--red)',
@@ -483,190 +569,191 @@ const TeamTimeline = () => {
         </div>
       )}
 
-      {expanded && (
-        <div style={{marginTop: 8, fontSize: 10, color: 'var(--text-3)', textAlign: 'right'}}>
-          <a href={`/api/task/${run.id}/trace`} target="_blank" rel="noreferrer"
-             style={{color: 'var(--text-3)', textDecoration: 'none', fontFamily: 'var(--font-mono)'}}>
-            ↗ download trace.md
-          </a>
+      {/* === Final deliverable + actions === */}
+      {run.final && (
+        <div style={{
+          margin: '0 16px 16px', padding: 14,
+          background: 'var(--bg-2)', borderRadius: 8,
+          borderLeft: '4px solid var(--green)',
+        }}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10}}>
+            <b style={{fontSize: 14}}>✦ Final deliverable</b>
+            <span className="mono-s" style={{color: 'var(--text-3)', marginLeft: 'auto'}}>
+              {run.durationLabel || ''}
+            </span>
+          </div>
+          <pre style={{
+            margin: 0,
+            padding: 12,
+            background: 'var(--bg-0)',
+            borderRadius: 6,
+            fontSize: 13,
+            lineHeight: 1.6,
+            maxHeight: 480,
+            overflowY: 'auto',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            color: 'var(--text-1)',
+            fontFamily: 'inherit',
+          }}>{run.final}</pre>
+          <div style={{display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap'}}>
+            <button className="btn-ghost" style={{fontSize: 12, padding: '6px 12px'}}
+              onClick={() => copy(run.final, 'final')}>
+              {copiedKey === 'final' ? '✓ copied' : '📋 Copy final'}
+            </button>
+            <button className="btn-ghost" style={{fontSize: 12, padding: '6px 12px'}}
+              onClick={openInNotes}>
+              ✎ Open in Notes
+            </button>
+            <a href={`/api/task/${run.id}/trace`} target="_blank" rel="noreferrer"
+              className="btn-ghost"
+              style={{fontSize: 12, padding: '6px 12px', textDecoration: 'none', color: 'var(--text-1)'}}>
+              ↗ Download trace.md
+            </a>
+            {run.skillsRecalled?.length === 0 && cards.filter((c) => c.step?.result?.ok).length >= 2 && (
+              <span className="mono-s" style={{fontSize: 10, color: 'var(--text-3)', alignSelf: 'center'}}>
+                (auto-saved as a skill on success)
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      {expanded && run.final && (
-        <div style={{
-          marginTop: 12,
-          padding: 10,
-          background: 'var(--bg-2)',
-          borderRadius: 6,
-          borderLeft: '3px solid var(--green)',
-        }}>
-          <div style={{fontSize: 12, marginBottom: 4}}>
-            <b>Final deliverable</b>
+      {/* === Scratchpad (collapsible footer) === */}
+      <div style={{
+        borderTop: '1px solid var(--border)',
+        padding: '10px 16px',
+      }}>
+        <button className="btn-ghost"
+          onClick={() => setScratchOpen((s) => !s)}
+          style={{
+            fontSize: 11, padding: '4px 8px',
+            color: 'var(--text-3)', fontFamily: 'var(--font-mono)',
+          }}>
+          {scratchOpen ? '▾' : '▸'} shared scratchpad ({scratch.length})
+        </button>
+        {scratchOpen && scratch.length > 0 && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 4,
+            marginTop: 8, maxHeight: 320, overflowY: 'auto',
+          }}>
+            {scratch.slice(-50).map((entry, i) => {
+              const kindColor = entry.kind === 'critique' || entry.kind === 'error' ? 'var(--red)'
+                : entry.kind === 'plan' ? 'var(--gold)'
+                : entry.kind === 'finding' || entry.kind === 'verify-pass' ? 'var(--green)'
+                : entry.kind === 'cancel-requested' ? 'var(--red)'
+                : 'var(--text-3)';
+              return (
+                <div key={i} style={{
+                  fontSize: 11,
+                  padding: '4px 8px',
+                  background: 'var(--bg-2)',
+                  borderRadius: 4,
+                  borderLeft: `2px solid ${kindColor}`,
+                }}>
+                  <div style={{display: 'flex', gap: 6, alignItems: 'baseline'}}>
+                    <b style={{color: 'var(--text-1)'}}>{entry.personaName}</b>
+                    <span className="mono-s" style={{color: kindColor, fontSize: 10}}>{entry.kind}</span>
+                  </div>
+                  <div style={{color: 'var(--text-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
+                    {entry.text}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div style={{fontSize: 12, color: 'var(--text-1)', whiteSpace: 'pre-wrap'}}>
-            {run.final}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
 
 const Dashboard = ({ layout, setLayout, onOpenAgent }) => {
-  const totalTokens = (window.STATS?.tokensToday || 0);
-  const totalCost   = (window.STATS?.spendToday || 0).toFixed(2);
-  const activeTasks = (window.STATS?.tasksRunning || 0);
-  const agentsOnline = (window.STATS?.agentsOnline || 0);
+  const agents = Array.isArray(window.AGENTS) ? window.AGENTS : [];
+  const runs = Array.isArray(window.RUNS) ? window.RUNS : [];
+  const activity = Array.isArray(window.ACTIVITY) ? window.ACTIVITY : [];
+  const sessions = Array.isArray(window.STATE_SESSIONS) ? window.STATE_SESSIONS : [];
+  const tasks = Array.isArray(window.TASKS) ? window.TASKS : [];
+  const dispatches = Array.isArray(window.DISPATCHES) ? window.DISPATCHES : [];
+  const stats = window.STATS || {};
+  const totalTokens = stats.tokensToday || 0;
+  const totalCost = (stats.spendToday || 0).toFixed(2);
+  const activeTasks = stats.tasksRunning || 0;
+  const agentsOnline = stats.agentsOnline || 0;
+  const providerStatus = window.AUTH_STATUS || {};
+  const providers = [{ key: 'anthropic', label: 'Anthropic' }, { key: 'openai', label: 'OpenAI' }, { key: 'google', label: 'Google' }];
+  const recentRuns = runs.slice(0, 6);
+  const timeline = activity.slice(-8).reverse();
+  const runningNow = runs.filter(r => r?.status === 'running').length;
+  const pendingTasks = tasks.filter(t => t?.status !== 'done' && t?.status !== 'completed').length;
 
   return (
     <div>
       <div className="topbar">
         <div>
-          <h1>Sim Office <span className="accent">Workfloor</span></h1>
-          <div className="sub">Office floor · {agentsOnline} online · {activeTasks} active desks · {STATE_SESSIONS.filter(s=>!s.endedAt).length} sessions</div>
+          <h1>Sim Office <span className="accent">Operations Workfloor</span></h1>
+          <div className="mono-s">Office floor control tower</div>
+          <div className="sub">Control tower · {agentsOnline} online · {runningNow} live runs · {sessions.filter(s => !s?.endedAt).length} active sessions</div>
         </div>
-        <div className="topbar-actions">
-          <span className="chip"><span className="dot"/> Live</span>
-        </div>
+        <div className="topbar-actions"><span className="chip"><span className="dot"/> Live</span></div>
       </div>
-
-      {/* QUICK TASK BAR */}
       <SendToOrchestra/>
-
-      {/* AGENT TEAM TIMELINE — plan / scratchpad / critique */}
+      <div className="grid dashboard-grid" style={{marginBottom: 14}}>
+        <div className="panel"><div className="panel-head"><h3>Gateway & Provider Health</h3></div>{providers.map(p => <div key={p.key} className="feed-row" style={{cursor:'default'}}><div style={{width:8,height:8,borderRadius:'50%',background:providerStatus?.[p.key]?.connected ? 'var(--green)' : 'var(--red)'}}/><div style={{fontSize:12}}><b>{p.label}</b> <span className="mono-s" style={{color:'var(--text-3)'}}>{providerStatus?.[p.key]?.connected ? 'connected' : 'disconnected'}</span></div></div>)}</div>
+        <div className="panel"><div className="panel-head"><h3>Model / Session / Task Summary</h3></div><div className="mono-s">{agents.length} agents · {sessions.length} sessions · {pendingTasks} open tasks · {dispatches.length} dispatches</div></div>
+      </div>
       <TeamTimeline/>
-
-      {/* STATS STRIP */}
       <div className="stats-strip">
-        <div className="stat-card">
-          <div className="stat-icon tokens">🔥</div>
-          <div>
-            <div className="stat-value">{totalTokens.toLocaleString()}</div>
-            <div className="stat-label">Tokens today</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon tasks">📋</div>
-          <div>
-            <div className="stat-value">{activeTasks}</div>
-            <div className="stat-label">Running tasks</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon agents">👥</div>
-          <div>
-            <div className="stat-value">{agentsOnline}</div>
-            <div className="stat-label">Agents online</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon spend">💰</div>
-          <div>
-            <div className="stat-value">${totalCost}</div>
-            <div className="stat-label">Spend today</div>
-          </div>
-        </div>
+        <div className="stat-card"><div className="stat-icon tokens">🔥</div><div><div className="stat-value">{totalTokens.toLocaleString()}</div><div className="stat-label">Tokens today</div></div></div>
+        <div className="stat-card"><div className="stat-icon tasks">📋</div><div><div className="stat-value">{activeTasks}</div><div className="stat-label">Running tasks</div></div></div>
+        <div className="stat-card"><div className="stat-icon agents">👥</div><div><div className="stat-value">{agentsOnline}</div><div className="stat-label">Agents online</div></div></div>
+        <div className="stat-card"><div className="stat-icon spend">💰</div><div><div className="stat-value">${totalCost}</div><div className="stat-label">Spend today</div></div></div>
       </div>
-
-      {/* AGENT WORKSPACE */}
-      <div style={{marginBottom: 18}}>
-        <AgentWorkspace onOpenAgent={onOpenAgent}/>
-      </div>
-
+      <div style={{marginBottom: 18}}><AgentWorkspace onOpenAgent={onOpenAgent}/></div>
       <div className="grid dashboard-grid">
-        {/* LIVE FEED */}
         <div className="panel">
-          <div className="panel-head">
-            <h3>Live Activity</h3>
-            <div className="right"><span className="chip" style={{padding:'3px 8px', fontSize:10}}><span className="dot"/> real-time</span></div>
-          </div>
-          <div style={{display:'flex', flexDirection:'column', gap: 2, maxHeight: 460, overflowY:'auto'}}>
+          <div className="panel-head"><h3>Live Run Timeline</h3><div className="right">{recentRuns.length} recent runs</div></div>
+          {recentRuns.length === 0 ? <div className="muted" style={{fontSize:12}}>No runs yet.</div> : recentRuns.map((r, i) => <div key={r?.id || i} className="feed-row" style={{cursor:'default'}}><div className="mono-s" style={{width:56, color:'var(--text-4)'}}>{relTime(r?.startedAt || r?.createdAt)}</div><div style={{flex:1, minWidth:0}}><b style={{fontSize:12}}>{(r?.goal || 'Untitled run').slice(0, 64)}</b><div className="mono-s" style={{color:'var(--text-3)'}}>{r?.phase || r?.status || 'queued'}</div></div></div>)}
+        </div>
+        <div className="panel">
+          <div className="panel-head"><h3>Live Activity</h3><div className="right"><span className="chip" style={{padding:'3px 8px', fontSize:10}}><span className="dot"/> real-time</span></div></div>
+          <div style={{display:'flex', flexDirection:'column', gap:2, maxHeight:460, overflowY:'auto'}}>
             {(() => {
-              const visible = ACTIVITY.filter(r => {
-                if (r.verb === 'turn-end') return false;
-                if (r.verb === 'spoke' && !(r.text || '').trim()) return false;
-                if (r.verb === 'result' && r.status !== 'err' && !(r.text || '').trim()) return false;
-                return true;
-              });
-              if (visible.length === 0) {
-                return (
-                  <div className="muted" style={{padding:'30px 12px', fontSize:12, textAlign:'center'}}>
-                    Waiting for activity... run <code>claude</code> in any terminal.
-                  </div>
-                );
-              }
+              const visible = activity.filter(r => !(r.verb === 'turn-end' || (r.verb === 'spoke' && !(r.text || '').trim()) || (r.verb === 'result' && r.status !== 'err' && !(r.text || '').trim())));
+              if (visible.length === 0) return <div className="muted" style={{padding:'30px 12px', fontSize:12, textAlign:'center'}}>Waiting for activity...</div>;
               return visible.map((row, i) => {
-              const personaId = row.personaId || row.agent;
-              const agent = AGENTS.find(a => a.id === personaId);
-              const statusColor = row.status === 'ok' ? 'var(--green)' : row.status === 'warn' ? 'var(--gold)' : 'var(--red)';
-              const tokens = row.tokens ?? ((row.usage?.input_tokens||0)+(row.usage?.output_tokens||0));
-              return (
-                <div key={row.id || i} className="feed-row" onClick={() => agent && onOpenAgent(agent.id)}>
-                  <div className="mono-s" style={{width: 56, color:'var(--text-4)'}}>{relTime(row.ts || row.t)}</div>
-                  <AgentDot agent={agent} size={28}/>
-                  <div style={{flex:1, minWidth:0}}>
-                    <div style={{display:'flex', gap:6, alignItems:'baseline', flexWrap:'wrap'}}>
-                      <b style={{fontSize:13}}>{agent ? agent.name : (personaId || '—')}</b>
-                      <span style={{color:'var(--text-3)', fontSize:12}}>{row.verb}{row.toolName ? ` · ${row.toolName}`:''}</span>
-                    </div>
-                    <div style={{fontSize:12, color:'var(--text-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{row.text}</div>
-                  </div>
-                  <div style={{display:'flex', alignItems:'center', gap:8}}>
-                    {tokens > 0 && <span className="mono-s" style={{color:'var(--text-3)'}}>{tokens.toLocaleString()} tok</span>}
-                    <span style={{width:6, height:6, borderRadius:'50%', background: statusColor, boxShadow:`0 0 8px ${statusColor}`}}/>
-                  </div>
-                </div>
-              );
+                const personaId = row.personaId || row.agent;
+                const agent = agents.find(a => a.id === personaId);
+                const statusColor = row.status === 'ok' ? 'var(--green)' : row.status === 'warn' ? 'var(--gold)' : 'var(--red)';
+                const tokens = row.tokens ?? ((row.usage?.input_tokens||0)+(row.usage?.output_tokens||0));
+                return <div key={row.id || i} className="feed-row" onClick={() => agent && onOpenAgent(agent.id)}><div className="mono-s" style={{width:56, color:'var(--text-4)'}}>{relTime(row.ts || row.t)}</div><AgentDot agent={agent} size={28}/><div style={{flex:1, minWidth:0}}><div style={{display:'flex', gap:6, alignItems:'baseline', flexWrap:'wrap'}}><b style={{fontSize:13}}>{agent ? agent.name : (personaId || '—')}</b><span style={{color:'var(--text-3)', fontSize:12}}>{row.verb}{row.toolName ? ` · ${row.toolName}` : ''}</span></div><div style={{fontSize:12, color:'var(--text-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{row.text}</div></div><div style={{display:'flex', alignItems:'center', gap:8}}>{tokens > 0 && <span className="mono-s" style={{color:'var(--text-3)'}}>{tokens.toLocaleString()} tok</span>}<span style={{width:6, height:6, borderRadius:'50%', background: statusColor, boxShadow:`0 0 8px ${statusColor}`}}/></div></div>;
               });
             })()}
           </div>
         </div>
-
-        {/* ACTIVE AGENTS */}
-        <div className="panel">
-          <div className="panel-head">
-            <h3>Active Agents</h3>
-            <div className="right">{AGENTS.filter(a=>a.status==='active'||a.status==='busy').length} online</div>
-          </div>
-          <div style={{display:'flex', flexDirection:'column', gap:8}}>
-            {AGENTS.filter(a => a.status === 'active' || a.status === 'busy').slice(0,6).map(a => (
-              <AgentCard key={a.id} agent={a} compact onClick={() => onOpenAgent(a.id)}/>
-            ))}
-            {AGENTS.filter(a => a.status === 'active' || a.status === 'busy').length === 0 && (
-              <div className="muted" style={{fontSize:12, padding:'20px 4px', textAlign:'center'}}>
-                No active agents right now
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* COLLABORATION GRAPH */}
-        <div className="panel dashboard-grid-wide">
-          <div className="panel-head">
-            <h3>Agent Collaboration</h3>
-            <div className="right">last 1h</div>
-          </div>
-          <CollabGraph onOpenAgent={onOpenAgent}/>
-        </div>
+        <div className="panel"><div className="panel-head"><h3>Active Agents</h3><div className="right">Office floor placement ยท {agents.filter(a=>a.status==='active'||a.status==='busy').length} staffed</div></div>{agents.filter(a => a.status === 'active' || a.status === 'busy').slice(0,6).map(a => <AgentCard key={a.id} agent={a} compact onClick={() => onOpenAgent(a.id)}/>)}{agents.filter(a => a.status === 'active' || a.status === 'busy').length === 0 && <div className="muted" style={{fontSize:12, padding:'20px 4px', textAlign:'center'}}>No active agents right now</div>}</div>
+        <div className="panel dashboard-grid-wide"><div className="panel-head"><h3>Agent Collaboration</h3><div className="right">last 1h</div></div><CollabGraph onOpenAgent={onOpenAgent}/></div>
       </div>
+      <div className="panel" style={{marginTop:14}}><div className="panel-head"><h3>Compact Command Bar Context</h3><div className="right">{timeline.length} latest events</div></div>{timeline.length === 0 ? <div className="muted" style={{fontSize:12}}>No command context yet.</div> : timeline.map((row, i) => <div key={row?.id || i} className="feed-row" style={{cursor:'default'}}><div className="mono-s" style={{width:56, color:'var(--text-4)'}}>{relTime(row?.ts || row?.t)}</div><div style={{flex:1, minWidth:0}}><div style={{fontSize:12}}><b>{row?.verb || 'event'}</b> <span style={{color:'var(--text-3)'}}>{row?.toolName || ''}</span></div><div style={{fontSize:12, color:'var(--text-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{row?.text || '—'}</div></div></div>)}</div>
     </div>
   );
 };
 
 /* ===== SIM OFFICE FLOOR — dashboard workstation view ===== */
 const AgentWorkspace = ({ onOpenAgent }) => {
+  const agents = Array.isArray(window.AGENTS) ? window.AGENTS : [];
   const statusRank = { busy: 0, active: 1, idle: 2, offline: 3 };
 
   const sorted = React.useMemo(() => {
-    return [...AGENTS].sort((a, b) => {
+    return [...agents].sort((a, b) => {
       const sa = statusRank[a.status] ?? 9;
       const sb = statusRank[b.status] ?? 9;
       if (sa !== sb) return sa - sb;
       return (a.name || '').localeCompare(b.name || '');
     });
-  }, [AGENTS]);
+  }, [agents]);
 
-  const working = AGENTS.filter(a => a.status === 'busy' || a.status === 'active').length;
+  const working = agents.filter(a => a.status === 'busy' || a.status === 'active').length;
 
   return (
     <div className="agent-office-page dashboard-office-floor">
@@ -677,9 +764,9 @@ const AgentWorkspace = ({ onOpenAgent }) => {
           <p>ห้องทำงานรวมของทีม AI: แต่ละ agent มีโต๊ะ จอ คิวงาน สถานะ online/working และ workload ที่เปลี่ยนตามงานจริง</p>
         </div>
         <div className="agent-office-stats">
-          <span><b>{AGENTS.length}</b> staff</span>
+          <span><b>{agents.length}</b> staff</span>
           <span><b>{working}</b> active desks</span>
-          <span><b>{AGENTS.filter(a => a.status === 'idle').length}</b> standby</span>
+          <span><b>{agents.filter(a => a.status === 'idle').length}</b> standby</span>
         </div>
       </div>
 
@@ -695,7 +782,7 @@ const AgentWorkspace = ({ onOpenAgent }) => {
       <div className="panel-head">
         <h3>Office Floor
           <span style={{color:'var(--text-3)', fontWeight:400, fontSize:11, marginLeft:8, fontFamily:'var(--font-mono)', letterSpacing:'0.1em'}}>
-            · {AGENTS.length} DESKS
+            · {agents.length} DESKS
           </span>
         </h3>
         <div className="right">
@@ -723,10 +810,11 @@ const AgentWorkspace = ({ onOpenAgent }) => {
 
 /* simple force-less collab graph */
 const CollabGraph = ({ onOpenAgent }) => {
+  const agents = Array.isArray(window.AGENTS) ? window.AGENTS : [];
   const radius = 140;
   const center = { x: 260, y: 160 };
-  const positions = AGENTS.map((a, i) => {
-    const ang = (i / AGENTS.length) * Math.PI * 2 - Math.PI/2;
+  const positions = agents.map((a, i) => {
+    const ang = (i / Math.max(agents.length, 1)) * Math.PI * 2 - Math.PI/2;
     return { ...a, x: center.x + Math.cos(ang)*radius, y: center.y + Math.sin(ang)*radius };
   });
   const edges = (window.STATE_EDGES && window.STATE_EDGES.length > 0)

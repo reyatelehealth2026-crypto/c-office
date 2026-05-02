@@ -410,6 +410,29 @@ export function bumpRunRevision(runId) {
   return run.revisions;
 }
 
+export function requestRunCancellation(runId, reason = 'user-cancelled') {
+  const run = state.runs.get(runId);
+  if (!run) return false;
+  if (run.status === 'done' || run.status === 'failed') return false;
+  run.cancelRequested = true;
+  run.cancelReason = String(reason).slice(0, 200);
+  run.scratchpad.push({
+    ts: Date.now(),
+    persona: 'orchestra',
+    personaName: getAgentSync('orchestra')?.name || 'Orchestra',
+    kind: 'cancel-requested',
+    text: `Cancellation requested: ${run.cancelReason}`,
+  });
+  if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
+  emitRun(run);
+  return true;
+}
+
+export function isRunCancellationRequested(runId) {
+  const run = state.runs.get(runId);
+  return !!run?.cancelRequested;
+}
+
 export function addPhaseCost(runId, phase, cost) {
   const run = state.runs.get(runId);
   if (!run || !phase) return 0;

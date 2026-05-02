@@ -15,7 +15,7 @@
 //   GET    /api/evals/:id/grades → list grades for eval
 
 import { Router } from 'express';
-import { state, approveRunPhase, rejectRunPhase } from '../state.js';
+import { state, approveRunPhase, rejectRunPhase, requestRunCancellation } from '../state.js';
 import { runOrchestrator } from '../agents/runner.js';
 import { listSkills } from '../agents/skills.js';
 import { listWorkflows } from '../agents/workflows.js';
@@ -162,6 +162,13 @@ router.get('/api/tasks', (req, res) => {
     .sort((a, b) => b.startedAt - a.startedAt)
     .slice(0, 50);
   res.json({ runs });
+});
+
+router.post('/api/task/:run_id/cancel', (req, res) => {
+  const reason = String(req.body?.reason || 'user-cancelled').slice(0, 200);
+  const ok = requestRunCancellation(req.params.run_id, reason);
+  if (!ok) return res.status(404).json({ error: 'unknown or already-finished run' });
+  res.json({ ok: true });
 });
 
 router.get('/api/task/:run_id/trace', (req, res) => {
