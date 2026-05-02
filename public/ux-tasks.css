@@ -1,0 +1,324 @@
+/* ==========================================================================
+   C-Office Tasks / Runs V2
+   Workflow surface for Orchestra runs, Task tool records, timelines and run
+   inspection. Keeps existing runtime data contract intact.
+   ========================================================================== */
+
+.ux-tasks {
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(340px, 460px);
+  gap: 18px;
+  align-items: start;
+}
+
+.ux-tasks-toolbar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-xl);
+  background:
+    radial-gradient(520px 220px at 0% 0%, rgba(244,114,182,0.12), transparent 70%),
+    rgba(255,255,255,0.045);
+  box-shadow: var(--ux-shadow-card);
+}
+
+.ux-task-search,
+.ux-task-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.045);
+  color: var(--ux-text-primary);
+  outline: none;
+  font: 600 13px var(--font-body);
+}
+
+.ux-task-select {
+  min-width: 150px;
+  color: var(--ux-text-secondary);
+}
+
+.ux-tasks-summary {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.ux-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ux-task-card-v2 {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-xl);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.058), rgba(255,255,255,0.032));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.ux-task-card-v2:hover,
+.ux-task-card-v2.is-selected {
+  transform: translateY(-1px);
+  border-color: rgba(244,114,182,0.38);
+  background: rgba(244,114,182,0.055);
+}
+
+.ux-task-glyph {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--ux-radius-lg);
+  background: rgba(244,114,182,0.10);
+  color: var(--ux-accent-pink);
+  border: 1px solid rgba(244,114,182,0.20);
+  font: 850 10px var(--font-mono);
+}
+
+.ux-task-main {
+  min-width: 0;
+}
+
+.ux-task-title {
+  color: var(--ux-text-primary);
+  font: 800 14px var(--font-display);
+  line-height: 1.35;
+}
+
+.ux-task-desc {
+  margin-top: 6px;
+  color: var(--ux-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ux-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ux-task-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 96px;
+}
+
+.ux-task-time {
+  color: var(--ux-text-faint);
+  font: 800 10px var(--font-mono);
+  white-space: nowrap;
+}
+
+.ux-task-progress {
+  position: relative;
+  height: 6px;
+  width: 100%;
+  min-width: 120px;
+  overflow: hidden;
+  border-radius: var(--ux-radius-pill);
+  background: rgba(255,255,255,0.08);
+}
+
+.ux-task-progress > span {
+  display: block;
+  height: 100%;
+  width: var(--task-progress, 18%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--ux-accent-pink), var(--ux-accent-primary), var(--ux-accent-gold));
+  box-shadow: var(--ux-glow-primary);
+}
+
+.ux-run-inspector {
+  position: sticky;
+  top: 94px;
+  max-height: calc(100vh - 116px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-xl);
+  background:
+    radial-gradient(420px 220px at 100% 0%, rgba(251,191,36,0.12), transparent 70%),
+    rgba(255,255,255,0.045);
+  box-shadow: var(--ux-shadow-card);
+}
+
+.ux-run-title {
+  margin: 0;
+  color: var(--ux-text-primary);
+  font: 850 19px var(--font-display);
+  line-height: 1.2;
+}
+
+.ux-run-sub {
+  margin-top: 4px;
+  color: var(--ux-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ux-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ux-run-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ux-run-cell {
+  padding: 10px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.035);
+}
+
+.ux-run-cell label {
+  display: block;
+  color: var(--ux-text-muted);
+  font: 800 9px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ux-run-cell b {
+  display: block;
+  margin-top: 5px;
+  color: var(--ux-text-primary);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.ux-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.ux-timeline::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 10px;
+  bottom: 10px;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(34,211,238,0.45), rgba(157,92,255,0.15));
+}
+
+.ux-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.ux-step-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(34,211,238,0.28);
+  background: rgba(13,16,32,0.96);
+  color: var(--ux-accent-secondary);
+  font: 800 10px var(--font-mono);
+  box-shadow: 0 0 18px rgba(34,211,238,0.18);
+}
+
+.ux-step-card {
+  padding: 10px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.035);
+}
+
+.ux-step-title {
+  color: var(--ux-text-primary);
+  font: 760 12px var(--font-display);
+}
+
+.ux-step-body {
+  margin-top: 5px;
+  color: var(--ux-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.ux-result-box {
+  max-height: 280px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(0,0,0,0.24);
+  color: var(--ux-text-secondary);
+  font: 11px/1.6 var(--font-mono);
+  white-space: pre-wrap;
+}
+
+@media (max-width: 1180px) {
+  .ux-tasks {
+    grid-template-columns: 1fr;
+  }
+  .ux-run-inspector {
+    position: relative;
+    top: auto;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .ux-tasks-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .ux-tasks-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ux-task-card-v2 {
+    grid-template-columns: 36px 1fr;
+  }
+  .ux-task-right {
+    grid-column: 2;
+    align-items: flex-start;
+  }
+  .ux-run-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
