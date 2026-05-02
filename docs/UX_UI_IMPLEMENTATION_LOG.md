@@ -57,7 +57,7 @@ Status:
 
 ---
 
-### Phase 2 — Mission Control V2
+### Phase 2 — Mission Control V2 + Polish
 
 Implemented:
 
@@ -77,13 +77,19 @@ Implemented:
   - pause/resume visual stream
   - inspect event metadata
   - copy raw JSON
+- `public/page-mission-control-polish.jsx`
+  - safe post-page override
+  - grouped repeated adjacent events
+  - grouped on/off toggle
+  - group-aware inspector
+  - group count metric
 - `public/index.html`
-  - loads Mission Control assets and route
+  - loads Mission Control assets and polish override after the base Mission Control page
 
 Status:
 
 - Mission Control is usable as a realtime inspection surface.
-- Grouped repeated events remain a future polish item.
+- Repeated feed noise can now be grouped without losing raw payload visibility.
 
 ---
 
@@ -254,13 +260,58 @@ Status:
 
 ---
 
+### Phase 4 — Agent Detail / Persona Inspector V2
+
+Implemented:
+
+- `public/ux-agent-detail.css`
+  - persona inspector layout
+  - hero profile card
+  - performance cards
+  - current assignment card
+  - desk chat surface
+  - quick action row
+  - profile/skills/history tabs
+  - skill matrix cards
+  - history list
+  - responsive rules
+- `public/page-detail-v2.jsx`
+  - safe override of `window.AgentDetail`
+  - preserves Desk Chat to `/api/task`
+  - polls `/api/task/:runId` for final response
+  - reads `/api/agents/:id/runs`
+  - shows profile metadata, skill matrix, run history
+- `public/index.html`
+  - loads Agent Detail V2 CSS and JSX after legacy detail page
+
+Status:
+
+- Agent detail now matches the redesigned command-center system.
+- Desk Chat still launches real Orchestra runs.
+
+---
+
+## Additional QA / Smoke Docs
+
+Implemented:
+
+- `docs/UX_UI_SMOKE_TEST.md`
+  - page smoke checklist
+  - critical UI behavior checklist
+  - endpoint smoke commands
+  - hook smoke command
+  - script order sanity check
+  - rollback guidance
+
+---
+
 ## Important implementation strategy
 
 The redesign currently uses **safe override layers**:
 
 - legacy files remain intact
 - V2 files load after legacy files
-- V2 files replace selected globals such as `window.Dashboard`, `window.NotesPage`, `window.TasksPage`, `window.ImageStudioPage`, `window.SettingsPage`, and `window.ProjectsPage`
+- V2 files replace selected globals such as `window.Dashboard`, `window.NotesPage`, `window.TasksPage`, `window.ImageStudioPage`, `window.SettingsPage`, `window.ProjectsPage`, and `window.AgentDetail`
 - no build step has been introduced
 - React UMD + Babel Standalone contract is preserved
 
@@ -270,21 +321,21 @@ This makes each redesign pass reversible and easier to inspect.
 
 ## Next recommended passes
 
-1. **Agent Detail / Persona Inspector V2**
-   - better persona history
-   - skills and current work blocks
-   - quick actions
-   - side-drawer style detail
-
-2. **Mission Control polish**
-   - grouped repeated events
-   - session/project filters
-   - clearer severity tags
-
-3. **Final smoke + cleanup**
+1. **Final smoke + cleanup**
+   - run the smoke checklist locally
+   - inspect console errors
    - verify script order
-   - document manual smoke commands
-   - consider consolidating overrides if stable
+   - verify endpoint assumptions
+
+2. **Consolidation pass**
+   - once stable, merge V2 override files into legacy files or convert to a proper module structure
+   - remove duplicate helper functions
+   - make versioning/cache busting consistent
+
+3. **Deeper product upgrades**
+   - richer session/project filters in Mission Control
+   - persistent project CRUD if backend supports it
+   - richer image presets and prompt history
 
 ---
 
@@ -302,15 +353,25 @@ Open:
 http://127.0.0.1:7878
 ```
 
+Read:
+
+```text
+docs/UX_UI_SMOKE_TEST.md
+```
+
 Check pages:
 
 - Dashboard
 - Mission Control
+- Agents
+- Agent Detail
 - Notes
 - Tasks
 - Projects
 - Images
 - Settings
+- Memory
+- Playbooks
 
 Check endpoints:
 
@@ -331,5 +392,5 @@ Check hook smoke:
 curl -X POST http://127.0.0.1:7878/hooks/event \
   -H 'X-COffice-Event: SessionStart' \
   -H 'Content-Type: application/json' \
-  --data '{"session_id":"ux-smoke","pid":123}'
+  --data '{"session_id":"ux-smoke","pid":123,"cwd":"/tmp/c-office-smoke"}'
 ```
