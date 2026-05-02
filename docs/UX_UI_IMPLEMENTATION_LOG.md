@@ -188,13 +188,79 @@ Status:
 
 ---
 
+### Phase 4 — Settings / Connections V2
+
+Implemented:
+
+- `public/ux-settings.css`
+  - trust-focused settings layout
+  - provider cards
+  - token rows
+  - hook diagnostics
+  - live sessions list
+  - provider runtime rows
+  - access/local credential warnings
+  - user profile editor styles
+- `public/page-settings-v2.jsx`
+  - safe override of `window.SettingsPage`
+  - uses existing `/api/auth/status`
+  - uses existing `/api/auth/token`
+  - uses existing `/api/auth/disconnect`
+  - uses existing `/api/auth/test/:provider`
+  - uses existing `/api/settings`
+  - uses existing `/api/user-profile`
+  - supports provider test/save/disconnect flows
+  - shows hook diagnostics and live sessions
+  - edits agent user profile Markdown
+- `public/index.html`
+  - loads Settings V2 CSS and JSX after legacy settings code
+
+Status:
+
+- Settings now behaves like a trust/control room rather than scattered technical panels.
+- Credential handling remains local and backend contract is unchanged.
+
+---
+
+### Phase 4 — Projects / Task Board V2
+
+Implemented:
+
+- `public/ux-projects.css`
+  - project cards
+  - project search toolbar
+  - project metrics
+  - kanban-style board columns
+  - board cards
+  - project/item inspector
+  - recent activity list
+  - responsive layout
+- `public/page-projects-v2.jsx`
+  - new `window.ProjectsPage`
+  - uses existing `/api/projects` when available
+  - uses existing `/api/task-board` when available
+  - falls back to deriving project buckets from `window.RUNS`, `window.NOTES`, and `window.ACTIVITY`
+  - supports scoped board cards across backlog / active / blocked / done
+  - supports board item inspection and JSON copy
+- `public/ux-nav-projects.jsx`
+  - post-nav override to add `Projects` route safely after `ux-nav.jsx`
+- `public/index.html`
+  - loads Projects V2 CSS/JS and routes `page === 'projects'`
+
+Status:
+
+- Projects now has a first-class navigation entry and project-scoped board surface.
+- The page remains useful even if project APIs return empty data.
+
+---
+
 ## Important implementation strategy
 
 The redesign currently uses **safe override layers**:
 
 - legacy files remain intact
 - V2 files load after legacy files
-- V2 files replace selected globals such as `window.Dashboard`, `window.NotesPage`, `window.TasksPage`, and `window.ImageStudioPage`
+- V2 files replace selected globals such as `window.Dashboard`, `window.NotesPage`, `window.TasksPage`, `window.ImageStudioPage`, `window.SettingsPage`, and `window.ProjectsPage`
 - no build step has been introduced
 - React UMD + Babel Standalone contract is preserved
 
@@ -204,23 +270,21 @@ This makes each redesign pass reversible and easier to inspect.
 
 ## Next recommended passes
 
-1. **Settings / Connections V2**
-   - provider cards
-   - hook diagnostics
-   - access-token warning
-   - local credential explainer
-   - trust-focused onboarding
+1. **Agent Detail / Persona Inspector V2**
+   - better persona history
+   - skills and current work blocks
+   - quick actions
+   - side-drawer style detail
 
 2. **Mission Control polish**
    - grouped repeated events
    - session/project filters
    - clearer severity tags
 
-3. **Projects / Task Board V2**
-   - project cards
-   - scoped activity
-   - kanban columns
-   - task card inspector
+3. **Final smoke + cleanup**
+   - verify script order
+   - document manual smoke commands
+   - consider consolidating overrides if stable
 
 ---
 
@@ -244,6 +308,7 @@ Check pages:
 - Mission Control
 - Notes
 - Tasks
+- Projects
 - Images
 - Settings
 
@@ -254,6 +319,10 @@ curl http://127.0.0.1:7878/api/state
 curl http://127.0.0.1:7878/api/notes/providers
 curl http://127.0.0.1:7878/api/images/status
 curl http://127.0.0.1:7878/api/images/library
+curl http://127.0.0.1:7878/api/projects
+curl http://127.0.0.1:7878/api/task-board
+curl http://127.0.0.1:7878/api/auth/status
+curl http://127.0.0.1:7878/api/settings
 ```
 
 Check hook smoke:
