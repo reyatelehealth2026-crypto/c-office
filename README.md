@@ -89,7 +89,33 @@ C-Office คือ command deck สำหรับคนที่ใช้หล
 
 ---
 
-## 3. Stack
+## 3. UX/UI Upgrade Plan
+
+A full UX/UI redesign spec lives here:
+
+```text
+docs/UX_UI_MASTER_SPEC.md
+```
+
+It covers:
+
+- product vision
+- information architecture
+- app shell
+- visual direction
+- design tokens
+- component system
+- page-by-page specs
+- realtime UX rules
+- accessibility
+- responsive behavior
+- phased implementation checklist
+
+Use it before redesigning dashboard, notes, mission control, tasks, images, projects, or settings.
+
+---
+
+## 4. Stack
 
 | Layer | Tech |
 |---|---|
@@ -103,9 +129,9 @@ C-Office คือ command deck สำหรับคนที่ใช้หล
 
 ---
 
-## 4. Quick Start
+## 5. Quick Start
 
-### 4.1 Install
+### 5.1 Install
 
 ```bash
 git clone https://github.com/reyatelehealth2026-crypto/c-office.git
@@ -113,7 +139,7 @@ cd c-office
 npm install
 ```
 
-### 4.2 Run Dev Server
+### 5.2 Run Dev Server
 
 ```bash
 npm run dev
@@ -125,7 +151,7 @@ Default URL:
 http://127.0.0.1:7878
 ```
 
-### 4.3 Install Claude Code Hooks
+### 5.3 Install Claude Code Hooks
 
 ```bash
 npm run install-hooks
@@ -145,7 +171,7 @@ claude
 
 C-Office should start seeing sessions and events.
 
-### 4.4 Uninstall Hooks
+### 5.4 Uninstall Hooks
 
 ```bash
 npm run uninstall-hooks
@@ -153,7 +179,7 @@ npm run uninstall-hooks
 
 ---
 
-## 5. Workflow Commands
+## 6. Workflow Commands
 
 | Command | Purpose |
 |---|---|
@@ -185,7 +211,7 @@ Expected response:
 
 ---
 
-## 6. Use Send to Orchestra
+## 7. Use Send to Orchestra
 
 1. Run the server:
 
@@ -210,7 +236,7 @@ Orchestra can route work through persona logic and report progress into the feed
 
 ---
 
-## 7. Use Notes Chat
+## 8. Use Notes Chat
 
 1. Go to:
 
@@ -232,7 +258,7 @@ Notes are stored locally at:
 
 ---
 
-## 8. The 9 Personas
+## 9. The 9 Personas
 
 | # | Persona | id | Role | Best at |
 |---|---|---:|---|---|
@@ -272,7 +298,7 @@ node -e "import('./server/mapping/personas.js').then(m => console.log(m.mapPerso
 
 ---
 
-## 9. Status Model
+## 10. Status Model
 
 | State | Meaning | Visual idea |
 |---|---|---|
@@ -292,7 +318,7 @@ Busy decay is handled by a background tick.
 
 ---
 
-## 10. Architecture
+## 11. Architecture
 
 ```text
 ┌──────────────────┐   POST /hooks/event   ┌─────────────────────────────┐
@@ -324,7 +350,7 @@ Busy decay is handled by a background tick.
 
 ---
 
-## 11. File Map
+## 12. File Map
 
 | Path | Purpose |
 |---|---|
@@ -351,10 +377,11 @@ Busy decay is handled by a background tick.
 | `.claude/agents/*.md` | Claude Code subagent definitions |
 | `public/` | React frontend loaded directly by browser |
 | `AGENTS.md` | Operating manual for AI agents and developers |
+| `docs/UX_UI_MASTER_SPEC.md` | full UX/UI redesign plan and implementation checklist |
 
 ---
 
-## 12. API Reference
+## 13. API Reference
 
 ### Read Endpoints
 
@@ -406,7 +433,7 @@ Busy decay is handled by a background tick.
 
 ---
 
-## 13. Environment Variables
+## 14. Environment Variables
 
 | Name | Default | Purpose |
 |---|---|---|
@@ -436,7 +463,7 @@ npm run dev
 
 ---
 
-## 14. Security Notes
+## 15. Security Notes
 
 C-Office is local-first by default. Keep it that way unless you know what you are exposing.
 
@@ -477,7 +504,7 @@ Do not expose the dashboard publicly without a token.
 
 ---
 
-## 15. Customization
+## 16. Customization
 
 ### Change Persona Mapping
 
@@ -552,7 +579,7 @@ Task({ subagent_type: "my-agent", prompt: "..." })
 
 ---
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 ### Dashboard does not see activity
 
@@ -619,12 +646,18 @@ Frontend files in `public/*.jsx` do not require server restart. Refresh browser.
 
 ---
 
-## 17. Development Protocol
+## 18. Development Protocol
 
 Before changing code, read:
 
 ```text
 AGENTS.md
+```
+
+For UX/UI work, also read:
+
+```text
+docs/UX_UI_MASTER_SPEC.md
 ```
 
 Minimum dev loop:
@@ -648,7 +681,7 @@ When changing behavior, update docs in the same pass.
 
 ---
 
-## 18. Design Direction
+## 19. Design Direction
 
 C-Office should feel like:
 
@@ -669,13 +702,13 @@ Avoid:
 
 ---
 
-## 19. License
+## 20. License
 
 Private / personal use. Not for redistribution.
 
 ---
 
-## 20. Credits
+## 21. Credits
 
 - Concept & persona art: custom illustrations
 - Framework inspiration: Claude Code CLI workflows
