@@ -1,0 +1,293 @@
+/* ==========================================================================
+   C-Office Projects / Task Board V2
+   Project-scoped operations layer with cards, kanban board, activity and task
+   inspector. Uses existing /api/projects and /api/task-board where available.
+   ========================================================================== */
+
+.ux-projects {
+  display: grid;
+  grid-template-columns: minmax(340px, 430px) minmax(480px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.ux-project-toolbar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-xl);
+  background:
+    radial-gradient(520px 220px at 0% 0%, rgba(34,211,238,0.12), transparent 70%),
+    rgba(255,255,255,0.045);
+  box-shadow: var(--ux-shadow-card);
+}
+
+.ux-project-search {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.045);
+  color: var(--ux-text-primary);
+  outline: none;
+  font: 600 13px var(--font-body);
+}
+
+.ux-project-panel {
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-xl);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.058), rgba(255,255,255,0.032));
+  box-shadow: var(--ux-shadow-card);
+  overflow: hidden;
+}
+
+.ux-project-head {
+  padding: 16px;
+  border-bottom: 1px solid var(--ux-border-soft);
+  background: rgba(255,255,255,0.035);
+}
+
+.ux-project-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.ux-project-title {
+  margin: 0;
+  color: var(--ux-text-primary);
+  font: 830 17px var(--font-display);
+}
+
+.ux-project-subtitle {
+  margin-top: 4px;
+  color: var(--ux-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ux-project-body {
+  padding: 16px;
+}
+
+.ux-project-list {
+  position: sticky;
+  top: 94px;
+  max-height: calc(100vh - 116px);
+  overflow: auto;
+}
+
+.ux-project-card {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 14px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background:
+    radial-gradient(260px 140px at 100% 0%, rgba(34,211,238,0.10), transparent 70%),
+    rgba(255,255,255,0.035);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.ux-project-card:hover,
+.ux-project-card.is-selected {
+  transform: translateY(-1px);
+  border-color: rgba(34,211,238,0.40);
+  background: rgba(34,211,238,0.055);
+}
+
+.ux-project-card-name {
+  color: var(--ux-text-primary);
+  font: 820 15px var(--font-display);
+}
+
+.ux-project-card-desc {
+  color: var(--ux-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ux-project-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ux-project-main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ux-project-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.ux-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(190px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.ux-board-column {
+  min-height: 320px;
+  padding: 12px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-xl);
+  background: rgba(255,255,255,0.035);
+}
+
+.ux-board-column-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ux-board-column-title {
+  color: var(--ux-text-primary);
+  font: 850 11px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ux-board-card {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 11px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.04);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.ux-board-card:hover,
+.ux-board-card.is-selected {
+  transform: translateY(-1px);
+  border-color: rgba(251,191,36,0.36);
+  background: rgba(251,191,36,0.055);
+}
+
+.ux-board-card-title {
+  color: var(--ux-text-primary);
+  font: 760 12px var(--font-display);
+  line-height: 1.35;
+}
+
+.ux-board-card-body {
+  color: var(--ux-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ux-project-inspector {
+  display: grid;
+  gap: 12px;
+}
+
+.ux-project-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ux-project-detail-cell {
+  padding: 10px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.035);
+}
+
+.ux-project-detail-cell label {
+  display: block;
+  color: var(--ux-text-muted);
+  font: 800 9px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ux-project-detail-cell b {
+  display: block;
+  margin-top: 4px;
+  color: var(--ux-text-primary);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.ux-activity-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ux-activity-mini {
+  padding: 10px;
+  border: 1px solid var(--ux-border-soft);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(255,255,255,0.035);
+}
+
+.ux-activity-mini-title {
+  color: var(--ux-text-primary);
+  font: 740 12px var(--font-display);
+}
+
+.ux-activity-mini-body {
+  margin-top: 4px;
+  color: var(--ux-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1280px) {
+  .ux-projects {
+    grid-template-columns: 1fr;
+  }
+  .ux-project-list {
+    position: relative;
+    top: auto;
+    max-height: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .ux-board {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ux-project-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .ux-project-toolbar,
+  .ux-board,
+  .ux-project-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
