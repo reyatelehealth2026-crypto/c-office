@@ -35,7 +35,12 @@ async function persist(buffer, slug) {
   return file;
 }
 
-// ─── Gemini Imagen ───────────────────────────────────────────────────────────
+// ─── Gemini · Nano Banana 2 ──────────────────────────────────────────────────
+// Uses gemini-3-pro-image-preview (Nano Banana 2, the latest image model)
+// via the generateContent API. The legacy imagen-3.0 / "3.1flashgen"
+// paths are not supported by this codebase — only Nano Banana 2.
+const NANO_BANANA_2_MODEL = 'gemini-3-pro-image-preview';
+
 async function generateGemini({ prompt, slug }) {
   const auth = await getGoogleAuth();
   if (!auth.connected) throw new Error('Google not connected. Connect in Settings.');
@@ -45,16 +50,25 @@ async function generateGemini({ prompt, slug }) {
       ? { apiKey: auth.apiKey }
       : { authOptions: { credentials: { access_token: auth.accessToken } } }
   );
-  const resp = await client.models.generateImages({
-    model: 'imagen-3.0-generate-002',
-    prompt,
-    config: { numberOfImages: 1, aspectRatio: '3:4' },
+  const resp = await client.models.generateContent({
+    model: NANO_BANANA_2_MODEL,
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
   });
-  const img = resp.generatedImages?.[0]?.image;
-  if (!img?.imageBytes) throw new Error('Gemini returned no image bytes');
-  const buf = Buffer.from(img.imageBytes, 'base64');
+  const parts = resp?.candidates?.[0]?.content?.parts || [];
+  const imagePart = parts.find((p) => p?.inlineData?.data);
+  if (!imagePart) {
+    const textPart = parts.find((p) => p?.text);
+    throw new Error(`Nano Banana 2 returned no image (model=${NANO_BANANA_2_MODEL})${textPart ? ' — ' + textPart.text.slice(0, 160) : ''}`);
+  }
+  const buf = Buffer.from(imagePart.inlineData.data, 'base64');
   const file = await persist(buf, slug);
-  return { url: publicPathFor(file), provider: 'gemini', costUsd: 0.04, localPath: file };
+  return {
+    url: publicPathFor(file),
+    provider: 'gemini',
+    model: NANO_BANANA_2_MODEL,
+    costUsd: 0.04,
+    localPath: file,
+  };
 }
 
 // ─── Replicate FLUX ──────────────────────────────────────────────────────────
