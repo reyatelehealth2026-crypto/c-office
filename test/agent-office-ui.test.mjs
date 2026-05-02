@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const page = readFileSync(new URL('../public/page-agents.jsx', import.meta.url), 'utf8');
+const dashboard = readFileSync(new URL('../public/page-dashboard.jsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../public/agent-office.css', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 
@@ -42,6 +43,13 @@ test('dashboard rendering keeps defensive fallbacks for sparse agent or run data
   assert.match(page, /agent\?\.generatedImage/);
   assert.match(page, /agents\[0\]\?\.id \|\| ''/);
   assert.match(page, /window\.PROVIDERS\?\.default \|\| 'claude'/);
+});
+
+test('dashboard checks Codex CLI login independently from OpenAI image keys', () => {
+  assert.match(dashboard, /authStatus\.codex\?\.connected/);
+  assert.match(dashboard, /Codex CLI/);
+  // OpenAI Images row removed from the providers panel by design — image
+  // generation is routed through Codex CLI / Gemini.
 });
 
 test('agent office stylesheet is loaded and defines workroom pieces', () => {

@@ -343,13 +343,67 @@ const CharacterImagePanel = ({ agent }) => {
     }
   };
 
-  const applyGenerated = () => patchAgent({ image: agent.generatedImage, avatar: agent.generatedImage });
+  const applyGeneratedCard = () => patchAgent({ image: agent.generatedImage });
+  const applyGeneratedAvatar = () => patchAgent({ avatar: agent.generatedAvatar });
   const restoreDefault = () => patchAgent({ image: defaultImage, avatar: defaultAvatarForAgent(agent) });
 
-  const generate = async () => {
+  // Builds a Look-Locked prompt with kind-specific cinematography. Both kinds
+  // share the same character data (gender/role/outfit/etc.) but differ in
+  // staging — card is a dramatic environment shot, avatar is a clean cutout.
+  const buildKindPrompt = (kind) => {
+    const styleMap = {
+      'อนิเมะญี่ปุ่นแฟนตาซี': 'high-quality JRPG anime style, vibrant colors, detailed cel shading',
+      'แฟนตาซีตะวันตก': 'epic western fantasy, semi-realistic, oil painting texture, dramatic lighting',
+      'จอมยุทธ์จีน': 'elegant Wuxia style, flowing ink aesthetics, traditional Chinese elements',
+      'ไทยประยุกต์แฟนตาซี': 'modern Thai fantasy fusion, intricate golden ornaments, tropical mythical atmosphere',
+      'ไซไฟโลกอนาคต': 'cyberpunk sci-fi, neon glows, metallic surfaces, high-tech intricate details',
+      'พิกเซลอาร์ต': 'detailed 32-bit pixel art style, retro game aesthetic, sharp colors',
+      '3D Render': 'modern 3D game render, Unreal Engine 5 style, octane render, cinematic',
+    };
+    const styleLine = styleMap[charStyle] || charStyle;
+    const subject = [
+      `Character: "${agent?.name || 'AI Agent'}".`,
+      `Style: ${styleLine}.`,
+      `Gender: ${charGender}.`,
+      `Role: ${charRole}.`,
+      `Outfit: ${charOutfit}.`,
+      `Weapon/Equipment: ${charWeapon}.`,
+      `Theme color: ${charColor}.`,
+    ].join(' ');
+
+    if (kind === 'card') {
+      return [
+        `A cinematic 3D-rendered hero portrait card of "${agent?.name || 'AI Agent'}".`,
+        subject,
+        '--- LOOK LOCK ---',
+        'Composition: dynamic 3/4 hero pose, dramatic perspective, depth of field, subject sharp and background softly blurred.',
+        'Environment: themed atmosphere matching the role (battlefield mist / neon city / temple / arcane sigils), rim lighting in the theme color, volumetric light shafts, floating particles or magical sparks for depth.',
+        'Lighting: cinematic key + rim light + colored bounce, strong contrast, glowing accents on weapon/equipment.',
+        'Camera: portrait 3:4, eye-level slightly low for heroic feel, subtle anamorphic lens flare, shallow depth of field.',
+        'Quality: ultra-detailed 4K hero key art, painterly polish, no text, no watermark, no card frame, no UI overlays.',
+      ].join('\n');
+    }
+
+    // avatar — clean cutout, isolated, transparent-friendly
+    return [
+      `A clean full-body character avatar of "${agent?.name || 'AI Agent'}".`,
+      subject,
+      '--- LOOK LOCK ---',
+      'Composition: one isolated character, full body, feet visible, centered, neutral standing pose, expressive face.',
+      'Background: pure solid white or pure solid gray (transparent-friendly). No scenery, no props in background.',
+      'Lighting: even studio lighting, soft shadow only beneath feet, no atmospheric effects.',
+      'Camera: portrait 3:4, head-to-toe framing, no lens flare.',
+      'Quality: high-detail clean anatomy, polished 3D-game-key-art feel, no watermark, no logo, no signature.',
+    ].join('\n');
+  };
+
+  const generate = async (kind /* 'card' | 'avatar' */) => {
     if (!agent?.id) return;
     setBusy(true);
     try {
+      const composedPrompt = prompt && prompt.includes('--- LOOK LOCK ---')
+        ? prompt
+        : buildKindPrompt(kind);
       const response = await fetch('/api/images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -357,7 +411,12 @@ const CharacterImagePanel = ({ agent }) => {
           provider: imageProvider,
           mode: 'character',
           agentId: agent.id,
-          prompt,
+          kind,
+          prompt: composedPrompt,
+          // gpt-image-2 only accepts 1024x1024 / 1536x1024 / 1024x1536 / auto.
+          // Both kinds want portrait framing, so use 1024x1536.
+          size: '1024x1536',
+          quality: 'high',
         }),
       });
       const json = await response.json().catch(() => ({}));
@@ -375,20 +434,28 @@ const CharacterImagePanel = ({ agent }) => {
       <div className="brief-kicker">Avatar Generator</div>
       <div className="character-generator-head">
         <strong>Staff Avatar Cutout</strong>
-        <span>{imageProvider === 'codex-image2' ? 'Codex Image Edit' : imageProvider === '3.1flashgen' ? '3.1 Flash Gen' : 'Nano Banana 2 · Gemini 3.1 Flash Image Preview'}</span>
+        <span>{imageProvider === 'codex-image2' ? 'Codex CLI Image · GPT Image 2' : imageProvider === '3.1flashgen' ? '3.1 Flash Gen' : 'Nano Banana 2 · Gemini 3.1 Flash Image Preview'}</span>
       </div>
       <div className="character-compare">
         <div>
-          <span>Current Image</span>
-          {agent?.image ? <img src={agent.image} alt={`${agent.name} current`}/> : <b>No image</b>}
+          <span>Profile Card (current)</span>
+          {agent?.image ? <img src={agent.image} alt={`${agent.name} profile card`}/> : <b>No card</b>}
         </div>
         <div>
-          <span>Generated Draft</span>
-          {agent?.generatedImage ? <img src={agent.generatedImage} alt={`${agent.name} generated draft`}/> : <b>No draft</b>}
+          <span>Profile Card (draft)</span>
+          {agent?.generatedImage ? <img src={agent.generatedImage} alt={`${agent.name} profile card draft`}/> : <b>No draft</b>}
+        </div>
+        <div>
+          <span>Avatar (current)</span>
+          {agent?.avatar && agent.avatar.startsWith('/') ? <img src={agent.avatar} alt={`${agent.name} avatar`}/> : <b>{agent?.avatar || 'No avatar'}</b>}
+        </div>
+        <div>
+          <span>Avatar (draft)</span>
+          {agent?.generatedAvatar ? <img src={agent.generatedAvatar} alt={`${agent.name} avatar draft`}/> : <b>No draft</b>}
         </div>
       </div>
       <div className="character-provider-tabs">
-        <button className={imageProvider === 'codex-image2' ? 'active' : ''} onClick={() => setImageProvider('codex-image2')}>Codex Image2</button>
+        <button className={imageProvider === 'codex-image2' ? 'active' : ''} onClick={() => setImageProvider('codex-image2')}>Codex CLI Image</button>
         <button className={imageProvider === '3.1flashgen' ? 'active' : ''} onClick={() => setImageProvider('3.1flashgen')}>3.1 Flash Gen</button>
         <button className={imageProvider === 'nanobanana-2-pro' ? 'active' : ''} onClick={() => setImageProvider('nanobanana-2-pro')}>Nano Banana 2 Pro</button>
       </div>
@@ -454,12 +521,31 @@ const CharacterImagePanel = ({ agent }) => {
         placeholder="พิมพ์รายละเอียดเพิ่มเติมที่ต้องการปรับแต่งที่นี่..."
       />
       <div className="character-actions">
-        <button className="btn ghost" disabled={busy || !agent?.generatedImage} onClick={applyGenerated}>Apply Generated</button>
+        <button className="btn ghost" disabled={busy || !agent?.generatedImage} onClick={applyGeneratedCard}>Apply as Profile Card</button>
+        <button className="btn ghost" disabled={busy || !agent?.generatedAvatar} onClick={applyGeneratedAvatar}>Apply as Avatar</button>
         <button className="btn ghost" disabled={busy || !defaultImage} onClick={restoreDefault}>Restore Default</button>
       </div>
-      <button className="btn primary" disabled={busy || !agent?.id} onClick={generate}>
-        {busy ? 'Generating...' : 'Generate Transparent Cutout'}
-      </button>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:8 }}>
+        <button className="btn primary" disabled={busy || !agent?.id} onClick={() => generate('card')} title="Cinematic hero card with depth, environment, rim lighting — for the big roster card.">
+          {busy ? '…' : '🎬 Generate Profile Card'}
+        </button>
+        <button className="btn" disabled={busy || !agent?.id} onClick={() => generate('avatar')} title="Clean transparent cutout — for thumbnails and small avatars.">
+          {busy ? '…' : '👤 Generate Avatar Cutout'}
+        </button>
+      </div>
+      {busy && (
+        <div style={{ marginTop:10 }}>
+          <div style={{ fontSize:11, color:'var(--text-2)', marginBottom:4 }}>กำลังเจนรูป... (Codex CLI ใช้เวลา ~60–90 วินาที, Gemini ~10–20 วินาที)</div>
+          <div style={{ height:6, borderRadius:999, background:'var(--bg-2)', overflow:'hidden', position:'relative' }}>
+            <div style={{
+              position:'absolute', top:0, bottom:0, left:0, right:0,
+              background:'linear-gradient(90deg, transparent 0%, var(--accent-cyan) 50%, transparent 100%)',
+              backgroundSize:'200% 100%',
+              animation:'cofficeProgressShimmer 1.6s linear infinite',
+            }}/>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

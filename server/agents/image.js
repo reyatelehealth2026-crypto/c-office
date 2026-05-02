@@ -1,5 +1,5 @@
 // Image-generation adapter. Default provider Gemini Imagen; pluggable to
-// Replicate FLUX or OpenAI gpt-image-1 by setting IMAGE_PROVIDER env.
+// Replicate FLUX or OpenAI GPT Image 2 by setting IMAGE_PROVIDER env.
 //
 // Adapter contract:
 //   generateImage({ prompt, size, persona }) → { url, provider, costUsd, localPath }
@@ -95,7 +95,7 @@ async function generateReplicate({ prompt, slug }) {
   return { url: publicPathFor(file), provider: 'replicate', costUsd: 0.04, localPath: file };
 }
 
-// ─── OpenAI gpt-image-1 ──────────────────────────────────────────────────────
+// ─── OpenAI GPT Image 2 ──────────────────────────────────────────────────────
 async function generateOpenAI({ prompt, slug }) {
   const c = await getCreds('openai');
   if (!c?.apiKey) throw new Error('OpenAI not connected. Paste token in Settings.');
@@ -105,7 +105,7 @@ async function generateOpenAI({ prompt, slug }) {
       'Authorization': `Bearer ${c.apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1536', n: 1 }),
+    body: JSON.stringify({ model: 'gpt-image-2', prompt, size: '1024x1536', n: 1 }),
   });
   if (!resp.ok) throw new Error(`OpenAI ${resp.status}: ${await resp.text()}`);
   const j = await resp.json();
@@ -113,7 +113,7 @@ async function generateOpenAI({ prompt, slug }) {
   if (!b64) throw new Error('OpenAI returned no b64_json');
   const buf = Buffer.from(b64, 'base64');
   const file = await persist(buf, slug);
-  return { url: publicPathFor(file), provider: 'openai', costUsd: 0.04, localPath: file };
+  return { url: publicPathFor(file), provider: 'openai', model: 'gpt-image-2', costUsd: 0.04, localPath: file };
 }
 
 const ADAPTERS = {
