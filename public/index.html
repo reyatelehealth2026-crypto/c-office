@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="ux-tasks.css?v=20260502a"/>
 <link rel="stylesheet" href="ux-images.css?v=20260502a"/>
 <link rel="stylesheet" href="ux-settings.css?v=20260502a"/>
+<link rel="stylesheet" href="ux-projects.css?v=20260502a"/>
 <style>
 .feed-row {
   display:flex; gap:12px; align-items:center;
@@ -42,6 +43,7 @@
 <script type="text/babel" src="components.jsx"></script>
 <script type="text/babel" src="ux-components.jsx?v=20260502a"></script>
 <script type="text/babel" src="ux-nav.jsx?v=20260502a"></script>
+<script type="text/babel" src="ux-nav-projects.jsx?v=20260502a"></script>
 <script type="text/babel" src="guild-icons.jsx"></script>
 <script type="text/babel" src="page-guild.jsx"></script>
 <script type="text/babel" src="page-agents.jsx"></script>
@@ -55,6 +57,7 @@
 <script type="text/babel" src="page-misc.jsx"></script>
 <script type="text/babel" src="page-settings-v2.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-tasks-v2.jsx?v=20260502a"></script>
+<script type="text/babel" src="page-projects-v2.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-notes.jsx"></script>
 <script type="text/babel" src="page-notes-v2.jsx?v=20260502a"></script>
 <script type="text/babel" src="run-window.jsx"></script>
@@ -69,6 +72,7 @@ const AgentsPage = window.AgentsPage;
 const ImageStudioPage = window.ImageStudioPage;
 const AgentDetail = window.AgentDetail;
 const TasksPage = window.TasksPage;
+const ProjectsPage = window.ProjectsPage;
 const SkillsPage = window.SkillsPage;
 const MemoryPanel = window.MemoryPanel;
 const SettingsPage = window.SettingsPage;
@@ -120,6 +124,7 @@ const App = () => {
         {page === 'images' && <ImageStudioPage/>}
         {page === 'agent-detail' && agent && <AgentDetail agent={agent} onBack={() => setPage('agents')} onOpenAgent={openAgent}/>}
         {page === 'tasks' && <TasksPage onOpenAgent={openAgent}/>}
+        {page === 'projects' && <ProjectsPage/>}
         {page === 'skills' && <SkillsPage onOpenAgent={openAgent}/>}
         {page === 'memory' && <MemoryPanel onOpenAgent={openAgent}/>}
         {page === 'settings' && <SettingsPage/>}
