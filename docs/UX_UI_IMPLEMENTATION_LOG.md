@@ -1,0 +1,228 @@
+# C-Office UX/UI Implementation Log
+
+> Incremental ship log for the UX/UI redesign. This file records actual implementation passes without risking accidental truncation of the longer master spec.
+
+---
+
+## Current shipped surfaces
+
+### Phase 1 — Foundation
+
+Implemented:
+
+- `public/ux-system.css`
+  - design tokens
+  - app background and shell polish
+  - sidebar polish
+  - topbar styles
+  - command bar styles
+  - status chips
+  - panel/card utilities
+  - empty/error/skeleton states
+  - responsive mobile nav behavior
+- `public/ux-components.jsx`
+  - `UXTopbar`
+  - `UXStatusChip`
+  - `UXEmptyState`
+  - `UXErrorState`
+  - `UXSkeleton`
+- `public/index.html`
+  - loads UX foundation assets
+  - renders global `UXTopbar`
+
+---
+
+### Phase 2 — Dashboard V2
+
+Implemented:
+
+- `public/ux-dashboard.css`
+  - command hero
+  - system pulse board
+  - metric cards
+  - agent roster cards
+  - provider readiness
+  - current run list
+  - live activity preview
+- `public/page-dashboard-v2.jsx`
+  - safe override of `window.Dashboard`
+  - uses existing `window.AGENTS`, `window.ACTIVITY`, `window.RUNS`, `window.STATS`, `window.AUTH_STATUS`, and `window.STATE_SESSIONS`
+- `public/index.html`
+  - loads Dashboard V2 assets after legacy dashboard
+
+Status:
+
+- Dashboard has a command-center overview.
+- Legacy dashboard file remains intact.
+
+---
+
+### Phase 2 — Mission Control V2
+
+Implemented:
+
+- `public/ux-nav.jsx`
+  - safe sidebar override
+  - adds `Mission Control` as a first-class route
+- `public/ux-mission-control.css`
+  - filter toolbar
+  - event cards
+  - summary metrics
+  - event inspector
+  - raw payload viewer
+- `public/page-mission-control.jsx`
+  - search events
+  - filter by persona
+  - filter by event type
+  - pause/resume visual stream
+  - inspect event metadata
+  - copy raw JSON
+- `public/index.html`
+  - loads Mission Control assets and route
+
+Status:
+
+- Mission Control is usable as a realtime inspection surface.
+- Grouped repeated events remain a future polish item.
+
+---
+
+### Phase 2 — Notes Workspace V2
+
+Implemented:
+
+- `public/ux-notes.css`
+  - three-panel work inbox layout
+  - note search
+  - tag filters
+  - note cards
+  - inbox composer
+  - agent/provider context panel
+  - responsive layout
+- `public/page-notes-v2.jsx`
+  - safe override of `window.NotesPage`
+  - reuses legacy `NoteDetail` and `AgentPicker`
+  - preserves note create/patch/delete
+  - preserves provider dispatch
+  - preserves Orchestra flow
+  - preserves image generation behavior
+- `public/index.html`
+  - loads Notes V2 assets after legacy notes file
+
+Status:
+
+- Notes now has left inbox, center note/chat detail, and right context panel.
+- Provider-unavailable inline banner remains a future polish item.
+
+---
+
+### Phase 3 — Tasks / Runs V2
+
+Implemented:
+
+- `public/ux-tasks.css`
+  - workflow toolbar
+  - summary metrics
+  - run/task cards
+  - progress bars
+  - run inspector
+  - timeline steps
+  - result and raw payload boxes
+  - responsive layout
+- `public/page-tasks-v2.jsx`
+  - safe override of `window.TasksPage`
+  - combines `window.RUNS` and `window.TASKS` into one workflow surface
+  - supports search
+  - supports status filter
+  - supports type filter: runs/tasks
+  - shows elapsed time and progress
+  - includes timeline inspector
+  - supports copy result and copy JSON
+  - links run records to `/run.html?id=...`
+- `public/index.html`
+  - loads Tasks V2 CSS and JSX after legacy `page-misc.jsx`
+
+Status:
+
+- Tasks now behaves like a workflow control surface instead of a flat operations table.
+- Run timeline and result inspection are available from the side inspector.
+
+---
+
+## Important implementation strategy
+
+The redesign currently uses **safe override layers**:
+
+- legacy files remain intact
+- V2 files load after legacy files
+- V2 files replace selected globals such as `window.Dashboard`, `window.NotesPage`, and `window.TasksPage`
+- no build step has been introduced
+- React UMD + Babel Standalone contract is preserved
+
+This makes each redesign pass reversible and easier to inspect.
+
+---
+
+## Next recommended passes
+
+1. **Images Studio V2**
+   - provider status
+   - prompt studio
+   - presets
+   - gallery grid
+   - image metadata drawer
+   - copy prompt
+   - delete confirmation
+
+2. **Settings / Connections V2**
+   - provider cards
+   - hook diagnostics
+   - access-token warning
+   - local credential explainer
+   - trust-focused onboarding
+
+3. **Mission Control polish**
+   - grouped repeated events
+   - session/project filters
+   - clearer severity tags
+
+---
+
+## Manual smoke checklist
+
+Run:
+
+```bash
+npm run dev
+```
+
+Open:
+
+```text
+http://127.0.0.1:7878
+```
+
+Check pages:
+
+- Dashboard
+- Mission Control
+- Notes
+- Tasks
+- Settings
+
+Check endpoints:
+
+```bash
+curl http://127.0.0.1:7878/api/state
+curl http://127.0.0.1:7878/api/notes/providers
+curl http://127.0.0.1:7878/api/images/status
+```
+
+Check hook smoke:
+
+```bash
+curl -X POST http://127.0.0.1:7878/hooks/event \
+  -H 'X-COffice-Event: SessionStart' \
+  -H 'Content-Type: application/json' \
+  --data '{"session_id":"ux-smoke","pid":123}'
+```
