@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="agent-office.css"/>
 <link rel="stylesheet" href="ux-system.css?v=20260502a"/>
 <link rel="stylesheet" href="ux-dashboard.css?v=20260502a"/>
+<link rel="stylesheet" href="ux-mission-control.css?v=20260502a"/>
 <style>
 .feed-row {
   display:flex; gap:12px; align-items:center;
@@ -36,12 +37,14 @@
 <script src="data.js"></script>
 <script type="text/babel" src="components.jsx"></script>
 <script type="text/babel" src="ux-components.jsx?v=20260502a"></script>
+<script type="text/babel" src="ux-nav.jsx?v=20260502a"></script>
 <script type="text/babel" src="guild-icons.jsx"></script>
 <script type="text/babel" src="page-guild.jsx"></script>
 <script type="text/babel" src="page-agents.jsx"></script>
 <script type="text/babel" src="page-images.jsx"></script>
 <script type="text/babel" src="page-dashboard.jsx"></script>
 <script type="text/babel" src="page-dashboard-v2.jsx?v=20260502a"></script>
+<script type="text/babel" src="page-mission-control.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-detail.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-memory.jsx?v=20260502a"></script>
 <script type="text/babel" src="page-misc.jsx"></script>
@@ -52,6 +55,7 @@
 /* Each .jsx file is its own scope; route components live on window — bind here for the router. */
 const Sidebar = window.Sidebar;
 const Dashboard = window.Dashboard;
+const MissionControlPage = window.MissionControlPage;
 const GuildHall = window.GuildHall;
 const AgentsPage = window.AgentsPage;
 const ImageStudioPage = window.ImageStudioPage;
@@ -102,6 +106,7 @@ const App = () => {
       <main className="main">
         {UXTopbar && <UXTopbar page={page} onSendGoal={(runId) => { setActiveRunId(runId); }}/>} 
         {page === 'dashboard' && <Dashboard layout={dashLayout} setLayout={setDashLayout} onOpenAgent={openAgent}/>}
+        {page === 'mission-control' && <MissionControlPage onOpenAgent={openAgent}/>}
         {page === 'guild' && <GuildHall onOpenAgent={openAgent}/>}
         {page === 'agents' && <AgentsPage onOpenAgent={openAgent} setPage={setPage}/>}
         {page === 'images' && <ImageStudioPage/>}
