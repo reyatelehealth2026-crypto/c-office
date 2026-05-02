@@ -149,13 +149,52 @@ Status:
 
 ---
 
+### Phase 4 — Images Studio V2
+
+Implemented:
+
+- `public/ux-images.css`
+  - three-zone image studio layout
+  - sticky prompt control panel
+  - provider/status visual treatment
+  - preset buttons
+  - reference image card
+  - searchable gallery grid
+  - selected image inspector
+  - metadata cells
+  - prompt viewer
+  - responsive layout
+- `public/page-images-v2.jsx`
+  - safe override of `window.ImageStudioPage`
+  - uses existing `/api/images/status`
+  - uses existing `/api/images/library`
+  - uses existing `/api/images/generate`
+  - uses existing `/api/images/upload`
+  - uses existing `/api/images/library/:name` delete endpoint
+  - supports provider selection
+  - supports mode selection: general/avatar
+  - supports style/aspect/quality look lock
+  - supports reference image upload
+  - supports gallery search
+  - supports selected image metadata inspection
+  - supports copy URL / copy prompt / delete confirmation
+- `public/index.html`
+  - loads Images V2 CSS and JSX after legacy image studio
+
+Status:
+
+- Images now behaves like a creative studio instead of a long form/gallery page.
+- The original image generation backend contract remains unchanged.
+
+---
+
 ## Important implementation strategy
 
 The redesign currently uses **safe override layers**:
 
 - legacy files remain intact
 - V2 files load after legacy files
-- V2 files replace selected globals such as `window.Dashboard`, `window.NotesPage`, and `window.TasksPage`
+- V2 files replace selected globals such as `window.Dashboard`, `window.NotesPage`, `window.TasksPage`, and `window.ImageStudioPage`
 - no build step has been introduced
 - React UMD + Babel Standalone contract is preserved
 
@@ -165,26 +204,23 @@ This makes each redesign pass reversible and easier to inspect.
 
 ## Next recommended passes
 
-1. **Images Studio V2**
-   - provider status
-   - prompt studio
-   - presets
-   - gallery grid
-   - image metadata drawer
-   - copy prompt
-   - delete confirmation
-
-2. **Settings / Connections V2**
+1. **Settings / Connections V2**
    - provider cards
    - hook diagnostics
    - access-token warning
    - local credential explainer
    - trust-focused onboarding
 
-3. **Mission Control polish**
+2. **Mission Control polish**
    - grouped repeated events
    - session/project filters
    - clearer severity tags
+
+3. **Projects / Task Board V2**
+   - project cards
+   - scoped activity
+   - kanban columns
+   - task card inspector
 
 ---
 
@@ -208,6 +244,7 @@ Check pages:
 - Mission Control
 - Notes
 - Tasks
+- Images
 - Settings
 
 Check endpoints:
@@ -216,6 +253,7 @@ Check endpoints:
 curl http://127.0.0.1:7878/api/state
 curl http://127.0.0.1:7878/api/notes/providers
 curl http://127.0.0.1:7878/api/images/status
+curl http://127.0.0.1:7878/api/images/library
 ```
 
 Check hook smoke:
