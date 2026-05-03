@@ -6,11 +6,16 @@
 //
 // `provider` is one of 'claude' | 'codex' | 'gemini'. The Claude path is
 // handled by runner.js directly (Claude Agent SDK with tools / sub-agents
-// semantics). This module covers the simpler Codex (OpenAI Chat Completions)
-// and Gemini (Google generateContent) paths.
+// semantics). This module covers Codex (CLI shell-out preferred, OpenAI
+// Chat Completions fallback) and Gemini (Google generateContent) paths.
 
+import { spawn, execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
 import { getCreds } from '../auth/credentials.js';
 import { getGoogleAuth } from '../auth/google.js';
+import { getCodexAccessToken } from '../auth/codex.js';
 
 const TIMEOUT_MS = 120_000;
 const DEFAULT_MODELS = {
@@ -111,8 +116,106 @@ async function callGemini({ systemPrompt, prompt, model }) {
   }
 }
 
+// ── Codex CLI shell-out adapter ──────────────────────────────────────────
+// Uses the `codex` CLI binary that the user already authenticated via
+// `codex login`. Avoids requiring an OpenAI sk-... key for ChatGPT-tier users.
+
+function commandCandidates(bin) {
+  try {
+    const cmd = process.platform === 'win32' ? 'where.exe' : 'sh';
+    const args = process.platform === 'win32'
+      ? [bin]
+      : ['-c', `command -v ${JSON.stringify(bin)} 2>/dev/null`];
+    const out = execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'], timeout: 800 })
+      .toString().trim();
+    return out.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  } catch { return []; }
+}
+
+function resolveCodexArgv(prompt) {
+  if (process.env.C_OFFICE_CODEX_CMD) {
+    const tmpl = process.env.C_OFFICE_CODEX_CMD;
+    const parts = tmpl.split(/\s+/).filter(Boolean);
+    const replaced = parts.map((p) => (p === '${PROMPT}' ? prompt : p));
+    if (!parts.includes('${PROMPT}')) replaced.push(prompt);
+    return replaced;
+  }
+  const candidates = commandCandidates('codex');
+  if (process.platform === 'win32') {
+    const cmdShim = candidates.find((file) => file.toLowerCase().endsWith('codex.cmd'));
+    if (cmdShim) {
+      const script = path.join(path.dirname(cmdShim), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+      if (existsSync(script)) return [process.execPath, script, 'exec', prompt];
+    }
+  }
+  const bin = candidates[0] || 'codex';
+  return [bin, 'exec', prompt];
+}
+
+async function callCodexCLI({ systemPrompt, prompt }) {
+  const auth = await getCodexAccessToken().catch(() => null);
+  if (!auth?.accessToken) {
+    return {
+      ok: false,
+      error: 'Codex CLI not connected',
+      hint: 'run `codex login` (see docs/CODEX_SETUP.md)',
+    };
+  }
+  if (commandCandidates('codex').length === 0 && !process.env.C_OFFICE_CODEX_CMD) {
+    return {
+      ok: false,
+      error: 'codex binary not on PATH',
+      hint: 'install Codex CLI: npm install -g @openai/codex',
+    };
+  }
+  const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${prompt}` : prompt;
+  const argv = resolveCodexArgv(fullPrompt);
+  const timeoutMs = Number(process.env.C_OFFICE_CODEX_TIMEOUT_MS) || 180_000;
+
+  return await new Promise((resolve) => {
+    const child = spawn(argv[0], argv.slice(1), { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    let err = '';
+    const timer = setTimeout(() => {
+      try { child.kill('SIGKILL'); } catch {}
+      resolve({ ok: false, error: `codex CLI timeout after ${timeoutMs}ms` });
+    }, timeoutMs);
+    child.stdout.on('data', (d) => { out += d.toString(); });
+    child.stderr.on('data', (d) => { err += d.toString(); });
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, error: `codex spawn failed: ${e.message}` });
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const text = out.trim();
+      if (code === 0 && text) {
+        resolve({ ok: true, text, model: 'codex-cli' });
+      } else {
+        resolve({
+          ok: false,
+          error: `codex exited ${code}${err ? `: ${err.trim().slice(0, 240)}` : ''}`,
+          hint: 'check `codex login` status; see docs/CODEX_SETUP.md',
+        });
+      }
+    });
+  });
+}
+
 export async function callLLM({ provider, systemPrompt, prompt, model, fetchImpl }) {
-  if (provider === 'codex') return callOpenAI({ systemPrompt, prompt, model, fetchImpl });
+  if (provider === 'codex') {
+    // Prefer the CLI shell-out (Codex CLI ChatGPT auth) — falls back to the
+    // OpenAI Chat Completions API if the CLI isn't available but the user
+    // has pasted an sk-... key in Settings.
+    const cli = await callCodexCLI({ systemPrompt, prompt });
+    if (cli.ok) return cli;
+    const api = await callOpenAI({ systemPrompt, prompt, model, fetchImpl });
+    if (api.ok) return api;
+    // Surface the most actionable message.
+    return cli.error.includes('not connected') && api.error.includes('not connected')
+      ? { ok: false, error: 'Codex CLI not connected and no OpenAI key', hint: 'run `codex login` OR paste an sk-... key in Settings' }
+      : (api.error.includes('not connected') ? cli : api);
+  }
   if (provider === 'gemini') return callGemini({ systemPrompt, prompt, model });
   return { ok: false, error: `Unknown provider: ${provider}` };
 }
