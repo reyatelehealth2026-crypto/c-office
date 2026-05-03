@@ -26,6 +26,7 @@ import { startSessionsWatcher } from './watchers/sessions.js';
 import { startTranscriptsWatcher } from './watchers/transcripts.js';
 import { accessLoginRoute, accessStatus, requireAccessToken } from './security/access-token.js';
 import { listPendingSuggestions } from './agents/persona-tune.js';
+import agentSkillsRouter from './api/agent-skills.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '../public');
@@ -71,6 +72,7 @@ app.get   ('/api/images/library',          imageLibraryRoute);
 app.delete('/api/images/library/:name',    deleteImageRoute);
 app.post  ('/api/images/generate',         generateImageRoute);
 app.post  ('/api/images/upload',           uploadImageRoute);
+app.use(agentSkillsRouter);
 
 app.use(express.static(PUBLIC_DIR, {
   cacheControl: false,

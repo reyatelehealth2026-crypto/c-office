@@ -195,6 +195,65 @@ router.post('/api/task/:run_id/cancel', (req, res) => {
   res.json({ ok: true });
 });
 
+// Pause = soft cancellation with reason 'paused'. The runner stops at the
+// next safe checkpoint, all completed steps remain in run.steps, and the run
+// is resumable via /resume. Persisted run state is the source of truth.
+router.post('/api/task/:run_id/pause', (req, res) => {
+  const ok = requestRunCancellation(req.params.run_id, 'paused');
+  if (!ok) return res.status(404).json({ error: 'unknown or already-finished run' });
+  res.json({ ok: true });
+});
+
+// Resume re-enters the pipeline using existingRunId. Already-completed steps
+// stay; runner picks up the current phase. Returns immediately; the
+// background re-run streams progress via SSE.
+router.post('/api/task/:run_id/resume', (req, res) => {
+  const runId = req.params.run_id;
+  const run = state.runs.get(runId);
+  if (!run) return res.status(404).json({ error: 'unknown run' });
+  appendScratchpad(runId, {
+    persona: 'user',
+    kind: 'user-note',
+    text: 'User resumed the run.',
+  });
+  if (run.cancelRequested) { run.cancelRequested = false; run.cancelReason = null; }
+  const goal = String(run.goal || '');
+  runOrchestrator(goal, {
+    existingRunId: runId,
+    projectId: run.projectId,
+    provider: run.provider || undefined,
+  }).catch((e) => console.error('[c-office] resume run failed:', e));
+  res.json({ ok: true });
+});
+
+// Retry a single step. Truncates completed steps from stepIdx forward and
+// re-enters the pipeline so the runner re-executes from there. Earlier steps
+// and their outputs are preserved.
+router.post('/api/task/:run_id/retry-step', (req, res) => {
+  const runId = req.params.run_id;
+  const run = state.runs.get(runId);
+  if (!run) return res.status(404).json({ error: 'unknown run' });
+  const stepIdx = Number(req.body?.stepIdx);
+  if (!Number.isInteger(stepIdx) || stepIdx < 0) {
+    return res.status(400).json({ error: 'stepIdx required (integer)' });
+  }
+  const steps = Array.isArray(run.steps) ? run.steps : [];
+  if (stepIdx >= steps.length) return res.status(400).json({ error: 'stepIdx out of range' });
+  run.steps = steps.slice(0, stepIdx);
+  if (run.cancelRequested) { run.cancelRequested = false; run.cancelReason = null; }
+  appendScratchpad(runId, {
+    persona: 'user',
+    kind: 'user-note',
+    text: `User requested retry from step ${stepIdx + 1}.`,
+  });
+  runOrchestrator(String(run.goal || ''), {
+    existingRunId: runId,
+    projectId: run.projectId,
+    provider: run.provider || undefined,
+  }).catch((e) => console.error('[c-office] retry-step failed:', e));
+  res.json({ ok: true });
+});
+
 // Mid-run user comment. Lands in the run's scratchpad as a `user-note`
 // entry so currently-running and upcoming steps see it inside their prior
 // context. `stepIdx` is optional — when provided the note prefixes which

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{background:#0a0a1a;font-family:'JetBrains Mono',monospace;padding:20px 24px;display:flex;flex-direction:column;gap:12px}
+.row{display:grid;grid-template-columns:140px 1fr;gap:16px;align-items:center}
+.demo{height:48px;border-radius:12px;position:relative}
+.tag{display:flex;flex-direction:column;gap:2px}
+.tag b{font-size:11px;font-weight:800;color:#f8fafc;letter-spacing:0.02em}
+.tag span{font-size:9px;color:#6f739b;letter-spacing:0.06em}
+</style></head><body>
+
+<div class="row">
+<div class="tag"><b>Card Shadow</b><span>ใช้กับ: panels, cards ทั่วไป</span></div>
+<div class="demo" style="background:#11122b;border:1px solid #2a2d5a;box-shadow:0 18px 60px rgba(0,0,0,0.6)"></div>
+</div>
+
+<div class="row">
+<div class="tag"><b>Popover Shadow</b><span>ใช้กับ: modals, dropdowns</span></div>
+<div class="demo" style="background:#11122b;border:1px solid #2a2d5a;box-shadow:0 24px 80px rgba(0,0,0,0.8)"></div>
+</div>
+
+<div class="row">
+<div class="tag"><b>Glow — Violet</b><span>ใช้กับ: active nav, focus</span></div>
+<div class="demo" style="background:#1a1040;border:2px solid #9d5cff;box-shadow:0 0 48px rgba(157,92,255,0.55),0 0 12px rgba(157,92,255,0.8)"></div>
+</div>
+
+<div class="row">
+<div class="tag"><b>Glow — Cyan</b><span>ใช้กับ: primary button, status</span></div>
+<div class="demo" style="background:#0a1a20;border:2px solid #22d3ee;box-shadow:0 0 48px rgba(34,211,238,0.5),0 0 12px rgba(34,211,238,0.8)"></div>
+</div>
+
+<div class="row">
+<div class="tag"><b>Glow — Gold</b><span>ใช้กับ: busy state, rarity SSR</span></div>
+<div class="demo" style="background:#1a1508;border:2px solid #fbbf24;box-shadow:0 0 48px rgba(251,191,36,0.5),0 0 12px rgba(251,191,36,0.8)"></div>
+</div>
+
+</body></html>

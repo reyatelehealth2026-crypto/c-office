@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{background:#0a0a1a;font-family:'Inter',sans-serif;padding:18px 22px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:12px;cursor:pointer;font:800 11px 'JetBrains Mono',monospace;letter-spacing:0.08em;text-transform:uppercase;border:0;position:relative;overflow:hidden;transition:transform 150ms cubic-bezier(.2,.8,.2,1),box-shadow 200ms,filter 150ms}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(0) scale(0.97);transition:transform 80ms}
+
+/* Shimmer sweep on hover */
+.btn::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,0.25) 50%,transparent 65%);transform:translateX(-120%);transition:none;pointer-events:none}
+.btn:hover::after{transform:translateX(120%);transition:transform 600ms ease}
+
+.primary{background:linear-gradient(135deg,#22d3ee,#9d5cff);color:#080a14;box-shadow:0 0 28px rgba(34,211,238,0.22)}
+.primary:hover{box-shadow:0 4px 32px rgba(34,211,238,0.4),0 0 60px rgba(157,92,255,0.2)}
+
+.ghost{background:rgba(255,255,255,0.045);border:1px solid rgba(255,255,255,0.10);color:#cbd5e1}
+.ghost:hover{border-color:rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);box-shadow:0 8px 32px rgba(0,0,0,0.3)}
+
+.gold{background:linear-gradient(135deg,#ffd700,#E09F00);color:#2a1800}
+.gold:hover{box-shadow:0 4px 32px rgba(255,215,0,0.35)}
+
+.danger{background:rgba(251,113,133,0.12);border:1px solid rgba(251,113,133,0.3);color:#fb7185}
+.danger:hover{background:rgba(251,113,133,0.2);border-color:rgba(251,113,133,0.5);box-shadow:0 4px 24px rgba(251,113,133,0.2)}
+
+/* Chips with pulse animation */
+.chip{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;font:700 10px 'JetBrains Mono',monospace;letter-spacing:0.08em;text-transform:uppercase;transition:transform 150ms,box-shadow 200ms;cursor:default}
+.chip:hover{transform:translateY(-1px)}
+.chip .dot{width:7px;height:7px;border-radius:50%;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(1.4)}}
+
+/* Badge with subtle entrance */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font:700 10px 'JetBrains Mono',monospace;letter-spacing:0.08em;text-transform:uppercase;animation:badgeIn 400ms cubic-bezier(.2,.8,.2,1) both;transition:transform 150ms}
+.badge:hover{transform:scale(1.08)}
+@keyframes badgeIn{from{opacity:0;transform:scale(0.8) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+/* Staggered entrance */
+body > *:nth-child(1){animation:fadeUp 350ms ease both}
+body > *:nth-child(2){animation:fadeUp 350ms ease 60ms both}
+body > *:nth-child(3){animation:fadeUp 350ms ease 120ms both}
+body > *:nth-child(4){animation:fadeUp 350ms ease 180ms both}
+body > *:nth-child(5){animation:fadeUp 350ms ease 240ms both}
+body > *:nth-child(6){animation:fadeUp 350ms ease 300ms both}
+body > *:nth-child(7){animation:fadeUp 350ms ease 360ms both}
+body > *:nth-child(8){animation:fadeUp 350ms ease 420ms both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+</style></head><body>
+<button class="btn primary">Launch</button>
+<button class="btn ghost">Inspect</button>
+<button class="btn gold">Connect</button>
+<button class="btn danger">Delete</button>
+<span class="chip" style="background:rgba(52,211,153,0.08);color:#34d399;border:1px solid rgba(52,211,153,0.22)"><span class="dot" style="background:#34d399;box-shadow:0 0 8px #34d399"></span>Online</span>
+<span class="chip" style="background:rgba(251,191,36,0.08);color:#fbbf24;border:1px solid rgba(251,191,36,0.22)"><span class="dot" style="background:#fbbf24;box-shadow:0 0 8px #fbbf24"></span>2 Busy</span>
+<span class="badge" style="background:rgba(157,92,255,0.1);color:#9d5cff;border:1px solid rgba(157,92,255,0.2);animation-delay:360ms">SSR</span>
+<span class="badge" style="background:rgba(34,211,238,0.08);color:#22d3ee;border:1px solid rgba(34,211,238,0.2);animation-delay:420ms">9 Agents</span>
+</body></html>

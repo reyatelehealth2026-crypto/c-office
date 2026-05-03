@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{background:#0e1028;font-family:'Inter',sans-serif;padding:16px 20px;display:flex;gap:16px}
+
+.nav{width:240px;display:flex;flex-direction:column;gap:4px;padding:14px 12px;border:2px solid #2a2d5a;background:#0e1028;border-radius:12px}
+
+/* Brand */
+.brand{display:flex;align-items:center;gap:10px;padding:8px 2px 16px;border-bottom:2px solid #2a2d5a;margin-bottom:10px}
+.brand-mark{width:46px;height:46px;border-radius:10px;overflow:hidden;flex-shrink:0;border:2px solid #22d3ee}
+.brand-mark img{width:100%;height:100%;object-fit:cover;object-position:center 10%}
+.brand-name{font:800 15px 'Space Grotesk',sans-serif;color:#fff;letter-spacing:0.08em}
+.brand-sub{font:700 9px 'JetBrains Mono',monospace;color:#6f739b;text-transform:uppercase;letter-spacing:0.12em;margin-top:2px}
+
+/* Nav items */
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 9px;border-radius:10px;cursor:pointer;border:2px solid transparent;min-height:42px;transition:all 140ms ease;color:#a0a3c0;font:500 13px 'Inter',sans-serif}
+.nav-item:hover{background:#1a1d42;color:#fff}
+
+/* Active state */
+.nav-item.active{background:#1a1d42;color:#fff;border-color:#22d3ee;border-left:3px solid #22d3ee}
+
+/* Icon box */
+.ico{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;font:800 10px 'JetBrains Mono',monospace;letter-spacing:0;flex-shrink:0;border:2px solid #2a2d5a;background:#161938;color:#6f739b}
+.active .ico{color:#22d3ee;background:rgba(34,211,238,0.12);border-color:#22d3ee}
+
+/* Badge */
+.badge{margin-left:auto;font:800 9px 'JetBrains Mono',monospace;padding:2px 7px;border-radius:999px;background:rgba(34,211,238,0.12);color:#22d3ee;border:1px solid rgba(34,211,238,0.3)}
+
+/* Nav color variants */
+.nav-item[data-color="violet"].active{border-color:#9d5cff}
+.nav-item[data-color="violet"].active .ico{color:#9d5cff;background:rgba(157,92,255,0.12);border-color:#9d5cff}
+.nav-item[data-color="gold"].active{border-color:#fbbf24}
+.nav-item[data-color="gold"].active .ico{color:#fbbf24;background:rgba(251,191,36,0.12);border-color:#fbbf24}
+.nav-item[data-color="pink"].active{border-color:#f472b6}
+.nav-item[data-color="pink"].active .ico{color:#f472b6;background:rgba(244,114,182,0.12);border-color:#f472b6}
+.nav-item[data-color="green"].active{border-color:#34d399}
+.nav-item[data-color="green"].active .ico{color:#34d399;background:rgba(52,211,153,0.12);border-color:#34d399}
+.nav-item[data-color="muted"].active{border-color:#64748b}
+.nav-item[data-color="muted"].active .ico{color:#94a3b8;background:rgba(100,116,139,0.12);border-color:#64748b}
+
+/* Footer */
+.foot{margin-top:auto;padding-top:12px;border-top:2px solid #2a2d5a;display:flex;gap:10px;align-items:center}
+.avatar{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#22d3ee,#9d5cff);display:flex;align-items:center;justify-content:center;font:800 12px 'Space Grotesk',sans-serif;color:#fff}
+.foot-name{font:700 12px 'Inter',sans-serif;color:#fff}
+.foot-role{font:700 9px 'JetBrains Mono',monospace;color:#6f739b;text-transform:uppercase;letter-spacing:0.1em}
+
+/* Annotations */
+.anno{flex:1;display:flex;flex-direction:column;gap:10px;padding:8px 0}
+.anno-item{padding:10px 14px;border:2px solid #2a2d5a;border-radius:10px;background:#161938}
+.anno-title{font:800 12px 'Space Grotesk',sans-serif;color:#22d3ee;margin-bottom:4px}
+.anno-body{font:400 11px 'Inter',sans-serif;color:#a0a3c0;line-height:1.5}
+.anno-code{font:600 10px 'JetBrains Mono',monospace;color:#fbbf24;background:#1a1d42;padding:1px 5px;border-radius:3px}
+</style></head><body>
+
+<div class="nav">
+  <div class="brand">
+    <div class="brand-mark"><img src="../assets/images/Orchestra.png" alt="C-Office"></div>
+    <div><div class="brand-name">C-OFFICE</div><div class="brand-sub">AI Agent Hub</div></div>
+  </div>
+
+  <div class="nav-item active" data-color="violet"><span class="ico">DB</span><span>Dashboard</span></div>
+  <div class="nav-item" data-color="cyan"><span class="ico">MC</span><span>Mission Control</span><span class="badge">12</span></div>
+  <div class="nav-item" data-color="cyan"><span class="ico">AG</span><span>Agents</span><span class="badge">9</span></div>
+  <div class="nav-item" data-color="gold"><span class="ico">NT</span><span>Notes</span></div>
+  <div class="nav-item" data-color="pink"><span class="ico">TS</span><span>Tasks</span><span class="badge" style="background:rgba(251,191,36,0.12);color:#fbbf24;border-color:rgba(251,191,36,0.3)">1</span></div>
+  <div class="nav-item" data-color="green"><span class="ico">IM</span><span>Images</span></div>
+  <div class="nav-item" data-color="cyan"><span class="ico">SK</span><span>Playbooks</span></div>
+  <div class="nav-item" data-color="violet"><span class="ico">MM</span><span>Archive</span></div>
+  <div class="nav-item" data-color="muted"><span class="ico">ST</span><span>Settings</span></div>
+
+  <div class="foot">
+    <div class="avatar">P</div>
+    <div><div class="foot-name">Commander</div><div class="foot-role">Admin</div></div>
+  </div>
+</div>
+
+<div class="anno">
+  <div class="anno-item">
+    <div class="anno-title">Collapsed State</div>
+    <div class="anno-body">Default width <span class="anno-code">72px</span> showing only icon boxes. Expands to <span class="anno-code">240px</span> on hover with 240ms ease transition.</div>
+  </div>
+  <div class="anno-item">
+    <div class="anno-title">Icon Codes</div>
+    <div class="anno-body">2-letter monospace codes in 30×30px boxes: <span class="anno-code">DB</span> <span class="anno-code">MC</span> <span class="anno-code">AG</span> <span class="anno-code">NT</span> <span class="anno-code">TS</span> <span class="anno-code">IM</span> <span class="anno-code">SK</span> <span class="anno-code">MM</span> <span class="anno-code">ST</span></div>
+  </div>
+  <div class="anno-item">
+    <div class="anno-title">Active State</div>
+    <div class="anno-body">Left border <span class="anno-code">3px solid</span> in nav accent color. Icon box gets color tint background + matching border. Background <span class="anno-code">#1a1d42</span>.</div>
+  </div>
+  <div class="anno-item">
+    <div class="anno-title">Color Per Route</div>
+    <div class="anno-body">Each nav item has its own accent: Violet <span class="anno-code">#9d5cff</span>, Cyan <span class="anno-code">#22d3ee</span>, Gold <span class="anno-code">#fbbf24</span>, Pink <span class="anno-code">#f472b6</span>, Green <span class="anno-code">#34d399</span>.</div>
+  </div>
+  <div class="anno-item">
+    <div class="anno-title">Badges</div>
+    <div class="anno-body">Pill-shaped counters on Agents (count), Mission Control (events), Tasks (running). Uses <span class="anno-code">border-radius: 999px</span>.</div>
+  </div>
+</div>
+
+</body></html>

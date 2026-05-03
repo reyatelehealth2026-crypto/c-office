@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C-Office UI Kit — Dashboard</title>
+<link rel="icon" href="../../assets/images/Orchestra.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sarabun:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+html { color-scheme: dark; }
+
+body {
+  background:
+    radial-gradient(900px 520px at 14% -12%, rgba(157,92,255,0.10), transparent 62%),
+    radial-gradient(780px 480px at 94% 2%, rgba(34,211,238,0.08), transparent 62%),
+    #12142e;
+  color: var(--text-primary);
+  font: var(--body-font);
+}
+
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+  background:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.5), transparent 85%);
+}
+
+.app {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.main {
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  padding: 18px 28px 64px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; border: 2px solid var(--bg-app); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+
+/* Toast for click feedback */
+.kit-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  padding: 10px 20px; border-radius: 12px;
+  background: rgba(17,18,43,0.95); border: 1px solid var(--ux-accent-secondary);
+  color: var(--ux-text-primary); font: 600 13px var(--font-body);
+  box-shadow: var(--shadow-popover), var(--glow-cyan);
+  z-index: 100; pointer-events: none;
+  animation: toastIn 300ms ease, toastOut 300ms ease 1.7s forwards;
+}
+@keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } }
+@keyframes toastOut { to { opacity: 0; transform: translateX(-50%) translateY(-10px); } }
+
+@media (max-width: 1180px) {
+  .app { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="sidebar.jsx"></script>
+<script type="text/babel" src="dashboard.jsx"></script>
+
+<script type="text/babel">
+const App = () => {
+  const [page, setPage] = React.useState('dashboard');
+  const [toast, setToast] = React.useState(null);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
+
+  const openAgent = (id) => {
+    const agent = PERSONAS.find(a => a.id === id);
+    showToast(`Inspecting ${agent?.name || id}...`);
+  };
+
+  return (
+    <div className="app">
+      <KitSidebar page={page} setPage={setPage} />
+      <main className="main">
+        <KitTopbar page={page} />
+        <div className="main-content">
+          {page === 'dashboard' && <KitDashboard onOpenAgent={openAgent} />}
+          {page !== 'dashboard' && (
+            <KitEmptyState
+              title={`${(KIT_NAV.find(n=>n.id===page)?.label) || page} — Coming Soon`}
+              body="This page is available in the full C-Office application."
+            />
+          )}
+        </div>
+      </main>
+      {toast && <div className="kit-toast">{toast}</div>}
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

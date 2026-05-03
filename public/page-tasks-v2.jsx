@@ -82,8 +82,19 @@ const statusState = (status) => {
 
 const TaskCardV2 = ({ item, selected, onSelect, onOpenAgent }) => {
   const agent = (window.AGENTS || []).find(a => a.id === item.owner);
+  const onCardKey = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect?.(); }
+  };
+  const openAgent = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onOpenAgent?.(agent?.id);
+  };
+  const onAgentKey = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') openAgent(e);
+  };
   return (
-    <button className={'ux-task-card-v2 ' + (selected ? 'is-selected' : '')} onClick={onSelect}>
+    <div role="button" tabIndex={0} className={'ux-task-card-v2 ' + (selected ? 'is-selected' : '')} onClick={onSelect} onKeyDown={onCardKey}>
       <div className="ux-task-glyph">{item.type === 'run' ? 'RN' : 'TK'}</div>
       <div className="ux-task-main">
         <div className="ux-task-title">{item.title}</div>
@@ -92,7 +103,7 @@ const TaskCardV2 = ({ item, selected, onSelect, onOpenAgent }) => {
           <UXStatusChip label={item.status} state={statusState(item.status)} />
           <span className="ux-event-tag">{item.type}</span>
           <span className="ux-event-tag">{item.subagent}</span>
-          {agent && <button type="button" className="ux-soft-button" style={{ minHeight: 24, padding: '4px 8px' }} onClick={(e) => { e.stopPropagation(); onOpenAgent?.(agent.id); }}>{agent.name}</button>}
+          {agent && <span role="button" tabIndex={0} className="ux-soft-button" style={{ minHeight: 24, padding: '4px 8px' }} onClick={openAgent} onKeyDown={onAgentKey}>{agent.name}</span>}
         </div>
       </div>
       <div className="ux-task-right">
@@ -100,7 +111,7 @@ const TaskCardV2 = ({ item, selected, onSelect, onOpenAgent }) => {
         <div className="ux-task-progress" style={{ '--task-progress': `${item.progress || 10}%` }}><span /></div>
         <div className="ux-note-mini">{taskElapsed(item.startedAt, item.endedAt)}</div>
       </div>
-    </button>
+    </div>
   );
 };
 

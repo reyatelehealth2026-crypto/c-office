@@ -17,6 +17,18 @@ const AGENT_STATUS_META = {
   offline: { label: 'Offline', tone: 'offline' },
 };
 
+const PERSONA_ELEMENTS = {
+  orchestra: '👑',
+  astra: '🎓',
+  lumen: '✒️',
+  vex: '🛡️',
+  kai: '⚡',
+  mira: '📈',
+  echo: '🎨',
+  nyx: '🔍',
+  orbit: '⚙️',
+};
+
 const inferCategoryKey = (agent) => {
   const explicit = (agent.category || '').toLowerCase().trim();
   if (explicit) return explicit;
@@ -132,8 +144,9 @@ const AgentModelUnit = ({ agent, selected, onSelect, onOpenAgent }) => {
       title={agent.currentTask || agent.tagline || agent.role}
     >
       <div className="agent-station-hud">
+        <span className="agent-element" aria-hidden="true">{PERSONA_ELEMENTS[agent.id] || '✦'}</span>
         <span className="agent-status-pill"><i/> {status.label}</span>
-        <span className="agent-rarity">{agent.provider || 'agent'}</span>
+        <span className="agent-rarity">{agent.rarity || agent.provider || 'agent'}</span>
       </div>
 
       <div className="agent-model-stage">
@@ -175,6 +188,113 @@ const AgentModelUnit = ({ agent, selected, onSelect, onOpenAgent }) => {
         </div>
       </div>
     </button>
+  );
+};
+
+const AgentSkillsSection = ({ agent }) => {
+  const [catalog, setCatalog] = React.useState([]);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+
+  const installed = Array.isArray(agent?.installedSkills) ? agent.installedSkills : [];
+
+  const refreshCatalog = React.useCallback(async () => {
+    try {
+      const r = await fetch('/api/agent-skills');
+      const j = await r.json();
+      setCatalog(Array.isArray(j.skills) ? j.skills : []);
+    } catch (e) { setError(e.message || String(e)); }
+  }, []);
+
+  React.useEffect(() => { refreshCatalog(); }, [refreshCatalog]);
+
+  if (!agent?.id) {
+    return (
+      <div className="agent-skills-section" style={{ marginTop: 8, padding: 10, border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 12 }}>
+        เลือก agent ก่อน เพื่อจะติดตั้งสกิล
+      </div>
+    );
+  }
+
+  const installSkill = async (skillId) => {
+    setBusy(true); setError('');
+    try {
+      const r = await fetch(`/api/agents/${agent.id}/skills`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skillId }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'install failed');
+      await window.fetchCOfficeState?.();
+    } catch (e) { setError(e.message || String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const uninstallSkill = async (skillId) => {
+    setBusy(true); setError('');
+    try {
+      const r = await fetch(`/api/agents/${agent.id}/skills/${encodeURIComponent(skillId)}`, { method: 'DELETE' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'uninstall failed');
+      await window.fetchCOfficeState?.();
+    } catch (e) { setError(e.message || String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const installedDetails = installed.map((id) => catalog.find((s) => s.id === id) || { id, name: id, summary: '(removed from catalog)' });
+  const available = catalog.filter((s) => !installed.includes(s.id));
+
+  return (
+    <div className="agent-skills-section" style={{ marginTop: 12, padding: 12, border: '2px solid var(--border)', borderRadius: 10, background: 'var(--bg-card-2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div>
+          <div style={{ font: '800 11px var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--accent-cyan)' }}>AI Skills</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>real capabilities injected into the agent's system prompt</div>
+        </div>
+        <button type="button" className="btn ghost" style={{ fontSize: 11 }} onClick={() => setOpen((v) => !v)}>
+          {open ? 'Hide catalog' : `Browse catalog (${available.length})`}
+        </button>
+      </div>
+
+      {error && <div style={{ color: 'var(--ux-danger)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {installedDetails.length === 0 && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>ยังไม่มีสกิลติดตั้ง — กด "Browse catalog" เพื่อเลือก</div>
+        )}
+        {installedDetails.map((s) => (
+          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ font: '700 12px var(--font-body)', color: 'var(--text-primary)' }}>{s.name}</div>
+              {s.summary && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.summary}</div>}
+              {s.category && <span style={{ fontSize: 9, font: '700 9px var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-cyan)', marginRight: 6 }}>{s.category}</span>}
+              {Array.isArray(s.tools) && s.tools.length > 0 && s.tools.map((t) => (
+                <span key={t} className="ux-tool-badge" data-tool={t} style={{ marginRight: 4 }}>{t}</span>
+              ))}
+            </div>
+            <button type="button" className="btn ghost" disabled={busy} onClick={() => uninstallSkill(s.id)} style={{ fontSize: 11 }}>Uninstall</button>
+          </div>
+        ))}
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ font: '700 10px var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Catalog</div>
+          {available.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>ติดตั้งครบทุกสกิลแล้ว</div>}
+          {available.map((s) => (
+            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ font: '700 12px var(--font-body)', color: 'var(--text-primary)' }}>{s.name}{s.builtin && <span style={{ marginLeft: 6, fontSize: 9, font: '700 9px var(--font-mono)', color: 'var(--accent-gold)' }}>BUILTIN</span>}</div>
+                {s.summary && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.summary}</div>}
+                {s.category && <span style={{ fontSize: 9, font: '700 9px var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-cyan)' }}>{s.category}</span>}
+              </div>
+              <button type="button" className="btn primary" disabled={busy} onClick={() => installSkill(s.id)} style={{ fontSize: 11 }}>Install</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -244,6 +364,7 @@ const AgentEditorPanel = ({ selected, onOpenAgent }) => {
       </div>
       <label>Tools allowed<input value={draft.toolsAllowed} onChange={(e) => set('toolsAllowed', e.target.value)} placeholder="Read, Write, Task"/></label>
       <label>System prompt<textarea value={draft.systemPrompt} onChange={(e) => set('systemPrompt', e.target.value)} rows="5"/></label>
+      <AgentSkillsSection agent={selected}/>
       <label className="agent-toggle"><input type="checkbox" checked={draft.enabled} onChange={(e) => set('enabled', e.target.checked)}/> Enabled</label>
 
       <div className="agent-editor-actions">

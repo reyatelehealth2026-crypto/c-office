@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{background:#0a0a1a;font-family:'JetBrains Mono',monospace;padding:16px 20px;display:flex;gap:14px;align-items:flex-end}
+.item{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1}
+.box{width:100%;aspect-ratio:1.6;border:2px solid #22d3ee;background:linear-gradient(135deg,rgba(34,211,238,0.12),rgba(157,92,255,0.08));position:relative;overflow:hidden;transition:transform 200ms cubic-bezier(.2,.8,.2,1),box-shadow 200ms}
+.box:hover{transform:translateY(-3px) scale(1.04);box-shadow:0 0 24px rgba(34,211,238,0.3)}
+.box::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.12),transparent 60%);pointer-events:none}
+.val{font-size:13px;font-weight:800;color:#22d3ee;letter-spacing:-0.02em}
+.label{font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:#6f739b}
+</style></head><body>
+<div class="item"><div class="box" style="border-radius:4px"></div><span class="val">4px</span><span class="label">Tight</span></div>
+<div class="item"><div class="box" style="border-radius:6px"></div><span class="val">6px</span><span class="label">Buttons</span></div>
+<div class="item"><div class="box" style="border-radius:8px"></div><span class="val">8px</span><span class="label">Inputs</span></div>
+<div class="item"><div class="box" style="border-radius:10px"></div><span class="val">10px</span><span class="label">Cards</span></div>
+<div class="item"><div class="box" style="border-radius:14px"></div><span class="val">14px</span><span class="label">Panels</span></div>
+</body></html>

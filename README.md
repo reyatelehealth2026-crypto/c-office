@@ -5,7 +5,7 @@
 ![status: personal-project](https://img.shields.io/badge/status-personal-purple)
 ![stack: node+react+sse](https://img.shields.io/badge/stack-node%20%7C%20react%20%7C%20sse-9d5cff)
 ![runtime: local-first](https://img.shields.io/badge/runtime-local--first-22c55e)
-![license: private](https://img.shields.io/badge/license-private-gold)
+![license: MIT](https://img.shields.io/badge/license-MIT-22c55e)
 
 ---
 
@@ -71,15 +71,70 @@ C-Office คือ command deck สำหรับคนที่ใช้หล
 
 - **Notes inbox** (`/#/notes`) — จดไอเดีย เลือกเอเจนต์ คุยใน chat ได้
 - **Inline chat indicators** — เห็นสถานะคิด / พิมพ์ / ใช้เครื่องมือ
+- **Provider picker** — เลือก Claude / Codex / Gemini ก่อนยิงงาน (persist ใน localStorage)
 - **CLI provider abstraction** — รองรับ `echo`, `claude`, `codex`, `gpt`
 - **Send to Orchestra** — ยิง goal ให้ Orchestra delegate ต่อให้เอเจนต์อื่น
 - **Claude subagent files** — ใช้ `.claude/agents/*.md` ผ่าน Claude Code Task tool ได้
 
+### Real-AI Skill Catalog
+
+Per-agent installable AI capabilities — system-prompt fragments + tool hints
+that an admin curates and assigns to specific agents. **Not** game-style perks:
+the runner appends installed skill prompts to the agent system prompt at
+delegate time, so the agent actually behaves differently.
+
+- 9 default skills seeded on first launch (Brand Voice, Web Research SOP,
+  Code Review Checklist, Bilingual TH/EN, Compliance FDA/PDPA, Image Brief,
+  Sales Copy, Data Analysis SOP, TDD)
+- Storage: `~/.c-office/agent-skills/<id>.md` (markdown + frontmatter)
+- API: `GET /api/agent-skills`, `POST /api/agent-skills` (custom create),
+  `POST /api/agents/:agentId/skills { skillId }` (install on agent),
+  `DELETE /api/agents/:agentId/skills/:skillId`
+- UI: Agents page → editor panel → "AI Skills" section with install/uninstall
+
+### Granular Run Control
+
+Stop and resume an Orchestra run without losing the work that's already done.
+All step results are persisted under `~/.c-office/runs/<run_id>.json` and
+survive server restarts.
+
+- **Pause** — soft cancel; runner finishes the current step and stops; status
+  becomes `paused`. Endpoint: `POST /api/task/:run_id/pause`
+- **Resume** — re-enters the pipeline using `existingRunId`; completed steps
+  stay. Endpoint: `POST /api/task/:run_id/resume`
+- **Retry from step** — drops steps from N forward and replays. Endpoint:
+  `POST /api/task/:run_id/retry-step { stepIdx }`
+- **Cancel** — hard terminate but keep all completed step outputs in
+  `run.steps[]`
+- **Per-step Copy** — copy any step's output to clipboard from the dashboard
+  Active Mission panel without waiting for the run to finish
+
 ### RPG Progression
 
 - **Levels** — เอเจนต์ level up เมื่อ task สำเร็จ
-- **Learned skills** — เก็บ pattern จาก multi-step runs ใน `~/.c-office/skills/`
+- **Learned skills** — auto-persist past Orchestra runs as Hermes-style
+  playbooks under `~/.c-office/skills/` (separate from the curated catalog
+  above)
 - **Playbooks** — matrix skill mastery ของแต่ละ persona
+
+### Design System
+
+Public design tokens, UI kit, and persona portraits live in `C-Office Design
+System/`. The runtime override layer (`public/ux-readable.css`) brings the
+spec into the production app — bright navy surfaces, solid 2px borders,
+JRPG agent cards with status ring + busy pulse + scan line, six-color accent
+palette with per-route nav tinting.
+
+Preview the spec:
+
+```bash
+# Open any of these directly in a browser
+ls "C-Office Design System/preview/"
+# brand-personas.html · comp-agent-cards.html · comp-buttons.html
+# comp-nav.html · comp-panels.html · comp-rarity.html
+# spacing-radii.html · spacing-shadows.html · type-fonts.html · type-scale.html
+# colors-{primary,neutrals,backgrounds,semantic}.html
+```
 
 ### Auth & Credentials
 
@@ -398,9 +453,12 @@ Busy decay is handled by a background tick.
 | `/api/providers` | GET | Provider catalog alias |
 | `/api/auth/status` | GET | Provider connection status |
 | `/api/settings` | GET | Safe Claude settings view |
-| `/api/skills` | GET | Learned skill summaries |
+| `/api/skills` | GET | Learned skill summaries (auto-persisted from past runs) |
+| `/api/agent-skills` | GET | Catalog of installable AI capabilities |
+| `/api/agent-skills/:id` | GET | Single skill record |
 | `/api/tasks` | GET | Recent Orchestra runs |
 | `/api/task/:run_id` | GET | Run detail |
+| `/api/task/:run_id/trace` | GET | Run trace as markdown |
 | `/api/images/status` | GET | Image provider status |
 | `/api/images/library` | GET | Generated image library |
 | `/api/projects` | GET | Projects list |
@@ -420,7 +478,17 @@ Busy decay is handled by a background tick.
 | `/api/notes/:id` | DELETE | delete note |
 | `/api/notes/:id/message` | POST | `{ content, role }` |
 | `/api/notes/:id/dispatch` | POST | `{ provider, agentId, message }` |
-| `/api/task` | POST | `{ goal }` |
+| `/api/task` | POST | `{ goal, provider?, projectId? }` |
+| `/api/task/:run_id/cancel` | POST | `{ reason? }` — hard terminate; preserves completed steps |
+| `/api/task/:run_id/pause` | POST | _none_ — soft cancel (resumable) |
+| `/api/task/:run_id/resume` | POST | _none_ — re-enter pipeline using existingRunId |
+| `/api/task/:run_id/retry-step` | POST | `{ stepIdx }` — drop steps from N forward and replay |
+| `/api/task/:run_id/comment` | POST | `{ text, stepIdx? }` — mid-run user note |
+| `/api/agent-skills` | POST | `{ name, summary, category, tools, body }` (custom) |
+| `/api/agent-skills/:id` | PATCH | partial skill update (builtin protected) |
+| `/api/agent-skills/:id` | DELETE | remove a custom skill |
+| `/api/agents/:agentId/skills` | POST | `{ skillId }` — install skill on agent |
+| `/api/agents/:agentId/skills/:skillId` | DELETE | uninstall skill from agent |
 | `/api/auth/token` | POST | `{ provider, token, clientId? }` |
 | `/api/auth/disconnect` | POST | `{ provider }` |
 | `/auth/anthropic/connect` | GET | mirror Claude credentials into local store |
@@ -452,6 +520,9 @@ Busy decay is handled by a background tick.
 | `C_OFFICE_GPT_CMD` | `sgpt ${PROMPT}` | GPT command template |
 | `IMAGE_PROVIDER` | `gemini` | Image provider: `gemini`, `replicate`, `openai` |
 | `COFFICE_IMAGE_DIR` | `public/generated` | Generated image output dir |
+| `COFFICE_AGENT_SKILLS_DIR` | `~/.c-office/agent-skills` | Per-agent installable skill catalog directory |
+| `COFFICE_SKILLS_DIR` | `~/.c-office/skills` | Auto-learned playbooks (Hermes-style) directory |
+| `COFFICE_MAX_USD_PER_RUN` | `5.0` | Per-run cost ceiling (USD) before runner aborts |
 
 Example provider override:
 
@@ -704,7 +775,9 @@ Avoid:
 
 ## 20. License
 
-Private / personal use. Not for redistribution.
+[MIT](LICENSE) © 2026 C-Office contributors.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, conventions, and PR checklist.
 
 ---
 

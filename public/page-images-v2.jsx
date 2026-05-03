@@ -44,7 +44,7 @@ const ixTime = (v) => {
   return `${Math.floor(h / 24)}d ago`;
 };
 
-const ixImageUrl = (img) => img?.url || img?.path || img?.href || (img?.name ? `/generated/${img.name}` : '');
+const ixImageUrl = (img) => img?.imageUrl || img?.url || img?.path || img?.href || (img?.name ? `/generated/images/${img.name}` : '');
 const ixImagePrompt = (img) => img?.prompt || img?.metadata?.prompt || img?.meta?.prompt || '';
 
 const IXImageTile = ({ img, selected, onSelect }) => {

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{background:#0e1028;font-family:'Inter',sans-serif;padding:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{border-radius:12px;overflow:hidden;border:2px solid #2a2d5a;background:#161938;cursor:pointer;transition:transform 200ms cubic-bezier(.2,.8,.2,1),border-color 200ms}
+.card:hover{transform:translateY(-4px);border-color:var(--ac)}
+.art{height:180px;position:relative;overflow:hidden;background:var(--grad,#1a1d42)}
+.art img{width:100%;height:100%;object-fit:cover;object-position:center 10%}
+.art::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 50%,#161938)}
+.el{position:absolute;top:8px;left:8px;font-size:14px;background:rgba(0,0,0,0.6);border-radius:6px;padding:3px 6px;backdrop-filter:blur(6px)}
+.rarity{position:absolute;top:8px;right:8px;font:800 9px 'JetBrains Mono',monospace;letter-spacing:0.1em;padding:3px 7px;border-radius:5px;background:rgba(0,0,0,0.6);border:1px solid;backdrop-filter:blur(6px)}
+.info{padding:10px 12px 12px;position:relative}
+.name{font:800 16px 'Space Grotesk',sans-serif;color:#fff;margin-bottom:2px}
+.role{font:600 10px 'JetBrains Mono',monospace;color:#a0a3c0;letter-spacing:0.04em}
+.id{font:600 9px 'JetBrains Mono',monospace;color:#6f739b;margin-top:4px;letter-spacing:0.08em;text-transform:uppercase}
+</style></head><body>
+
+<div class="card" style="--ac:#fbbf24;--grad:linear-gradient(155deg,#3d2060,#1a1040)">
+<div class="art"><img src="../assets/images/Orchestra.png" alt=""><span class="el">👑</span><span class="rarity" style="color:#fbbf24;border-color:#fbbf24">SSR</span></div>
+<div class="info"><div class="name">Orchestra</div><div class="role">Maestro · Lead Conductor</div><div class="id">id: orchestra</div></div></div>
+
+<div class="card" style="--ac:#f472b6;--grad:linear-gradient(155deg,#3d1040,#201030)">
+<div class="art"><img src="../assets/images/Aira.png" alt=""><span class="el">🎓</span><span class="rarity" style="color:#f472b6;border-color:#f472b6">SSR</span></div>
+<div class="info"><div class="name">Aira</div><div class="role">Mentor · Knowledge Architect</div><div class="id">id: astra</div></div></div>
+
+<div class="card" style="--ac:#a78bfa;--grad:linear-gradient(155deg,#201840,#181430)">
+<div class="art"><img src="../assets/images/Luna.png" alt=""><span class="el">✒️</span><span class="rarity" style="color:#a78bfa;border-color:#a78bfa">SSR</span></div>
+<div class="info"><div class="name">Luna</div><div class="role">Scribe · Content Lead</div><div class="id">id: lumen</div></div></div>
+
+<div class="card" style="--ac:#fb7185;--grad:linear-gradient(155deg,#301020,#201018)">
+<div class="art"><img src="../assets/images/Vivi.png" alt=""><span class="el">🛡️</span><span class="rarity" style="color:#fb7185;border-color:#fb7185">SR</span></div>
+<div class="info"><div class="name">Vivi</div><div class="role">Sentinel · Audit & Security</div><div class="id">id: vex</div></div></div>
+
+<div class="card" style="--ac:#22d3ee;--grad:linear-gradient(155deg,#0a2030,#0d1828)">
+<div class="art"><img src="../assets/images/Kira.png" alt=""><span class="el">⚡</span><span class="rarity" style="color:#22d3ee;border-color:#22d3ee">SSR</span></div>
+<div class="info"><div class="name">Kira</div><div class="role">Builder · Code Forge</div><div class="id">id: kai</div></div></div>
+
+<div class="card" style="--ac:#ec4899;--grad:linear-gradient(155deg,#301028,#201020)">
+<div class="art"><img src="../assets/images/Miku.png" alt=""><span class="el">📈</span><span class="rarity" style="color:#ec4899;border-color:#ec4899">SR</span></div>
+<div class="info"><div class="name">Miku</div><div class="role">Growth · Multi-platform Strategist</div><div class="id">id: mira</div></div></div>
+
+<div class="card" style="--ac:#34d399;--grad:linear-gradient(155deg,#0a201a,#0a1a18)">
+<div class="art"><img src="../assets/images/Emi.png" alt=""><span class="el">🎨</span><span class="rarity" style="color:#34d399;border-color:#34d399">SR</span></div>
+<div class="info"><div class="name">Emi</div><div class="role">Studio · Visual Craft</div><div class="id">id: echo</div></div></div>
+
+<div class="card" style="--ac:#818cf8;--grad:linear-gradient(155deg,#1a1030,#181028)">
+<div class="art"><img src="../assets/images/Nana.png" alt=""><span class="el">🔍</span><span class="rarity" style="color:#818cf8;border-color:#818cf8">SR</span></div>
+<div class="info"><div class="name">Nana</div><div class="role">Intel · Insights Analyst</div><div class="id">id: nyx</div></div></div>
+
+<div class="card" style="--ac:#94a3b8;--grad:linear-gradient(155deg,#161820,#1a1e28)">
+<div class="art"><img src="../assets/images/Ori.png" alt=""><span class="el">⚙️</span><span class="rarity" style="color:#94a3b8;border-color:#94a3b8">R</span></div>
+<div class="info"><div class="name">Ori</div><div class="role">Operations · DevOps Lead</div><div class="id">id: orbit</div></div></div>
+
+</body></html>

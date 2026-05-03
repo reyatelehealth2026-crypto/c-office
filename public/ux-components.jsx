@@ -32,10 +32,19 @@ const UXSkeleton = ({ height = 16, width = '100%', style = {} }) => (
   <div className="ux-skeleton" style={{ height, width, ...style }} />
 );
 
+const UX_PROVIDER_OPTIONS = [
+  { id: 'claude', label: 'Claude', authKey: 'anthropic' },
+  { id: 'codex',  label: 'Codex',  authKey: 'codex' },
+  { id: 'gemini', label: 'Gemini', authKey: 'google' },
+];
+
 const UXTopbar = ({ page, onSendGoal }) => {
   const meta = UX_PAGE_META[page] || UX_PAGE_META.dashboard;
   const [goal, setGoal] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const [provider, setProvider] = React.useState(() => {
+    try { return localStorage.getItem('c-office-provider') || 'claude'; } catch { return 'claude'; }
+  });
   const agents = Array.isArray(window.AGENTS) ? window.AGENTS : [];
   const runs = Array.isArray(window.RUNS) ? window.RUNS : [];
   const activeAgents = agents.filter(a => ['busy', 'active'].includes(a.status)).length;
@@ -45,6 +54,11 @@ const UXTopbar = ({ page, onSendGoal }) => {
   const connectedProviders = ['anthropic', 'google', 'openai', 'replicate', 'codex']
     .filter(k => auth[k]?.connected || auth[k]?.available).length;
 
+  const updateProvider = (next) => {
+    setProvider(next);
+    try { localStorage.setItem('c-office-provider', next); } catch {}
+  };
+
   const submit = async () => {
     const text = goal.trim();
     if (!text || busy) return;
@@ -53,7 +67,7 @@ const UXTopbar = ({ page, onSendGoal }) => {
       const r = await fetch('/api/task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal: text }),
+        body: JSON.stringify({ goal: text, provider }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Failed to start run');
@@ -79,7 +93,7 @@ const UXTopbar = ({ page, onSendGoal }) => {
         <div className="ux-kicker">{meta.kicker}</div>
         <div className="ux-page-title">{meta.title}</div>
       </div>
-      <div className="ux-command" role="search">
+      <div className="ux-command" role="search" style={{ gridTemplateColumns: '1fr auto auto', gap: 8 }}>
         <input
           value={goal}
           onChange={e => setGoal(e.target.value)}
@@ -88,6 +102,20 @@ const UXTopbar = ({ page, onSendGoal }) => {
           disabled={busy}
           aria-label="Send a mission to Orchestra"
         />
+        <select
+          className="ux-provider-picker"
+          value={provider}
+          onChange={e => updateProvider(e.target.value)}
+          disabled={busy}
+          aria-label="Model provider"
+          title="Pick the model provider used by Orchestra"
+          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', font: '700 11px var(--font-mono)', letterSpacing: '0.06em', padding: '6px 8px', minWidth: 90 }}
+        >
+          {UX_PROVIDER_OPTIONS.map(p => {
+            const ready = !!(auth[p.authKey]?.connected || auth[p.authKey]?.available);
+            return <option key={p.id} value={p.id}>{p.label}{ready ? '' : ' (setup)'}</option>;
+          })}
+        </select>
         <button onClick={submit} disabled={busy || !goal.trim()}>{busy ? 'Sending' : 'Launch'}</button>
       </div>
       <div className="ux-status-row" aria-label="System status">

@@ -73,28 +73,34 @@ const UXAgentCardV2 = ({ agent, onOpenAgent }) => {
     <button
       className="ux-agent-card-v2"
       data-status={agent.status || 'idle'}
+      data-level={agent.level || 1}
+      data-rarity={agent.rarity || 'R'}
       style={{ '--agent-color': color, textAlign: 'left' }}
       onClick={() => onOpenAgent?.(agent.id)}
       aria-label={`Open ${agent.name}`}
     >
-      {agent.image ? (
-        <img className="ux-agent-avatar" src={agent.image} alt={agent.name}/>
-      ) : (
-        <div className="ux-agent-avatar ux-agent-fallback" style={{ background: agent.gradient || color }}>{agent.avatarInitials || agent.name?.slice(0,2)}</div>
-      )}
-      <div className="ux-agent-body">
-        <div className="ux-agent-topline">
-          <div style={{ minWidth: 0 }}>
-            <div className="ux-agent-name">{agent.name}</div>
-            <div className="ux-agent-role">{agent.role}</div>
+      <div className="ux-agent-top">
+        <span className="ux-agent-avatar-wrap">
+          {agent.image ? (
+            <img className="ux-agent-avatar" src={agent.image} alt={agent.name}/>
+          ) : (
+            <div className="ux-agent-avatar ux-agent-fallback" style={{ background: agent.gradient || color }}>{agent.avatarInitials || agent.name?.slice(0,2)}</div>
+          )}
+        </span>
+        <div className="ux-agent-body">
+          <div className="ux-agent-topline">
+            <div style={{ minWidth: 0 }}>
+              <div className="ux-agent-name">{agent.name}</div>
+              <div className="ux-agent-role">{agent.role}</div>
+            </div>
+            <UXStatusChip label={uxStatusLabel(agent.status)} state={uxStatusState(agent.status)} />
           </div>
-          <UXStatusChip label={uxStatusLabel(agent.status)} state={uxStatusState(agent.status)} />
         </div>
-        <div className="ux-agent-task">{work}</div>
-        <div className="ux-agent-footer">
-          <span className="ux-mini-meta">Lv.{agent.level || 1} · {agent.rarity || 'R'}</span>
-          <span className="ux-mini-meta">{agent.elementName || 'agent'}</span>
-        </div>
+      </div>
+      <div className="ux-agent-task">{work}</div>
+      <div className="ux-agent-footer">
+        <span className="ux-mini-meta">Lv.{agent.level || 1} · {agent.rarity || 'R'}</span>
+        <span className="ux-mini-meta">{agent.elementName || 'agent'}</span>
       </div>
     </button>
   );
@@ -173,6 +179,7 @@ const UXLiveFeed = ({ onOpenAgent }) => {
             <div style={{ minWidth: 0 }}>
               <div className="ux-feed-topline">
                 <div className="ux-feed-title">{agent?.name || ev.persona || ev.source || 'System'}</div>
+                {ev.tool && <span className="ux-tool-badge" data-tool={String(ev.tool).slice(0, 12)}>{String(ev.tool).slice(0, 12)}</span>}
                 <div className="ux-feed-time">{uxRelTime(ev.ts || ev.t || ev.time)}</div>
               </div>
               <div className="ux-feed-detail">{uxEventTitle(ev)}</div>
@@ -182,6 +189,92 @@ const UXLiveFeed = ({ onOpenAgent }) => {
         );
       })}
     </div>
+  );
+};
+
+const UXActiveMission = () => {
+  const runs = window.RUNS || [];
+  const running = runs.find(r => r.status === 'running')
+    || runs.find(r => r.cancelReason === 'paused' || r.status === 'paused')
+    || runs[0];
+  const [busy, setBusy] = React.useState(false);
+  if (!running) return null;
+  const orch = (window.AGENTS || []).find(a => a.id === 'orchestra');
+  const allSteps = Array.isArray(running.steps) ? running.steps : [];
+  const steps = allSteps.slice(-5);
+  const isPaused = running.cancelReason === 'paused' || running.status === 'paused';
+  const isRunning = running.status === 'running';
+  const isFinished = running.status === 'done' || running.status === 'failed';
+
+  const post = async (url, body) => {
+    setBusy(true);
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        alert(j.error || 'request failed');
+      }
+      await window.fetchCOfficeState?.();
+    } catch (e) { alert(e.message || String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const pause = () => post(`/api/task/${running.id}/pause`);
+  const resume = () => post(`/api/task/${running.id}/resume`);
+  const cancel = () => { if (confirm('Cancel this run? Completed steps will be preserved.')) post(`/api/task/${running.id}/cancel`, { reason: 'user-cancelled' }); };
+  const retryStep = (idx) => { if (confirm(`Retry from step ${idx + 1}? Steps after will be re-run.`)) post(`/api/task/${running.id}/retry-step`, { stepIdx: idx }); };
+  const copyStep = (s) => navigator.clipboard?.writeText(s.result?.text || s.text || s.summary || s.content || '').catch(() => {});
+
+  return (
+    <section className="ux-active-mission" data-status={running.status}>
+      <div className="ux-mission-head">
+        <div className="ux-mission-orch">
+          {orch?.image && <img src={orch.image} alt="Orchestra"/>}
+          <div>
+            <div className="ux-mission-title">{running.goal || running.title || 'Active Mission'}</div>
+            <div className="ux-mission-sub">Orchestra · {isPaused ? 'paused' : (running.status || 'running')} · {allSteps.length} step{allSteps.length === 1 ? '' : 's'} done</div>
+          </div>
+        </div>
+        <div className="ux-mission-controls" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {isRunning && <button type="button" className="ux-btn ux-btn-ghost" disabled={busy} onClick={pause}>Pause</button>}
+          {(isPaused || isFinished) && <button type="button" className="ux-btn ux-btn-primary" disabled={busy} onClick={resume}>Resume</button>}
+          {!isFinished && <button type="button" className="ux-btn ux-btn-danger" disabled={busy} onClick={cancel}>Cancel</button>}
+          {isRunning && <div className="ux-thinking-dots" style={{ marginLeft: 8 }} aria-hidden="true"><span/><span/><span/></div>}
+        </div>
+      </div>
+      {steps.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {steps.map((s, i) => {
+            const realIdx = allSteps.length - steps.length + i;
+            const failed = s.result?.error || s.error;
+            const done = !!(s.done || s.completed || s.result?.ok) || (i < steps.length - 1 && !failed);
+            return (
+              <div key={realIdx} style={{ display: 'flex', gap: 12, padding: '8px 0' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 24, flexShrink: 0 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: failed ? 'var(--ux-danger)' : (done ? 'var(--accent-lime)' : 'var(--accent-gold)'), border: done || failed ? 'none' : '2px solid var(--accent-gold)' }}/>
+                  {i < steps.length - 1 && <div style={{ width: 2, flex: 1, background: done ? 'var(--accent-lime)' : 'var(--border)', marginTop: 2 }}/>}
+                </div>
+                <div style={{ flex: 1, paddingBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
+                    <span style={{ font: '700 12px var(--font-body)', color: 'var(--text-primary)' }}>{s.personaName || s.persona || s.agent || 'Orchestra'}</span>
+                    <span className="ux-tool-badge" data-tool={s.tool || s.action || s.phase || 'Step'}>{s.tool || s.action || s.phase || 'Step'}</span>
+                    <span style={{ font: '500 9px var(--font-mono)', color: 'var(--text-faint)', marginLeft: 'auto' }}>{uxRelTime(s.ts || s.startedAt || s.time)}</span>
+                    <button type="button" className="ux-soft-button" disabled={busy} style={{ padding: '2px 6px', minHeight: 20, fontSize: 10 }} onClick={() => copyStep(s)} title="Copy step output">Copy</button>
+                    <button type="button" className="ux-soft-button" disabled={busy} style={{ padding: '2px 6px', minHeight: 20, fontSize: 10 }} onClick={() => retryStep(realIdx)} title="Retry this step (drops later steps)">Retry</button>
+                  </div>
+                  <div style={{ font: '400 11px var(--font-body)', color: 'var(--text-secondary)' }}>{s.summary || s.instruction || s.detail || s.content || (s.result?.text || '').slice(0, 200) || s.text || ''}</div>
+                  {failed && <div style={{ font: '400 11px var(--font-body)', color: 'var(--ux-danger)', marginTop: 4 }}>{String(failed).slice(0, 240)}</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 };
 
@@ -203,6 +296,7 @@ const DashboardV2 = ({ onOpenAgent, setLayout }) => {
 
   return (
     <div className="ux-dashboard">
+      <UXActiveMission/>
       <div className="ux-hero-grid">
         <section className="ux-command-hero">
           <div className="ux-hero-kicker">Live Command Center</div>

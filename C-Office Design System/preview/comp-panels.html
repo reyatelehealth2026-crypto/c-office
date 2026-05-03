@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{background:#0a0a1a;font-family:'Inter',sans-serif;padding:16px 20px;display:flex;flex-direction:column;gap:10px}
+.panel{padding:14px 18px;border-radius:10px;border:2px solid #2a2d5a;background:#11122b}
+.head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.head h3{font:800 15px 'Space Grotesk',sans-serif;color:#f8fafc}
+.head span{font:800 10px 'JetBrains Mono',monospace;letter-spacing:0.12em;text-transform:uppercase;color:#22d3ee}
+.body{color:#cbd5e1;font-size:13px;line-height:1.5}
+.gold{border-color:#fbbf24}
+.gold .head span{color:#fbbf24}
+.cyan{border-color:#22d3ee}
+.input{width:100%;margin-top:10px;border:2px solid #2a2d5a;border-radius:10px;background:#1a1c3d;color:#f8fafc;padding:11px 14px;outline:none;font:600 13px 'Inter',sans-serif}
+.input::placeholder{color:#6f739b}
+.input:focus{border-color:#9d5cff}
+</style></head><body>
+<div class="panel cyan">
+<div class="head"><h3>System Board</h3><span>Live</span></div>
+<div class="body">Standard panel — solid #11122b surface, 2px border, no glow or gradient.</div>
+</div>
+<div class="panel gold">
+<div class="head"><h3>Guild Panel</h3><span>Gold</span></div>
+<div class="body">Accent panel — bold colored border for clear visual distinction.</div>
+</div>
+<input class="input" placeholder="Send a mission to Orchestra..." readonly>
+</body></html>

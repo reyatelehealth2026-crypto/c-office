@@ -32,6 +32,7 @@ import {
 import { getAgentSync, listAgentsSync, resolveAgentIdSync } from '../store/agents.js';
 import { costUsd } from '../mapping/pricing.js';
 import { recallSkills, persistSkill, degradeSkill, forkSkill, listSkills } from './skills.js';
+import { resolveSkillsPromptFragment } from './skill-catalog.js';
 import { generateImage } from './image.js';
 import { callLLM } from './providers-llm.js';
 import { getWorkflow } from './workflows.js';
@@ -107,15 +108,19 @@ function summarize(value, max = 90) {
 function sdkAgentDefinitions() {
   const entries = listAgentsSync({ includeDisabled: false })
     .filter((agent) => agent.id !== ORCHESTRA_PERSONA)
-    .map((agent) => [
-      agent.id,
-      {
-        description: `${agent.name} - ${agent.role}`,
-        prompt: agent.systemPrompt || `You are ${agent.name}. Return a concise answer for the assigned task.`,
-        tools: agent.toolsAllowed || [],
-        model: 'inherit',
-      },
-    ]);
+    .map((agent) => {
+      const basePrompt = agent.systemPrompt || `You are ${agent.name}. Return a concise answer for the assigned task.`;
+      const skillsFragment = resolveSkillsPromptFragment(agent.installedSkills);
+      return [
+        agent.id,
+        {
+          description: `${agent.name} - ${agent.role}`,
+          prompt: basePrompt + skillsFragment,
+          tools: agent.toolsAllowed || [],
+          model: 'inherit',
+        },
+      ];
+    });
   return Object.fromEntries(entries);
 }
 
@@ -802,21 +807,33 @@ async function executeStep(runId, goal, step, idx, prior, opts = {}) {
     // N prompts. Otherwise it returns a single-item array.
     let imagePrompts = [step.instruction];
     if (prior.length > 0) {
+      // Visible signal — composer LLM round-trip can take 5-15s on long
+      // contexts; without this the dashboard shows Emi as "running" with
+      // no detail and the user thinks the API call is stuck.
+      pushEvent({
+        sessionId: runId,
+        personaId,
+        verb: 'used',
+        toolName: 'ImagePromptCompose',
+        text: `Composing image prompt from ${prior.length} prior step${prior.length === 1 ? '' : 's'}…`,
+        status: 'ok',
+        dedupeKey: `imgcompose:${runId}:${toolUseId}`,
+      });
       const priorText = prior
         .map((p) => `[${p.persona}]\n${p.text}`)
         .join('\n\n')
-        .slice(0, 6000);
+        .slice(0, 2500);  // tighter cap — long context made composer slower without improving prompts
       const composerSystem = `You compose image-generation prompts for diffusion models.
-Read the assignment + earlier research/writing context, then decide how
-many distinct images this deliverable needs (e.g. one image per Facebook
-post, one per product variant). Output a JSON array of self-contained
-English prompts — each ~80-160 words, including subject, setting,
-lighting, composition, mood, and concrete visual cues from the context.
+Read the assignment + earlier research/writing context, then output a JSON
+array of self-contained English prompts — each ~60-120 words, including
+subject, setting, lighting, composition, mood, and concrete visual cues
+from the context.
 
 Reply with ONLY the JSON array, no preface or prose:
 ["prompt 1", "prompt 2", ...]
 
-Use 1 prompt unless the context clearly calls for more. Cap at 4.`;
+DEFAULT TO 1 PROMPT. Only emit more if the assignment EXPLICITLY says
+"N images" or "one per X". Cap at 2 — never more.`;
       const composerPrompt = `Assignment: ${step.instruction}\n\nContext from earlier steps:\n${priorText}\n\nReturn the JSON array of prompts now.`;
       try {
         let composed = '';
@@ -843,7 +860,7 @@ Use 1 prompt unless the context clearly calls for more. Cap at 4.`;
           imagePrompts = parsed
             .map((p) => typeof p === 'string' ? p : (p?.prompt || p?.instruction || ''))
             .filter((p) => p && p.length > 30)
-            .slice(0, 4);
+            .slice(0, 2);
         } else if (composed.trim().length > 40) {
           imagePrompts = [composed.trim()];
         } else {
@@ -862,7 +879,7 @@ Use 1 prompt unless the context clearly calls for more. Cap at 4.`;
     });
 
     // Hard timeout per image — keeps a hung provider from stalling the run.
-    const IMAGE_TIMEOUT_MS = Number(process.env.COFFICE_TIMEOUT_IMAGE_MS) || 120_000;
+    const IMAGE_TIMEOUT_MS = Number(process.env.COFFICE_TIMEOUT_IMAGE_MS) || 60_000;
     const generateOne = async (prompt, n) => {
       let timer;
       const deadline = new Promise((_, reject) => {

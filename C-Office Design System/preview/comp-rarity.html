@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}body{background:#0a0a1a;font-family:'JetBrains Mono',monospace;padding:16px 20px;display:flex;gap:10px}
+.r{flex:1;min-width:80px;aspect-ratio:3/4;border-radius:12px;overflow:hidden;position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:10px}
+.r::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:2px;background:var(--g);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.r .bg{position:absolute;inset:0;background:var(--bg);z-index:0}
+.r .bg::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,rgba(7,4,26,0.9))}
+.r span{position:relative;z-index:1;font:800 10px 'JetBrains Mono',monospace;letter-spacing:0.12em;color:var(--c)}
+.r b{position:relative;z-index:1;font:700 14px 'Space Grotesk',sans-serif;color:#fff;margin-top:2px}
+</style></head><body>
+<div class="r" style="--g:linear-gradient(135deg,#00f0ff,#8b5cf6 48%,#ff00a0);--c:#fbbf24;--bg:linear-gradient(160deg,#3d2080,#1a1040 60%,#204060);box-shadow:0 14px 40px -10px rgba(251,191,36,0.35)"><div class="bg"></div><span>★★★ SSR</span><b>Legendary</b></div>
+<div class="r" style="--g:linear-gradient(135deg,#ffd700,#ff6b35 60%,#ff00a0);--c:#ff6b35;--bg:linear-gradient(160deg,#8B3A3A,#2a1a1a 60%,#3a2020);box-shadow:0 14px 40px -12px rgba(255,107,107,0.4)"><div class="bg"></div><span>★★ SR</span><b>Epic</b></div>
+<div class="r" style="--g:linear-gradient(135deg,#39ff14,#00f0ff);--c:#00f0ff;--bg:linear-gradient(160deg,#1a3a3a,#1a2030);box-shadow:0 12px 32px -12px rgba(78,205,196,0.35)"><div class="bg"></div><span>★ R</span><b>Rare</b></div>
+<div class="r" style="--g:linear-gradient(135deg,#5a5e85,#2a2d5a);--c:#6f739b;--bg:linear-gradient(160deg,#2a2d4a,#1a1a2a);box-shadow:0 8px 24px -12px rgba(0,0,0,0.6)"><div class="bg"></div><span>N</span><b>Common</b></div>
+</body></html>

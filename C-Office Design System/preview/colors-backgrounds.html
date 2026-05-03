@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}body{font-family:'JetBrains Mono',monospace;display:flex;gap:12px;padding:14px;height:100vh}
+.bg{flex:1;border-radius:10px;overflow:hidden;position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:12px;border:2px solid #2a2d5a}
+.bg b{position:relative;z-index:1;font:800 12px 'JetBrains Mono',monospace;color:#fff;margin-bottom:4px}
+.bg span{position:relative;z-index:1;font-size:9px;letter-spacing:0.08em;color:#a0a3c0}
+.grid{position:absolute;inset:0;background:linear-gradient(rgba(255,255,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px);background-size:48px 48px}
+</style></head><body>
+
+<div class="bg" style="background:radial-gradient(600px 400px at 20% 20%,rgba(157,92,255,0.2),transparent 60%),radial-gradient(500px 350px at 80% 30%,rgba(34,211,238,0.15),transparent 60%),radial-gradient(400px 300px at 50% 90%,rgba(251,191,36,0.1),transparent 60%),#12142e">
+<div class="grid"></div>
+<b>App Background</b>
+<span>#12142e + grid + 3 radial glows</span>
+</div>
+
+<div class="bg" style="background:radial-gradient(400px 200px at 0% 0%,rgba(157,92,255,0.25),transparent 70%),radial-gradient(300px 200px at 100% 10%,rgba(34,211,238,0.2),transparent 70%),#1a1d42">
+<b>Hero Surface</b>
+<span>#1a1d42 + violet/cyan radials</span>
+</div>
+
+<div class="bg" style="background:#161938">
+<b>Panel Surface</b>
+<span>#161938 solid</span>
+</div>
+
+<div class="bg" style="background:#1e2148">
+<b>Card Inner</b>
+<span>#1e2148 solid</span>
+</div>
+
+<div class="bg" style="background:#252850">
+<b>Elevated</b>
+<span>#252850 inputs, tracks</span>
+</div>
+
+</body></html>

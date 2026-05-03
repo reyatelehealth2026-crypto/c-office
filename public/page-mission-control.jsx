@@ -56,7 +56,7 @@ const MCEventCard = ({ ev, selected, onSelect }) => {
         <div className="ux-event-summary">{title}</div>
         <div className="ux-event-tags">
           {ev?.session_id && <span className="ux-event-tag">session</span>}
-          {ev?.tool && <span className="ux-event-tag">tool: {String(ev.tool).slice(0, 18)}</span>}
+          {ev?.tool && <span className="ux-event-tag" data-tool={String(ev.tool).slice(0, 18)}>{String(ev.tool).slice(0, 18)}</span>}
           {ev?.status && <span className="ux-event-tag">{ev.status}</span>}
           {rawSummary && !ev?.tool && !ev?.status && <span className="ux-event-tag">detail</span>}
         </div>

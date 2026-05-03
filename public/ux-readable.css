@@ -1,0 +1,1799 @@
+/* ==========================================================================
+   C-Office Design System Override (override layer, loaded LAST)
+   Source: C-Office Design System/colors_and_type.css + README.md spec
+   Purpose: bright navy surfaces, solid 2px borders, JRPG agent UI, per-route
+   accents, restrained neon glows used only on active/working states.
+   Rollback: remove the <link> from public/index.html — no other file imports
+   this stylesheet.
+   ========================================================================== */
+
+:root {
+  /* ── Background System (BRIGHT navy — clear visual hierarchy) ──────── */
+  --bg-app: #12142e;
+  --bg-app-soft: #161938;
+  --bg-panel: #161938;
+  --bg-card: #1a1d42;
+  --bg-card-2: #1e2148;
+  --bg-elevated: #252850;
+
+  --bg-0: var(--bg-app);
+  --bg-1: var(--bg-app-soft);
+  --bg-2: var(--bg-panel);
+  --bg-3: var(--bg-card);
+
+  /* ── Borders (SOLID — no rgba glass) ───────────────────────────────── */
+  --border:   #2a2d5a;
+  --border-2: #3a3d6a;
+  --border-3: #4a4d8a;
+
+  /* ── Text Hierarchy ────────────────────────────────────────────────── */
+  --text-primary:   #ffffff;
+  --text-body:      #cbd5e1;
+  --text-secondary: #a0a3c0;
+  --text-muted:     #7f8da3;
+  --text-faint:     #526072;
+  --text: var(--text-primary);
+
+  /* ── Neon Accent Palette ───────────────────────────────────────────── */
+  --accent-violet:  #9d5cff;
+  --accent-cyan:    #22d3ee;
+  --accent-gold:    #fbbf24;
+  --accent-pink:    #f472b6;
+  --accent-magenta: #ec4899;
+  --accent-lime:    #34d399;
+
+  /* ── UX layer aliases (drives existing ux-* CSS) ───────────────────── */
+  --ux-bg-app: var(--bg-app);
+  --ux-bg-app-soft: var(--bg-app-soft);
+  --ux-surface-1: var(--bg-card);
+  --ux-surface-2: var(--bg-card-2);
+  --ux-surface-3: var(--bg-elevated);
+  --ux-surface-elevated: var(--bg-elevated);
+  --ux-border-soft: var(--border);
+  --ux-border-strong: var(--border-2);
+
+  --ux-text-primary:   var(--text-primary);
+  --ux-text-secondary: var(--text-body);
+  --ux-text-muted:     var(--text-secondary);
+  --ux-text-faint:     var(--text-muted);
+
+  --ux-accent-primary:   var(--accent-violet);
+  --ux-accent-secondary: var(--accent-cyan);
+  --ux-accent-gold:      var(--accent-gold);
+  --ux-accent-pink:      var(--accent-pink);
+
+  --ux-success: var(--accent-lime);
+  --ux-warning: var(--accent-gold);
+  --ux-danger:  #fb7185;
+  --ux-info:    #38bdf8;
+  --ux-offline: #64748b;
+
+  /* ── Status Tokens ─────────────────────────────────────────────────── */
+  --status-working: var(--accent-gold);
+  --status-online:  var(--accent-lime);
+  --status-idle:    #94a3b8;
+  --status-offline: #64748b;
+  --status-danger:  #fb7185;
+  --status-info:    #38bdf8;
+
+  /* ── Rarity Gradients (gacha tier) ─────────────────────────────────── */
+  --rarity-ssr: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #fb7185 100%);
+  --rarity-sr:  linear-gradient(135deg, #a78bfa 0%, #ec4899 100%);
+  --rarity-r:   linear-gradient(135deg, #22d3ee 0%, #34d399 100%);
+  --rarity-n:   linear-gradient(135deg, #64748b 0%, #475569 100%);
+
+  /* ── Shadows (subtle — no heavy glass blur) ────────────────────────── */
+  --shadow-card:    0 8px 28px rgba(0, 0, 0, 0.4);
+  --shadow-popover: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --shadow-deep:    0 12px 36px rgba(0, 0, 0, 0.5);
+  --ux-shadow-card: var(--shadow-card);
+  --ux-shadow-popover: var(--shadow-popover);
+
+  /* ── Glows (used only on active/working) ───────────────────────────── */
+  --glow-violet: 0 0 0 2px rgba(157, 92, 255, 0.4);
+  --glow-cyan:   0 0 0 2px rgba(34, 211, 238, 0.4);
+  --glow-gold:   0 0 12px rgba(251, 191, 36, 0.5);
+  --glow-pulse:  0 0 0 4px rgba(251, 191, 36, 0.25);
+  --ux-glow-primary: var(--glow-violet);
+  --ux-glow-cyan:    var(--glow-cyan);
+  --ux-glow-gold:    var(--glow-gold);
+
+  /* ── Border Radii (max 16px) ───────────────────────────────────────── */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius:      8px;
+  --radius-md:   10px;
+  --radius-lg:   12px;
+  --radius-xl:   14px;
+  --radius-2xl:  16px;
+  --radius-pill: 999px;
+
+  --ux-radius-sm:   var(--radius-sm);
+  --ux-radius-md:   var(--radius-md);
+  --ux-radius-lg:   var(--radius-lg);
+  --ux-radius-xl:   var(--radius-xl);
+  --ux-radius-pill: var(--radius-pill);
+
+  /* ── Typography ────────────────────────────────────────────────────── */
+  --font-display: 'Space Grotesk', 'Sarabun', ui-sans-serif, system-ui, sans-serif;
+  --font-body:    'Inter', 'Sarabun', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+  --font-thai:    'Sarabun', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── App Canvas (3 soft radial glows + 48px grid) ─────────────────────── */
+body {
+  background:
+    radial-gradient(900px 520px at 14% -12%, rgba(157, 92, 255, 0.10), transparent 62%),
+    radial-gradient(780px 480px at 94% 2%, rgba(34, 211, 238, 0.08), transparent 62%),
+    radial-gradient(640px 380px at 54% 110%, rgba(251, 191, 36, 0.05), transparent 64%),
+    var(--bg-app) !important;
+  color: var(--text-primary);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  display: block !important;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5), transparent 85%);
+          mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5), transparent 85%);
+}
+
+/* ── Sidebar (per-route accent colors via --nav-color) ────────────────── */
+.sidebar {
+  background: #0e1028 !important;
+  border-right: 2px solid var(--border) !important;
+  box-shadow: none !important;
+}
+
+.brand {
+  border-bottom: 2px solid var(--border) !important;
+}
+
+.brand-mark {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.10),
+    0 0 22px rgba(34, 211, 238, 0.26),
+    0 14px 28px rgba(0, 0, 0, 0.28) !important;
+}
+
+.nav-item {
+  border-radius: var(--radius-lg);
+  min-height: 42px;
+  border: 1px solid transparent;
+  transition: all 140ms ease;
+}
+
+.nav-item:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.nav-item .ico {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(42, 45, 90, 0.45);
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  font: 600 10px var(--font-mono);
+  width: 30px;
+  height: 30px;
+}
+
+.nav-item.active {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 18%, transparent), rgba(255, 255, 255, 0.04)) !important;
+  border-color: color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 42%, rgba(255, 255, 255, 0.10)) !important;
+  border-left: 3px solid var(--nav-color, var(--accent-cyan)) !important;
+  color: #ffffff !important;
+}
+
+.nav-item.active .ico {
+  color: var(--nav-color, var(--accent-cyan));
+  background: color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 13%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 28%, transparent);
+}
+
+/* Per-route nav accent colors per DS spec */
+.nav-item[data-route="dashboard"]       { --nav-color: var(--accent-violet); }
+.nav-item[data-route="mission-control"] { --nav-color: var(--accent-cyan); }
+.nav-item[data-route="agents"]          { --nav-color: var(--accent-cyan); }
+.nav-item[data-route="notes"]           { --nav-color: var(--accent-gold); }
+.nav-item[data-route="tasks"]           { --nav-color: var(--accent-pink); }
+.nav-item[data-route="images"]          { --nav-color: var(--accent-lime); }
+.nav-item[data-route="skills"]          { --nav-color: var(--accent-cyan); }
+.nav-item[data-route="memory"]          { --nav-color: var(--accent-violet); }
+.nav-item[data-route="settings"]        { --nav-color: var(--text-muted); }
+.nav-item[data-route="guild"]           { --nav-color: var(--accent-magenta); }
+.nav-item[data-route="projects"]        { --nav-color: var(--accent-pink); }
+
+/* ── Topbar (sticky #161938, 2px bottom border) ───────────────────────── */
+.ux-topbar {
+  background: var(--bg-app-soft) !important;
+  backdrop-filter: none !important;
+  border-bottom: 2px solid var(--border) !important;
+}
+
+.ux-kicker {
+  font: 800 10px/1 var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-cyan) !important;
+}
+
+.ux-kicker::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-lime);
+  box-shadow: 0 0 8px var(--accent-lime);
+}
+
+.ux-page-title {
+  font: 800 clamp(18px, 2vw, 24px)/1.15 var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--text-primary) !important;
+}
+
+/* ── Command bar (center input + primary button) ──────────────────────── */
+.ux-command {
+  background: var(--bg-card-2) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+.ux-command input {
+  color: var(--text-primary) !important;
+}
+
+.ux-command input::placeholder {
+  color: var(--text-muted);
+}
+
+.ux-command button,
+.ux-button-primary,
+.ux-hero-button {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg) !important;
+  padding: 8px 14px;
+  color: #080a14 !important;
+  cursor: pointer;
+  font: 800 11px var(--font-mono) !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet)) !important;
+  box-shadow: var(--glow-cyan) !important;
+  transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
+}
+
+.ux-command button::before,
+.ux-button-primary::before,
+.ux-hero-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 600ms ease;
+  pointer-events: none;
+}
+
+.ux-command button:hover::before,
+.ux-button-primary:hover::before,
+.ux-hero-button:hover::before {
+  transform: translateX(100%);
+}
+
+.ux-command button:hover,
+.ux-button-primary:hover,
+.ux-hero-button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow: var(--glow-cyan), 0 8px 24px rgba(34, 211, 238, 0.25) !important;
+}
+
+.ux-command button:active,
+.ux-button-primary:active,
+.ux-hero-button:active {
+  transform: translateY(0) scale(0.97);
+  transition: transform 80ms ease;
+}
+
+.ux-command button:disabled,
+.ux-button-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Status Chips (semantic color blocks) ─────────────────────────────── */
+.ux-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 26px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-card-2);
+  color: var(--text-secondary);
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ux-status-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.ux-status-chip[data-state="active"] {
+  color: var(--accent-lime);
+  border-color: color-mix(in srgb, var(--accent-lime) 32%, transparent);
+  background: color-mix(in srgb, var(--accent-lime) 10%, transparent);
+}
+
+.ux-status-chip[data-state="busy"] {
+  color: var(--accent-gold);
+  border-color: color-mix(in srgb, var(--accent-gold) 38%, transparent);
+  background: color-mix(in srgb, var(--accent-gold) 10%, transparent);
+}
+
+.ux-status-chip[data-state="danger"] {
+  color: var(--ux-danger);
+  border-color: color-mix(in srgb, var(--ux-danger) 38%, transparent);
+  background: color-mix(in srgb, var(--ux-danger) 10%, transparent);
+}
+
+.ux-status-chip[data-state="muted"] {
+  color: var(--text-muted);
+  background: var(--bg-card-2);
+}
+
+/* ── Cards & Panels (solid #1a1d42, 2px solid border) ─────────────────── */
+.ux-panel,
+.ux-section-panel,
+.ux-card,
+.ux-metric-card,
+.ux-task-card-v2,
+.ux-image-tile,
+.ux-image-panel,
+.ux-board-column,
+.ux-provider-card-v2,
+.ux-note-card,
+.ux-context-card,
+.ux-settings-panel,
+.ux-run-inspector,
+.ux-notes-context,
+.ux-notes-panel,
+.panel,
+.card,
+.guild-panel,
+.agent-card,
+.mission-panel,
+.notes-shell,
+.image-studio,
+.settings-card {
+  background: var(--bg-card) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+/* Hover lift — translateY(-3px) + accent border (per DS spec) */
+.ux-card-lift,
+.ux-task-card-v2,
+.ux-image-tile,
+.ux-note-card,
+.ux-provider-card-v2,
+.ux-metric-card {
+  transition: transform 160ms cubic-bezier(.2, .8, .2, 1),
+              border-color 160ms ease,
+              box-shadow 160ms ease,
+              background-color 160ms ease;
+}
+
+.ux-card-lift:hover,
+.ux-task-card-v2:hover,
+.ux-image-tile:hover,
+.ux-note-card:hover,
+.ux-provider-card-v2:hover,
+.ux-metric-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-2) !important;
+  background: var(--bg-card-2) !important;
+  box-shadow: var(--shadow-card), 0 0 32px color-mix(in srgb, var(--accent-violet) 18%, transparent) !important;
+}
+
+.ux-task-card-v2.is-selected,
+.ux-image-tile.is-selected,
+.ux-note-card.is-active {
+  background: var(--bg-card-2) !important;
+  border-color: var(--accent-violet) !important;
+  box-shadow: var(--glow-violet), var(--shadow-card) !important;
+}
+
+/* ── Soft / Secondary Buttons ─────────────────────────────────────────── */
+.ux-soft-button {
+  background: var(--bg-card-2) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-body) !important;
+  border-radius: var(--radius) !important;
+  padding: 6px 12px;
+  font: 600 12px var(--font-body);
+  transition: all 140ms ease;
+  cursor: pointer;
+}
+
+.ux-soft-button:hover {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-2) !important;
+  color: var(--text-primary) !important;
+  transform: translateY(-1px);
+}
+
+/* ── Event / Tool badges ──────────────────────────────────────────────── */
+.ux-event-tag {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-body);
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  font: 800 10px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── Empty / Error States ─────────────────────────────────────────────── */
+.ux-empty-state,
+.ux-error-state {
+  background: var(--bg-panel);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-xl);
+}
+
+.ux-empty-state b,
+.ux-error-state b {
+  color: var(--text-primary);
+  font: 700 16px var(--font-display);
+}
+
+.ux-empty-state span,
+.ux-error-state span {
+  color: var(--text-muted);
+}
+
+.ux-error-state {
+  border-color: color-mix(in srgb, var(--ux-danger) 38%, transparent);
+  background: color-mix(in srgb, var(--ux-danger) 6%, var(--bg-panel));
+}
+
+/* ── Inputs / textareas / selects ─────────────────────────────────────── */
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+textarea,
+select,
+.ux-task-search,
+.ux-task-select {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  border-radius: var(--radius-lg) !important;
+  font: 400 14px/1.5 var(--font-body);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent-violet) !important;
+  outline: none !important;
+  box-shadow: var(--glow-violet) !important;
+}
+
+/* ── Code / preformatted ──────────────────────────────────────────────── */
+.ux-result-box,
+.ux-prompt-box,
+pre {
+  background: var(--bg-app) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  color: var(--text-body) !important;
+  font: 500 12px/1.5 var(--font-mono);
+}
+
+/* ── Typography (titles & body text) ──────────────────────────────────── */
+.ux-page-title,
+.ux-section-title,
+.ux-section-subtitle,
+.ux-metric-value,
+.ux-task-title,
+.ux-image-title,
+.ux-run-title,
+.ux-settings-title,
+.ux-note-card-title {
+  color: var(--text-primary) !important;
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.ux-task-desc,
+.ux-image-subtitle,
+.ux-run-sub,
+.ux-settings-subtitle,
+.ux-note-card-body,
+.ux-metric-note,
+.ux-task-time,
+.ux-note-mini {
+  color: var(--text-body) !important;
+  font: 500 13px/1.5 var(--font-body);
+}
+
+.ux-metric-label {
+  font: 800 10px var(--font-mono) !important;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted) !important;
+}
+
+.ux-metric-value {
+  font: 800 28px/1 var(--font-display) !important;
+  letter-spacing: -0.02em;
+}
+
+/* ── Progress bar ─────────────────────────────────────────────────────── */
+.ux-task-progress {
+  background: var(--bg-elevated) !important;
+  border-radius: var(--radius-pill) !important;
+  height: 6px !important;
+  overflow: hidden;
+}
+
+.ux-task-progress span {
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet)) !important;
+  display: block;
+  height: 100%;
+}
+
+/* ── Inspector / detail labels ────────────────────────────────────────── */
+.ux-run-cell label,
+.ux-image-meta-cell label {
+  color: var(--text-muted) !important;
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ── Focus ring (accessible) ──────────────────────────────────────────── */
+button:focus-visible,
+.nav-item:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent-violet) !important;
+  outline-offset: 2px;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; border: 2px solid var(--bg-app); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+
+/* ── Status Pulse Animation (working agents) ──────────────────────────── */
+@keyframes uxStatusPulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  50%      { box-shadow: 0 0 0 4px transparent; opacity: 0.7; }
+}
+
+.ux-status-chip[data-state="busy"]::before {
+  animation: uxStatusPulse 1.6s ease-in-out infinite;
+}
+
+/* ── Responsive: stack 3-panel workspaces on narrow viewports ─────────── */
+@media (max-width: 1100px) {
+  .ux-notes-shell,
+  .ux-notes-grid,
+  .ux-tasks-grid,
+  .ux-images-grid,
+  .ux-board-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ux-notes-context,
+  .ux-run-inspector,
+  .ux-image-inspector {
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .ux-topbar {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .ux-page-title { font-size: 18px !important; }
+  .ux-status-row { justify-content: flex-start !important; }
+  .main { padding: 12px 12px 88px !important; }
+}
+
+/* ==========================================================================
+   DS Agentic Card (dashboard agent roster) — horizontal layout with status
+   ring, tool badge, progress bar, thinking dots, and busy scan line.
+   Source: C-Office Design System/ui_kits/dashboard/dashboard.jsx (AgenticCard)
+   ========================================================================== */
+
+.ux-agent-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.ux-agent-card-v2 {
+  position: relative !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-card) !important;
+  cursor: pointer !important;
+  transition: transform 180ms cubic-bezier(.2, .8, .2, 1),
+              border-color 180ms ease !important;
+  text-align: left;
+  min-height: 0 !important;
+}
+
+.ux-agent-card-v2:hover {
+  transform: translateY(-3px) !important;
+  border-color: var(--agent-color, var(--accent-violet)) !important;
+  box-shadow:
+    var(--shadow-card),
+    0 0 24px color-mix(in srgb, var(--agent-color, var(--accent-violet)) 22%, transparent) !important;
+}
+
+.ux-agent-card-v2[data-status="busy"] {
+  border-color: var(--accent-gold) !important;
+}
+
+.ux-agent-card-v2[data-status="active"] {
+  border-color: var(--accent-lime) !important;
+}
+
+/* Top row: avatar + name/role + status label + Lv */
+.ux-agent-card-v2 > .ux-agent-top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+/* Avatar with status-color border (44px) */
+.ux-agent-avatar {
+  position: relative !important;
+  z-index: 1;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: var(--radius-md) !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  border: 2px solid var(--agent-color, var(--border)) !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: none !important;
+  flex-shrink: 0;
+}
+
+/* Pulsing ring around avatar when busy */
+.ux-agent-card-v2[data-status="busy"] .ux-agent-avatar-wrap::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 13px;
+  border: 2px solid var(--accent-gold);
+  pointer-events: none;
+  animation: uxBusyRing 2s ease-in-out infinite;
+}
+
+@keyframes uxBusyRing {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-gold); }
+  50%      { box-shadow: 0 0 0 6px transparent; }
+}
+
+/* Status indicator dot at avatar bottom-right */
+.ux-agent-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ux-agent-avatar-wrap::before {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--agent-color, var(--text-muted));
+  border: 2px solid var(--bg-card);
+  z-index: 2;
+}
+
+.ux-agent-card-v2[data-status="busy"]   .ux-agent-avatar-wrap::before { background: var(--accent-gold); }
+.ux-agent-card-v2[data-status="active"] .ux-agent-avatar-wrap::before { background: var(--accent-lime); }
+.ux-agent-card-v2[data-status="offline"] .ux-agent-avatar-wrap::before { background: var(--ux-offline); }
+
+/* Card body — name + role */
+.ux-agent-body {
+  position: relative !important;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+}
+
+.ux-agent-topline {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+}
+
+.ux-agent-name {
+  font: 700 14px var(--font-display) !important;
+  color: var(--text-primary) !important;
+  letter-spacing: 0 !important;
+}
+
+.ux-agent-role {
+  margin-top: 2px !important;
+  color: var(--text-secondary) !important;
+  font: 500 10px var(--font-mono) !important;
+  letter-spacing: 0.04em !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Reset gallery-style positioning of status chip — show inline on top row */
+.ux-agent-card-v2 .ux-agent-topline .ux-status-chip {
+  position: static !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+          backdrop-filter: none !important;
+  border: 0 !important;
+  padding: 0 !important;
+  font: 800 10px var(--font-mono) !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase;
+  min-height: 0 !important;
+}
+
+.ux-agent-card-v2 .ux-agent-topline .ux-status-chip::before {
+  display: none;
+}
+
+.ux-agent-card-v2 .ux-agent-topline .ux-status-chip[data-state="busy"] { color: var(--accent-gold) !important; }
+.ux-agent-card-v2 .ux-agent-topline .ux-status-chip[data-state="active"] { color: var(--accent-lime) !important; }
+.ux-agent-card-v2 .ux-agent-topline .ux-status-chip[data-state="muted"] { color: var(--ux-offline) !important; }
+
+/* Remove the rarity badge ::before (was for portrait card) */
+.ux-agent-card-v2::before { content: none !important; display: none !important; }
+.ux-agent-card-v2::after  { content: none !important; display: none !important; }
+
+/* Current task line — tool badge + detail */
+.ux-agent-task {
+  padding: 0 14px 12px !important;
+  font: 400 11px/1.4 var(--font-body) !important;
+  color: var(--text-body) !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Footer — Lv + element on horizontal row */
+.ux-agent-footer {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 8px 14px !important;
+  margin-top: 0 !important;
+  border-top: 1px solid var(--border) !important;
+  font: 700 11px var(--font-mono) !important;
+  letter-spacing: 0.06em;
+}
+
+.ux-mini-meta {
+  color: var(--text-muted) !important;
+  font: 700 11px var(--font-mono) !important;
+  letter-spacing: 0.06em;
+}
+
+.ux-agent-footer .ux-mini-meta:last-child {
+  color: var(--agent-color, var(--accent-cyan)) !important;
+}
+
+/* Scan line at bottom of busy cards */
+.ux-agent-card-v2[data-status="busy"]::after {
+  content: "" !important;
+  display: block !important;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  overflow: hidden;
+  z-index: 2;
+  background: linear-gradient(90deg, transparent, var(--accent-gold), transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: uxScanLine 2s linear infinite;
+}
+
+@keyframes uxScanLine {
+  from { background-position: -50% 0; }
+  to   { background-position: 150% 0; }
+}
+
+/* ==========================================================================
+   DS Tool Badges (Edit / Read / Bash / Write / Agent / Grep)
+   Source: dashboard.jsx — small mono uppercase tokens with tinted bg
+   ========================================================================== */
+
+.ux-tool-badge,
+.ux-event-tag[data-tool] {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--accent-cyan) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-cyan) 30%, transparent);
+  color: var(--accent-cyan);
+  font: 800 9px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ux-tool-badge[data-tool="Edit"],
+.ux-tool-badge[data-tool="Write"] {
+  background: color-mix(in srgb, var(--accent-violet) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent-violet) 30%, transparent);
+  color: var(--accent-violet);
+}
+
+.ux-tool-badge[data-tool="Bash"] {
+  background: color-mix(in srgb, var(--accent-gold) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent-gold) 30%, transparent);
+  color: var(--accent-gold);
+}
+
+.ux-tool-badge[data-tool="Agent"],
+.ux-tool-badge[data-tool="Task"] {
+  background: color-mix(in srgb, var(--accent-pink) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent-pink) 30%, transparent);
+  color: var(--accent-pink);
+}
+
+.ux-tool-badge[data-tool="Read"],
+.ux-tool-badge[data-tool="Grep"],
+.ux-tool-badge[data-tool="Glob"] {
+  background: color-mix(in srgb, var(--accent-lime) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent-lime) 30%, transparent);
+  color: var(--accent-lime);
+}
+
+/* ==========================================================================
+   DS Thinking Dots — 3-dot stagger animation for busy/working agents
+   Source: dashboard.jsx ag-thinking
+   ========================================================================== */
+
+.ux-thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.ux-thinking-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-gold);
+  animation: uxThink 1.2s ease-in-out infinite;
+}
+
+.ux-thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
+.ux-thinking-dots span:nth-child(3) { animation-delay: 0.30s; }
+
+@keyframes uxThink {
+  0%, 80%, 100% { opacity: 0.3; }
+  40%           { opacity: 1; }
+}
+
+/* ==========================================================================
+   DS Active Mission Panel — gold-bordered hero block at top of dashboard
+   Source: dashboard.jsx ActiveMission
+   ========================================================================== */
+
+.ux-active-mission {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  border: 2px solid var(--accent-gold);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.ux-active-mission::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-gold), transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: uxScanLine 2s linear infinite;
+}
+
+.ux-mission-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.ux-mission-orch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ux-mission-orch img {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  object-fit: cover;
+  object-position: center top;
+  border: 2px solid var(--accent-gold);
+}
+
+.ux-mission-title {
+  font: 800 14px var(--font-display);
+  color: var(--text-primary);
+}
+
+.ux-mission-sub {
+  font: 600 10px var(--font-mono);
+  color: var(--accent-gold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   DS Brand Persona Gallery (used on /agents page or roster gallery view)
+   Source: C-Office Design System/preview/brand-personas.html
+   ========================================================================== */
+
+.ux-persona-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.ux-persona-card {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition: transform 200ms cubic-bezier(.2, .8, .2, 1), border-color 200ms;
+}
+
+.ux-persona-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--persona-color, var(--accent-violet));
+}
+
+.ux-persona-art {
+  position: relative;
+  height: 180px;
+  overflow: hidden;
+  background: var(--persona-grad, linear-gradient(155deg, var(--bg-card), var(--bg-app)));
+}
+
+.ux-persona-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 10%;
+}
+
+.ux-persona-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 50%, var(--bg-panel));
+  pointer-events: none;
+}
+
+.ux-persona-element {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  z-index: 1;
+}
+
+.ux-persona-rarity {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font: 800 9px var(--font-mono);
+  letter-spacing: 0.1em;
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--persona-color, var(--accent-violet));
+  color: var(--persona-color, var(--accent-violet));
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  z-index: 1;
+}
+
+.ux-persona-info {
+  padding: 10px 12px 12px;
+  position: relative;
+}
+
+.ux-persona-name {
+  font: 800 16px var(--font-display);
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.ux-persona-role {
+  font: 600 10px var(--font-mono);
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.ux-persona-id {
+  font: 600 9px var(--font-mono);
+  color: var(--text-muted);
+  margin-top: 4px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   DS Button Variants (Launch / Inspect / Connect / Delete)
+   Source: comp-buttons.html
+   ========================================================================== */
+
+.ux-btn {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  font: 800 11px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 0;
+  transition: transform 150ms cubic-bezier(.2, .8, .2, 1),
+              box-shadow 200ms,
+              filter 150ms;
+}
+
+.ux-btn:hover { transform: translateY(-2px); }
+.ux-btn:active { transform: translateY(0) scale(0.97); transition: transform 80ms; }
+.ux-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.25) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: none;
+  pointer-events: none;
+}
+.ux-btn:hover::after { transform: translateX(120%); transition: transform 600ms ease; }
+
+.ux-btn-primary {
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+  color: #080a14;
+  box-shadow: 0 0 28px rgba(34, 211, 238, 0.22);
+}
+.ux-btn-primary:hover { box-shadow: 0 4px 32px rgba(34, 211, 238, 0.4), 0 0 60px rgba(157, 92, 255, 0.2); }
+
+.ux-btn-ghost {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: var(--text-body);
+}
+.ux-btn-ghost:hover { border-color: rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.08); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); }
+
+.ux-btn-gold {
+  background: linear-gradient(135deg, #ffd700, #e09f00);
+  color: #2a1800;
+}
+.ux-btn-gold:hover { box-shadow: 0 4px 32px rgba(255, 215, 0, 0.35); }
+
+.ux-btn-danger {
+  background: rgba(251, 113, 133, 0.12);
+  border: 1px solid rgba(251, 113, 133, 0.3);
+  color: var(--ux-danger);
+}
+.ux-btn-danger:hover { background: rgba(251, 113, 133, 0.2); border-color: rgba(251, 113, 133, 0.5); box-shadow: 0 4px 24px rgba(251, 113, 133, 0.2); }
+
+/* ==========================================================================
+   DS Sidebar Brand Mark — 2px cyan border framing the Orchestra portrait
+   Source: comp-nav.html
+   ========================================================================== */
+
+.brand-mark {
+  border: 2px solid var(--accent-cyan) !important;
+  background-size: 180% auto;
+  background-position: center 10%;
+}
+
+.brand-name {
+  letter-spacing: 0.08em;
+}
+
+/* Mobile — keep horizontal AgenticCard layout */
+@media (max-width: 760px) {
+  .ux-agent-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+}
+
+/* ==========================================================================
+   /agents page — flatten the workstation 3D card into brand-personas gallery
+   Source: C-Office Design System/preview/brand-personas.html
+   Hides decorative 3D layers, fills portrait, repositions HUD elements.
+   ========================================================================== */
+
+.agent-model-unit {
+  position: relative !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--bg-panel) !important;
+  padding: 0 !important;
+  cursor: pointer;
+  transition: transform 200ms cubic-bezier(.2, .8, .2, 1), border-color 200ms;
+}
+
+.agent-model-unit:hover {
+  transform: translateY(-4px);
+  border-color: var(--cat-color, var(--accent-violet)) !important;
+}
+
+.agent-model-unit.is-selected {
+  border-color: var(--cat-color, var(--accent-violet)) !important;
+  box-shadow: 0 0 0 1px var(--cat-color, var(--accent-violet)), var(--shadow-card);
+}
+
+/* Hide decorative 3D layers */
+.agent-workstation,
+.agent-back-screen,
+.agent-light-column,
+.agent-holo-ring,
+.agent-desk { display: none !important; }
+
+/* Stage container becomes a flat 180px portrait area */
+.agent-model-stage {
+  position: relative !important;
+  height: 180px !important;
+  overflow: hidden !important;
+  background: var(--agent-gradient, linear-gradient(155deg, var(--bg-card), var(--bg-app))) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.agent-model-portrait {
+  position: absolute !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.agent-model-portrait img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center 10% !important;
+}
+
+.agent-model-portrait > span {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font: 800 36px var(--font-display);
+  color: var(--text-primary);
+}
+
+/* Gradient fade at bottom */
+.agent-model-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 50%, var(--bg-panel)) !important;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* HUD overlays: status-pill = rarity slot top-right, .agent-rarity = element slot top-left */
+.agent-station-hud {
+  position: absolute !important;
+  inset: 8px 8px auto 8px !important;
+  z-index: 2;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  pointer-events: none;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  gap: 6px;
+}
+
+.agent-element {
+  font-size: 16px;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: var(--radius-sm);
+  padding: 4px 7px;
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  align-self: flex-start;
+}
+
+.agent-station-hud > .agent-status-pill,
+.agent-station-hud > .agent-rarity {
+  margin-left: auto;
+}
+
+.agent-station-hud > .agent-element + .agent-status-pill {
+  margin-left: auto;
+}
+
+.agent-status-pill {
+  background: rgba(0, 0, 0, 0.6) !important;
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  border: 1px solid color-mix(in srgb, var(--cat-color, var(--accent-cyan)) 40%, transparent) !important;
+  color: var(--cat-color, var(--accent-cyan)) !important;
+  font: 800 9px var(--font-mono) !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase;
+  padding: 3px 8px !important;
+  border-radius: var(--radius-sm) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.agent-status-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.agent-rarity {
+  background: rgba(0, 0, 0, 0.6) !important;
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  border: 1px solid color-mix(in srgb, var(--cat-color, var(--accent-cyan)) 40%, transparent) !important;
+  color: var(--cat-color, var(--accent-cyan)) !important;
+  font: 800 9px var(--font-mono) !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase;
+  padding: 3px 8px !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+/* Footer: name + role + thin meter row */
+.agent-unit-footer {
+  padding: 10px 12px 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  background: var(--bg-panel) !important;
+  border-top: 0 !important;
+  position: relative;
+  z-index: 1;
+}
+
+.agent-unit-footer > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-unit-footer strong {
+  font: 800 16px var(--font-display) !important;
+  color: var(--text-primary) !important;
+}
+
+.agent-unit-footer span {
+  font: 600 10px var(--font-mono) !important;
+  color: var(--text-secondary) !important;
+  letter-spacing: 0.04em;
+}
+
+.agent-meter-row {
+  display: flex !important;
+  gap: 4px !important;
+  height: 3px !important;
+  margin-top: 4px;
+}
+
+.agent-meter-row span {
+  height: 100% !important;
+  border-radius: 999px !important;
+  background: var(--cat-color, var(--accent-cyan)) !important;
+  opacity: 0.7;
+}
+
+/* Status colors via tone class on .agent-model-unit */
+.agent-model-unit.status-busy { border-color: var(--accent-gold) !important; }
+.agent-model-unit.status-busy .agent-status-pill,
+.agent-model-unit.status-busy .agent-rarity {
+  border-color: color-mix(in srgb, var(--accent-gold) 50%, transparent) !important;
+  color: var(--accent-gold) !important;
+}
+
+.agent-model-unit.status-active { border-color: var(--accent-lime) !important; }
+.agent-model-unit.status-active .agent-status-pill,
+.agent-model-unit.status-active .agent-rarity {
+  border-color: color-mix(in srgb, var(--accent-lime) 50%, transparent) !important;
+  color: var(--accent-lime) !important;
+}
+
+.agent-model-unit.status-offline { border-color: var(--ux-offline) !important; }
+.agent-model-unit.status-offline .agent-status-pill,
+.agent-model-unit.status-offline .agent-rarity {
+  color: var(--ux-offline) !important;
+}
+
+/* ==========================================================================
+   DS Page-Wide Component Overrides — enforces solid navy + 2px solid border
+   on every workspace surface. Source: C-Office Design System/preview/comp-*
+   ========================================================================== */
+
+/* ── Tasks page ─────────────────────────────────────────────────────── */
+.ux-tasks-toolbar {
+  background: var(--bg-card) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  padding: 12px !important;
+}
+
+.ux-task-search,
+.ux-task-select {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 8px 10px !important;
+  font: 500 13px var(--font-body) !important;
+}
+
+.ux-task-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+
+.ux-task-card-v2 {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 12px !important;
+  padding: 14px !important;
+  background: var(--bg-card) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  text-align: left !important;
+}
+
+.ux-task-card-v2:hover {
+  border-color: var(--accent-violet) !important;
+  background: var(--bg-card-2) !important;
+  box-shadow: var(--shadow-card), 0 0 24px color-mix(in srgb, var(--accent-violet) 18%, transparent) !important;
+}
+
+.ux-task-glyph {
+  width: 36px !important;
+  height: 36px !important;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm) !important;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--accent-cyan) !important;
+  font: 800 11px var(--font-mono) !important;
+  letter-spacing: 0.08em;
+}
+
+.ux-task-main { flex: 1; min-width: 0; }
+.ux-task-right { text-align: right; min-width: 90px; }
+
+.ux-step,
+.ux-step-card {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.ux-step-dot {
+  background: var(--accent-cyan) !important;
+  color: #080a14 !important;
+  font: 800 11px var(--font-mono);
+}
+
+/* ── Mission Control ─────────────────────────────────────────────────── */
+.ux-mission-toolbar {
+  background: var(--bg-card) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  padding: 12px !important;
+}
+
+.ux-filter-input,
+.ux-filter-select {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.ux-filter-pills { display: flex !important; flex-wrap: wrap !important; gap: 6px !important; }
+
+.ux-filter-pill {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-body) !important;
+  border-radius: var(--radius-pill) !important;
+  padding: 4px 12px !important;
+  font: 700 10px var(--font-mono) !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.ux-filter-pill:hover { border-color: var(--border-2) !important; color: var(--text-primary) !important; }
+
+.ux-filter-pill.is-active,
+.ux-filter-pill[data-active="true"],
+.ux-filter-pill[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent-violet) 16%, transparent) !important;
+  border-color: var(--accent-violet) !important;
+  color: var(--accent-violet) !important;
+}
+
+.ux-mission-feed,
+.ux-mission-summary {
+  background: var(--bg-card) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  padding: 14px !important;
+}
+
+.ux-event-card {
+  background: var(--bg-card-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 12px !important;
+  transition: all 140ms ease;
+  cursor: pointer;
+}
+
+.ux-event-card:hover {
+  border-color: var(--accent-cyan) !important;
+  background: var(--bg-elevated) !important;
+  transform: translateY(-1px);
+}
+
+.ux-event-glyph {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--accent-cyan) !important;
+  border-radius: var(--radius-sm) !important;
+  font: 800 10px var(--font-mono) !important;
+  letter-spacing: 0.08em;
+}
+
+.ux-event-title { color: var(--text-primary) !important; font: 700 13px var(--font-display) !important; }
+.ux-event-summary { color: var(--text-body) !important; font: 400 12px/1.5 var(--font-body) !important; }
+.ux-event-source { color: var(--text-muted) !important; font: 600 11px var(--font-mono) !important; letter-spacing: 0.06em; }
+.ux-event-time { color: var(--text-muted) !important; font: 600 10px var(--font-mono) !important; letter-spacing: 0.04em; }
+
+.ux-inspector,
+.ux-raw-box {
+  background: var(--bg-card) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+.ux-inspector-title { color: var(--text-primary) !important; font: 800 16px var(--font-display) !important; }
+.ux-inspector-sub { color: var(--text-muted) !important; }
+
+.ux-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ux-detail-cell {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 8px 10px !important;
+}
+
+.ux-detail-label {
+  color: var(--text-muted) !important;
+  font: 800 9px var(--font-mono) !important;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ux-detail-value { color: var(--text-primary) !important; font: 600 12px var(--font-body) !important; }
+
+/* ── Notes ───────────────────────────────────────────────────────────── */
+.ux-notes-list-panel,
+.ux-notes-center,
+.ux-notes-panel {
+  background: var(--bg-card) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+.ux-notes-head,
+.ux-notes-title-row {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.ux-notes-title { color: var(--text-primary) !important; font: 800 16px var(--font-display) !important; }
+.ux-notes-subtitle { color: var(--text-muted) !important; font: 500 12px var(--font-body) !important; }
+
+.ux-notes-search input,
+.ux-notes-search {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.ux-note-card {
+  background: var(--bg-card-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 12px !important;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ux-note-card:hover {
+  background: var(--bg-elevated) !important;
+  border-color: var(--accent-gold) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.ux-note-card.is-active {
+  background: var(--bg-elevated) !important;
+  border-color: var(--accent-gold) !important;
+  box-shadow: 0 0 0 1px var(--accent-gold), var(--shadow-card) !important;
+}
+
+.ux-note-card-title { color: var(--text-primary) !important; font: 700 13px var(--font-display) !important; }
+.ux-note-card-body { color: var(--text-body) !important; font: 400 12px/1.4 var(--font-body) !important; }
+
+.ux-note-tag {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-body) !important;
+  border-radius: var(--radius-xs) !important;
+  padding: 2px 7px !important;
+  font: 700 10px var(--font-mono) !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ux-context-card,
+.ux-agent-context {
+  background: var(--bg-card-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 12px !important;
+}
+
+.ux-note-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ux-note-stat {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 8px 10px !important;
+}
+
+.ux-note-stat b { color: var(--text-primary) !important; font: 800 14px var(--font-display) !important; display: block; }
+.ux-note-stat span { color: var(--text-muted) !important; font: 700 9px var(--font-mono) !important; letter-spacing: 0.1em; text-transform: uppercase; }
+
+.ux-provider-stack { display: flex; flex-direction: column; gap: 6px; }
+
+.ux-provider-mini {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 8px 10px !important;
+}
+
+.ux-provider-mini b { color: var(--text-primary) !important; font: 700 12px var(--font-body) !important; }
+.ux-provider-mini span { color: var(--text-muted) !important; font: 600 10px var(--font-mono) !important; letter-spacing: 0.06em; }
+
+.ux-compose-form,
+.ux-note-compose {
+  background: var(--bg-card-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 12px !important;
+}
+
+/* ── Settings ────────────────────────────────────────────────────────── */
+.ux-settings-hero {
+  background:
+    radial-gradient(420px 240px at 90% 0%, rgba(157, 92, 255, 0.18), transparent 70%),
+    var(--bg-card) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-xl) !important;
+  padding: 18px 22px !important;
+}
+
+.ux-settings-title { color: var(--text-primary) !important; font: 800 clamp(20px,2vw,28px) var(--font-display) !important; letter-spacing: -0.02em; }
+.ux-settings-subtitle { color: var(--text-body) !important; font: 500 13px/1.5 var(--font-body) !important; }
+
+.ux-settings-panel {
+  background: var(--bg-card) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  padding: 16px !important;
+}
+
+.ux-provider-grid-v2 {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.ux-provider-card-v2 {
+  background: var(--bg-card-2) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  transition: all 160ms ease;
+}
+
+.ux-provider-card-v2:hover {
+  border-color: var(--accent-violet) !important;
+  background: var(--bg-elevated) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+.ux-provider-card-name { color: var(--text-primary) !important; font: 800 14px var(--font-display) !important; }
+.ux-provider-card-desc { color: var(--text-muted) !important; font: 500 11px var(--font-body) !important; }
+
+.ux-hook-list,
+.ux-runtime-list,
+.ux-session-list,
+.ux-trust-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ux-hook-row,
+.ux-runtime-row,
+.ux-session-row,
+.ux-trust-row,
+.ux-token-row {
+  background: var(--bg-card-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 10px 12px !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.ux-hook-name,
+.ux-runtime-name,
+.ux-session-name { color: var(--text-primary) !important; font: 700 13px var(--font-body) !important; }
+
+.ux-hook-detail,
+.ux-runtime-detail,
+.ux-session-detail,
+.ux-trust-detail { color: var(--text-muted) !important; font: 500 11px var(--font-body) !important; }
+
+.ux-diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.ux-diagnostic-card {
+  background: var(--bg-card-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 12px !important;
+}
+
+.ux-profile-textarea {
+  background: var(--bg-app) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-body) !important;
+  font: 500 12px/1.5 var(--font-mono) !important;
+  padding: 12px !important;
+}
