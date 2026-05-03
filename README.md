@@ -141,8 +141,88 @@ ls "C-Office Design System/preview/"
 - **OAuth-first credential store** — เก็บใน `~/.c-office/credentials.json` แบบ encrypted local file
 - **Settings → Connections** — connect Anthropic, Google, Replicate, OpenAI
 - **No env-var sprawl** — ไม่จำเป็นต้องโยน token ลง shell ทุกครั้ง
-- **Provider setup guides:**
-  - [Codex CLI](docs/CODEX_SETUP.md) — ChatGPT login + token refresh + image gen
+
+#### Connect Codex CLI
+
+C-Office อ่าน OAuth credentials ของ Codex จากไฟล์ที่ Codex CLI สร้างไว้แล้ว
+ไม่มี flow OAuth ภายใน — เพียงต้อง login ผ่าน Codex CLI ก่อน แล้ว C-Office
+จะ auto-detect ทันที (ดูคู่มือเต็มที่ [docs/CODEX_SETUP.md](docs/CODEX_SETUP.md))
+
+**1) ติดตั้ง Codex CLI**
+
+```bash
+npm install -g @openai/codex
+# หรือ: brew install openai/tap/codex (macOS)
+codex --version
+```
+
+**2) Login**
+
+```bash
+codex login                            # OAuth via ChatGPT account
+codex login --api-key sk-proj-...      # หรือใช้ API key
+```
+
+หลัง login Codex CLI จะเขียนไฟล์ที่ `~/.codex/auth.json`:
+
+```json
+{
+  "tokens": {
+    "access_token": "<oauth-access-token>",
+    "account_id": "<account-uuid>",
+    "id_token": "<jwt>",
+    "refresh_token": "<refresh>"
+  },
+  "last_refresh": "2026-04-27T10:39:05.121Z",
+  "auth_mode": "chatgpt"
+}
+```
+
+> **Security:** ไฟล์นี้เก็บ access token แบบ plaintext (Codex CLI's own
+> design) — ตั้งสิทธิ์ `chmod 600 ~/.codex/auth.json` และอย่า commit เข้า
+> git default `~/.codex/` ไม่ได้อยู่ใน C-Office repo
+
+**3) ตรวจสถานะ**
+
+เปิด `http://127.0.0.1:7878/#/settings` → ดูการ์ด **Codex CLI** ถ้าเห็น
+`READY` คือเชื่อมสำเร็จ หรือ check ผ่าน API:
+
+```bash
+curl http://127.0.0.1:7878/api/auth/status | jq '.codex'
+# { "connected": true, "mode": "chatgpt", "lastRefresh": "..." }
+```
+
+**4) ใช้งาน**
+
+ที่ Topbar dashboard เลือก **Codex** จาก provider dropdown ก่อนกด **Launch**
+— C-Office จะส่ง POST `/api/task` ด้วย `{ goal, provider: "codex" }` →
+runner shell out ไปที่ `codex exec "<prompt>"`
+
+**5) Customize (optional)**
+
+```bash
+# Override command template
+export C_OFFICE_CODEX_CMD='codex exec --model gpt-5 --json ${PROMPT}'
+
+# Increase timeout (default 180s)
+export C_OFFICE_CODEX_TIMEOUT_MS=300000
+
+# Multi-account: point to a different auth file
+export CODEX_AUTH_FILE=/path/to/custom/auth.json
+
+# Use Codex for image generation (gpt-image-2)
+export IMAGE_PROVIDER=codex-cli
+```
+
+**6) Troubleshooting**
+
+| ปัญหา | วิธีแก้ |
+|---|---|
+| Settings โชว์ `setup` / `disconnected` | รัน `codex login` แล้ว refresh; ตรวจ `~/.codex/auth.json` มีอยู่ |
+| Token หมดอายุ | `codex login` ใหม่ — Codex CLI จัดการ refresh เอง |
+| Run timeout | เพิ่ม `C_OFFICE_CODEX_TIMEOUT_MS=300000`; ตรวจ `codex` อยู่ใน PATH |
+| Permission denied | `chmod 600 ~/.codex/auth.json` + ตรวจ user ที่รัน C-Office |
+| Topbar dropdown ไม่มี Codex | ตรวจ `auth.codex.connected = true` ใน `/api/auth/status` |
 
 ---
 
