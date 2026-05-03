@@ -67,7 +67,7 @@ const QuestCard = ({ note, onSortie, onPick, onAfterAction }) => {
   const status = questStatusOf(note);
   const statusLabel = QUEST_STATUS_LABEL_TH[status] || status;
   const agents = window.AGENTS || [];
-  const personaId = note.selectedAgent || note.persona || 'orchestra';
+  const personaId = note.selectedAgent || note.persona || 'atlas';
   const agent = agents.find((a) => a.id === personaId);
   const provider = note.provider || 'codex';
   const isRunning = status === 'running';

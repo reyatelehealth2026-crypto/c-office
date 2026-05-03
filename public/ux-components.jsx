@@ -6,7 +6,7 @@ const UX_PAGE_META = {
   dashboard: { title: 'Dashboard', kicker: 'Command Deck', hint: 'System overview and active agents' },
   agents: { title: 'Agents', kicker: 'Roster', hint: 'Persona team and status' },
   notes: { title: 'Notes', kicker: 'Work Inbox', hint: 'Agent chat and note threads' },
-  tasks: { title: 'Tasks', kicker: 'Orchestra Runs', hint: 'Workflow execution and traces' },
+  tasks: { title: 'Tasks', kicker: 'Atlas Runs', hint: 'Workflow execution and traces' },
   images: { title: 'Images', kicker: 'Studio', hint: 'Generation and asset library' },
   skills: { title: 'Playbooks', kicker: 'Skills', hint: 'Learned patterns and SOPs' },
   memory: { title: 'Archive', kicker: 'Memory', hint: 'Graph and system recall' },
@@ -98,9 +98,9 @@ const UXTopbar = ({ page, onSendGoal }) => {
           value={goal}
           onChange={e => setGoal(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-          placeholder="Send a mission to Orchestra..."
+          placeholder="Send a mission to Atlas..."
           disabled={busy}
-          aria-label="Send a mission to Orchestra"
+          aria-label="Send a mission to Atlas"
         />
         <select
           className="ux-provider-picker"
@@ -108,7 +108,7 @@ const UXTopbar = ({ page, onSendGoal }) => {
           onChange={e => updateProvider(e.target.value)}
           disabled={busy}
           aria-label="Model provider"
-          title="Pick the model provider used by Orchestra"
+          title="Pick the model provider used by Atlas"
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', font: '700 11px var(--font-mono)', letterSpacing: '0.06em', padding: '6px 8px', minWidth: 90 }}
         >
           {UX_PROVIDER_OPTIONS.map(p => {

@@ -74,23 +74,23 @@ Every session/subagent is mapped to one of 9 personas. **Persona `id` ≠ displa
 
 | id | name |
 |---|---|
-| `orchestra` | Orchestra |
-| `astra` | Aira |
-| `lumen` | Luna |
-| `vex` | Vivi |
-| `kai` | Kira |
-| `mira` | Miku |
-| `echo` | Emi |
-| `nyx` | Nana |
-| `orbit` | Ori |
+| `atlas` | Atlas |
+| `oracle` | Oracle |
+| `scribe` | Scribe |
+| `warden` | Warden |
+| `vector` | Vector |
+| `pulse` | Pulse |
+| `forge` | Forge |
+| `scout` | Scout |
+| `relay` | Relay |
 
-Routing rules in `PERSONA_RULES` are evaluated **in order, first match wins**. They are intentionally ordered most-specific-functional first (e.g. `paid-media-search-query-analyst` matches Nana's analytics rule before Miku's paid-media keyword rule). Adding a new rule near the top is usually correct; adding it at the bottom risks being shadowed.
+Routing rules in `PERSONA_RULES` are evaluated **in order, first match wins**. They are intentionally ordered most-specific-functional first (e.g. `paid-media-search-query-analyst` matches Scout's analytics rule before Pulse's paid-media keyword rule). Adding a new rule near the top is usually correct; adding it at the bottom risks being shadowed.
 
-`mapPersona()` normalizes input to lowercase-hyphen slug form, so each regex must match both display ("UI Designer") and slug ("ui-designer"). Look at the `echo` (Emi) rule for the established pattern.
+`mapPersona()` normalizes input to lowercase-hyphen slug form, so each regex must match both display ("UI Designer") and slug ("ui-designer"). Look at the `forge` (Forge) rule for the established pattern.
 
 Special cases handled inside `mapPersona`:
-- `sessionKind === 'interactive'` or no `subagent_type` → always `orchestra`.
-- Anything that falls through every rule → `kai` (default for unclassified engineering work).
+- `sessionKind === 'interactive'` or no `subagent_type` → always `atlas`.
+- Anything that falls through every rule → `vector` (default for unclassified engineering work).
 
 ### Server entry points (`server/index.js`)
 
@@ -120,16 +120,16 @@ If you add a new hook event to listen on, append it to the `EVENTS` array — un
 
 ## Agent execution layer
 
-`server/agents/` adds a **server-side agent execution surface** alongside the passive monitor. The dashboard's "Send to Orchestra" input + `POST /api/task { goal }` invokes `runOrchestrator()` in `server/agents/runner.js`, which:
+`server/agents/` adds a **server-side agent execution surface** alongside the passive monitor. The dashboard's "Send to Atlas" input + `POST /api/task { goal }` invokes `runOrchestrator()` in `server/agents/runner.js`, which:
 
-1. Calls Anthropic via `@anthropic-ai/claude-agent-sdk` with Orchestra's system prompt (`server/agents/personas.js`) and a single tool: `delegate(persona, instruction)`.
+1. Calls Anthropic via `@anthropic-ai/claude-agent-sdk` with Atlas's system prompt (`server/agents/personas.js`) and a single tool: `delegate(persona, instruction)`.
 2. Loops while `stop_reason === 'tool_use'`. For each delegation:
-   - `persona === 'echo'` → image adapter (`server/agents/image.js`, default Gemini Imagen, swap with `IMAGE_PROVIDER=replicate|openai`).
+   - `persona === 'forge'` → image adapter (`server/agents/image.js`, default Gemini Imagen, swap with `IMAGE_PROVIDER=replicate|openai`).
    - any other persona → child `messages.create` with that persona's system prompt + tool allowlist.
 3. Emits **synthetic events through the existing `pushEvent` / `startTask` / `finishTask` pipeline** so the gacha busy animation, persona-status broadcast, level-ups, and event feed light up unchanged. Each delegation gets a synthetic `tool_use_id` so the dedupe contract still holds.
 4. Persists run state in `state.runs` (Map by run_id). Snapshot exposes the last 50 runs; `'run'` is a new SSE event type for live updates.
 
-The CLI surface is independent: `.claude/agents/<persona>.md` files (orchestra, nana, luna, emi to start) make the same personas usable via the Task tool inside any Claude Code session — existing hook events already render them in the dashboard with no extra wiring. **Slug ↔ persona id ↔ display name** are three different things; `mapPersona()` reconciles them, but when authoring system prompts and `delegate` enums use **persona ids** (`nyx`, `lumen`, `echo`, …).
+The CLI surface is independent: `.claude/agents/<persona>.md` files (atlas, scout, scribe, forge to start) make the same personas usable via the Task tool inside any Claude Code session — existing hook events already render them in the dashboard with no extra wiring. **Slug ↔ persona id ↔ display name** are three different things; `mapPersona()` reconciles them, but when authoring system prompts and `delegate` enums use **persona ids** (`scout`, `scribe`, `forge`, …).
 
 ### Pipeline phases & timeouts (`server/agents/runner.js`)
 
@@ -138,7 +138,7 @@ Each run flows through `analyze → plan → plan-critique → execute → criti
 - **Phase 0 (analyze)** is skipped when `runOrchestrator` is invoked with `existingRunId` — that means the user already supplied follow-up feedback, and re-asking the clarification question would just loop. The `ANALYZE_SYSTEM` prompt is biased hard toward `CLEAR`; only genuinely missing concrete facts (no subject, no destination, no language) trigger a clarifying question. Style/tone/length ambiguity is *not* a reason to ask.
 - **Per-phase wall-clock timeouts** live in `PHASE_TIMEOUTS_MS` (`plan: 60s, execute: 600s, critique: 90s, verify: 60s`). The claude path is wrapped with `withPhaseTimeout()`; non-claude providers (`codex`, `gemini`) are wrapped with the equivalent `Promise.race` — *both* must time out, otherwise an unresponsive provider hangs the run forever.
 - **Tool-using personas** get `maxTurns = 30` and the prompt includes an explicit "TOOL BUDGET: at most 6 tool calls, then STOP and write final" instruction. On `error_max_turns` we keep any accumulated assistant text; if there's still nothing, we fire one **synthesis turn** (no tools, `maxTurns=1`) to force a final answer instead of failing the step.
-- **Echo (image) step** distills `prior` (research/writing outputs) + `step.instruction` into a focused image prompt via a Haiku 4.5 composer call before invoking `generateImage()`. The composed prompt is logged to scratchpad as `[image-prompt]` so it shows up in the run trace. Falls back to direct concat if the composer fails.
+- **Forge (image) step** distills `prior` (research/writing outputs) + `step.instruction` into a focused image prompt via a Haiku 4.5 composer call before invoking `generateImage()`. The composed prompt is logged to scratchpad as `[image-prompt]` so it shows up in the run trace. Falls back to direct concat if the composer fails.
 
 ### Image Studio Look Lock (`public/page-images.jsx`)
 
@@ -156,7 +156,7 @@ Auth surface (`server/auth/`, `server/api/auth.js`):
 | Google (Gemini Imagen) | Full PKCE OAuth, loopback redirect to `/auth/google/callback` | First requires a `client_id` from Google Cloud Console — pasted in Settings (Desktop or Web client; PKCE means no secret needed). |
 | Replicate, OpenAI | Settings paste-token only | No public third-party OAuth. |
 
-The Settings → Connections panel shows live status per provider via the `'auth.status'` SSE event. **On SSE connect** `server/api/stream.js` immediately pushes the current `statusSnapshot()` so newly-loaded clients reflect real state instead of "disconnected"; on bootstrap `public/data.js` also fetches `/api/auth/status` once for first-paint correctness. The dashboard's "Send to Orchestra" button is gated on Anthropic being connected.
+The Settings → Connections panel shows live status per provider via the `'auth.status'` SSE event. **On SSE connect** `server/api/stream.js` immediately pushes the current `statusSnapshot()` so newly-loaded clients reflect real state instead of "disconnected"; on bootstrap `public/data.js` also fetches `/api/auth/status` once for first-paint correctness. The dashboard's "Send to Atlas" button is gated on Anthropic being connected.
 
 When adding a new provider:
 1. Drop a module in `server/auth/<provider>.js` exposing `getXAuth()`, `statusOf()`, optionally `startAuth/handleCallback` for OAuth.
@@ -167,7 +167,7 @@ When adding a new provider:
 
 - **ESM only** — `package.json` has `"type": "module"`. Use `import`, no CommonJS.
 - **No new runtime deps casually**. Two prod deps total. The lack of a build step is a feature; keep it.
-- **Persona display names live in `personas.js`**; do not hard-code "Aira" / "Vivi" / etc. elsewhere — read them from the persona object so future renames stay localized.
+- **Persona display names live in `personas.js`**; do not hard-code "Oracle" / "Warden" / etc. elsewhere — read them from the persona object so future renames stay localized.
 - **New events need a `dedupeKey`.** See "Two ingestion paths" above.
 - **Hook script must stay non-blocking.** `hooks/post-event.sh` runs inside the user's Claude Code process — anything that can't finish in 400 ms must be backgrounded with `&` + `disown` and exit 0.
 - **In-memory only.** Don't add a database without an explicit ask; clients tolerate restart-loss because JSONL replay (with `C_OFFICE_REPLAY=1`) covers the historical case.

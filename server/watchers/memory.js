@@ -62,7 +62,7 @@ export async function scanMemory() {
         x: Math.random()*80 + 10,
         y: Math.random()*70 + 15,
         size: 10,
-        agent: 'orchestra',
+        agent: 'atlas',
       });
       edges.push([projectId, id]);
     }

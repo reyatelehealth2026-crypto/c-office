@@ -1,5 +1,5 @@
 /* Tasks / Runs V2 — workflow timeline override.
-   Combines Orchestra RUNS and Task tool TASKS into one operational surface. */
+   Combines Atlas RUNS and Task tool TASKS into one operational surface. */
 
 const taskTime = (input) => {
   if (!input) return 'unknown';
@@ -39,10 +39,10 @@ const normalizeRunItem = (item, type) => {
       type,
       id: item.id || item.run_id,
       title: item.goal || item.title || `Run ${String(item.id || '').slice(-6)}`,
-      description: item.final || item.error || item.phase || 'Orchestra workflow run',
+      description: item.final || item.error || item.phase || 'Atlas workflow run',
       status: item.status || 'running',
-      owner: item.personaId || item.agentId || 'orchestra',
-      subagent: 'orchestra',
+      owner: item.personaId || item.agentId || 'atlas',
+      subagent: 'atlas',
       startedAt,
       endedAt,
       updatedAt: item.updatedAt || endedAt || startedAt,
@@ -242,7 +242,7 @@ const TasksPageV2 = ({ onOpenAgent }) => {
         <div className="ux-section-head">
           <div>
             <h3 className="ux-section-title">Workflow queue</h3>
-            <div className="ux-section-subtitle">Orchestra runs and Task tool records in one operational list.</div>
+            <div className="ux-section-subtitle">Atlas runs and Task tool records in one operational list.</div>
           </div>
           <UXStatusChip label={`${filtered.length} shown`} state={filtered.length ? 'active' : 'muted'} />
         </div>
@@ -253,7 +253,7 @@ const TasksPageV2 = ({ onOpenAgent }) => {
             ))}
           </div>
         ) : (
-          <UXEmptyState title="No matching workflows" body="Start an Orchestra mission or clear filters to see task records." />
+          <UXEmptyState title="No matching workflows" body="Start an Atlas mission or clear filters to see task records." />
         )}
       </section>
 

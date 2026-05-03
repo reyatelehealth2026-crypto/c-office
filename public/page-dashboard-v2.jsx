@@ -109,7 +109,7 @@ const UXAgentCardV2 = ({ agent, onOpenAgent }) => {
 const UXProviderReadiness = () => {
   const auth = window.AUTH_STATUS || {};
   const providers = [
-    { id: 'anthropic', label: 'Anthropic', hint: 'Orchestra / Claude SDK' },
+    { id: 'anthropic', label: 'Anthropic', hint: 'Atlas / Claude SDK' },
     { id: 'google', label: 'Google', hint: 'Gemini / Imagen' },
     { id: 'openai', label: 'OpenAI', hint: 'GPT compatible' },
     { id: 'replicate', label: 'Replicate', hint: 'Image fallback' },
@@ -135,7 +135,7 @@ const UXProviderReadiness = () => {
 const UXRunList = () => {
   const runs = (window.RUNS || []).slice(0, 4);
   if (!runs.length) {
-    return <UXEmptyState title="No active runs" body="Launch a mission and Orchestra will appear here." />;
+    return <UXEmptyState title="No active runs" body="Launch a mission and Atlas will appear here." />;
   }
   return (
     <div className="ux-run-list">
@@ -199,7 +199,7 @@ const UXActiveMission = () => {
     || runs[0];
   const [busy, setBusy] = React.useState(false);
   if (!running) return null;
-  const orch = (window.AGENTS || []).find(a => a.id === 'orchestra');
+  const orch = (window.AGENTS || []).find(a => a.id === 'atlas');
   const allSteps = Array.isArray(running.steps) ? running.steps : [];
   const steps = allSteps.slice(-5);
   const isPaused = running.cancelReason === 'paused' || running.status === 'paused';
@@ -233,10 +233,10 @@ const UXActiveMission = () => {
     <section className="ux-active-mission" data-status={running.status}>
       <div className="ux-mission-head">
         <div className="ux-mission-orch">
-          {orch?.image && <img src={orch.image} alt="Orchestra"/>}
+          {orch?.image && <img src={orch.image} alt="Atlas"/>}
           <div>
             <div className="ux-mission-title">{running.goal || running.title || 'Active Mission'}</div>
-            <div className="ux-mission-sub">Orchestra · {isPaused ? 'paused' : (running.status || 'running')} · {allSteps.length} step{allSteps.length === 1 ? '' : 's'} done</div>
+            <div className="ux-mission-sub">Atlas · {isPaused ? 'paused' : (running.status || 'running')} · {allSteps.length} step{allSteps.length === 1 ? '' : 's'} done</div>
           </div>
         </div>
         <div className="ux-mission-controls" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -260,7 +260,7 @@ const UXActiveMission = () => {
                 </div>
                 <div style={{ flex: 1, paddingBottom: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
-                    <span style={{ font: '700 12px var(--font-body)', color: 'var(--text-primary)' }}>{s.personaName || s.persona || s.agent || 'Orchestra'}</span>
+                    <span style={{ font: '700 12px var(--font-body)', color: 'var(--text-primary)' }}>{s.personaName || s.persona || s.agent || 'Atlas'}</span>
                     <span className="ux-tool-badge" data-tool={s.tool || s.action || s.phase || 'Step'}>{s.tool || s.action || s.phase || 'Step'}</span>
                     <span style={{ font: '500 9px var(--font-mono)', color: 'var(--text-faint)', marginLeft: 'auto' }}>{uxRelTime(s.ts || s.startedAt || s.time)}</span>
                     <button type="button" className="ux-soft-button" disabled={busy} style={{ padding: '2px 6px', minHeight: 20, fontSize: 10 }} onClick={() => copyStep(s)} title="Copy step output">Copy</button>
@@ -370,7 +370,7 @@ const DashboardV2 = ({ onOpenAgent, setLayout }) => {
             <div className="ux-section-head">
               <div>
                 <h3 className="ux-section-title">Current runs</h3>
-                <div className="ux-section-subtitle">Recent Orchestra missions and step progress.</div>
+                <div className="ux-section-subtitle">Recent Atlas missions and step progress.</div>
               </div>
             </div>
             <UXRunList/>

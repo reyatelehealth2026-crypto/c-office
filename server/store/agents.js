@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { PERSONAS } from '../mapping/personas.js';
+import { PERSONAS, LEGACY_ID_ALIASES } from '../mapping/personas.js';
 
 const DEFAULT_DATA_DIR = path.join(os.homedir(), '.c-office');
 
@@ -127,7 +127,9 @@ export function listAgentsSync({ includeDisabled = true } = {}) {
 
 export function getAgentSync(id) {
   const key = slug(id || '');
-  return listAgentsSync().find((agent) => agent.id === key) || null;
+  const aliased = LEGACY_ID_ALIASES[key] || key;
+  const agents = listAgentsSync();
+  return agents.find((agent) => agent.id === aliased) || agents.find((agent) => agent.id === key) || null;
 }
 
 export function createAgent(input = {}) {
@@ -155,18 +157,28 @@ export function updateAgent(id, patch = {}) {
 
 export function deleteAgent(id) {
   const key = slug(id || '');
+  const aliased = LEGACY_ID_ALIASES[key] || key;
   const current = listAgentsSync();
-  const next = current.filter((agent) => agent.id !== key);
-  if (next.length === current.length) return false;
+  const target = current.find((agent) => agent.id === aliased) || current.find((agent) => agent.id === key);
+  if (!target) return false;
+  if (target.deletable === false) {
+    const err = new Error(`agent ${target.id} is locked and cannot be deleted`);
+    err.statusCode = 403;
+    throw err;
+  }
+  const next = current.filter((agent) => agent.id !== target.id);
   writeRaw(next);
   return true;
 }
 
-export function resolveAgentIdSync(value, fallback = 'orchestra') {
+export function resolveAgentIdSync(value, fallback = 'atlas') {
   const raw = String(value || '').trim();
   const norm = slug(raw);
+  const aliased = LEGACY_ID_ALIASES[norm] || norm;
+  const aliasedFallback = LEGACY_ID_ALIASES[fallback] || fallback;
   const agents = listAgentsSync();
   const direct = agents.find((agent) =>
+    agent.id === aliased ||
     agent.id === norm ||
     agent.name.toLowerCase() === raw.toLowerCase() ||
     slug(agent.name) === norm ||
@@ -174,15 +186,19 @@ export function resolveAgentIdSync(value, fallback = 'orchestra') {
   );
   if (direct) return direct.id;
   const enabled = agents.filter((agent) => agent.enabled !== false);
-  return agents.some((agent) => agent.id === fallback) ? fallback : enabled[0]?.id || agents[0]?.id || fallback;
+  if (agents.some((agent) => agent.id === aliasedFallback)) return aliasedFallback;
+  if (agents.some((agent) => agent.id === fallback)) return fallback;
+  return enabled[0]?.id || agents[0]?.id || aliasedFallback;
 }
 
 export function mapAgentSync(subagentType, sessionKind) {
-  if (sessionKind === 'interactive' || !subagentType) return resolveAgentIdSync('orchestra');
+  if (sessionKind === 'interactive' || !subagentType) return resolveAgentIdSync('atlas');
   const raw = String(subagentType || '').trim();
   const norm = slug(raw);
+  const aliased = LEGACY_ID_ALIASES[norm] || norm;
   const agents = listAgentsSync({ includeDisabled: false });
   const direct = agents.find((agent) =>
+    agent.id === aliased ||
     agent.id === norm ||
     slug(agent.name) === norm ||
     slug(agent.role).includes(norm) ||
@@ -194,7 +210,7 @@ export function mapAgentSync(subagentType, sessionKind) {
     const haystack = `${agent.name} ${agent.role} ${agent.category} ${agent.tagline || ''}`.toLowerCase();
     return norm.split('-').filter((part) => part.length > 2).some((part) => haystack.includes(part));
   });
-  return roleMatch?.id || resolveAgentIdSync('orchestra');
+  return roleMatch?.id || resolveAgentIdSync('atlas');
 }
 
 export function getAgentPromptSync(id) {

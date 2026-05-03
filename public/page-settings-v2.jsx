@@ -1,7 +1,7 @@
 /* Settings / Connections V2 — trust-focused control room override. */
 
 const SX_PROVIDERS = [
-  { id: 'anthropic', name: 'Anthropic', desc: 'Claude / Orchestra SDK connection', color: 'var(--ux-accent-gold)', tokenHint: 'sk-ant-…' },
+  { id: 'anthropic', name: 'Anthropic', desc: 'Claude / Atlas SDK connection', color: 'var(--ux-accent-gold)', tokenHint: 'sk-ant-…' },
   { id: 'google', name: 'Google Gemini', desc: 'Gemini / image generation / OAuth or API key', color: 'var(--ux-success)', tokenHint: 'Gemini API key' },
   { id: 'openai', name: 'OpenAI', desc: 'GPT-compatible provider runtime', color: 'var(--ux-accent-secondary)', tokenHint: 'sk-…' },
   { id: 'replicate', name: 'Replicate', desc: 'Image/model fallback provider', color: 'var(--ux-accent-pink)', tokenHint: 'r8_…' },

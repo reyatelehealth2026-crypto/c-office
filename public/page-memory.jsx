@@ -255,7 +255,7 @@ const SkillsPage = ({ onOpenAgent }) => {
         )}
         {!loadErr && !loading && learned.length === 0 && (
           <div className="muted" style={{ padding: '24px 16px', fontSize: 13, lineHeight: 1.5 }}>
-            No learned skills yet. They appear after multi-step Orchestra runs finish successfully (saved automatically).
+            No learned skills yet. They appear after multi-step Atlas runs finish successfully (saved automatically).
           </div>
         )}
         <div className="stack" style={{ gap: 12, padding: '0 16px 16px' }}>
@@ -291,7 +291,7 @@ const SkillsPage = ({ onOpenAgent }) => {
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <button type="button" className="btn gold" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => sendToOrchestra(s)}>
-                      Send to Orchestra
+                      Send to Atlas
                     </button>
                     <button type="button" className="btn" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => copyText(String(s.goal || '').trim(), null)}>
                       Copy goal

@@ -49,7 +49,7 @@
       }
     }
 
-    const personaId = agentId || (inlineNote?.agentId) || 'orchestra';
+    const personaId = agentId || (inlineNote?.agentId) || 'atlas';
     const persona   = (window.AGENTS || []).find(a => a.id === personaId);
     const def       = window.PROVIDERS?.default || 'claude';
     const prov      = provider || def;
@@ -144,7 +144,7 @@ const SceneOverlay = () => {
 };
 
 const SceneStage = ({ scene, phase, onClose }) => {
-  const persona  = scene.persona  || (window.AGENTS || []).find(a => a.id === 'orchestra');
+  const persona  = scene.persona  || (window.AGENTS || []).find(a => a.id === 'atlas');
   const note     = scene.script?.note || { title: scene.message || 'Mission' };
   const agentName = persona?.name || 'Agent';
 
@@ -394,14 +394,14 @@ const SceneStage = ({ scene, phase, onClose }) => {
 const SceneLaunchPage = ({ onOpenAgent }) => {
   window.useCOfficeRefresh?.();
   const [message, setMessage] = React.useState('');
-  const [agentId, setAgentId] = React.useState('orchestra');
+  const [agentId, setAgentId] = React.useState('atlas');
   const agent = (window.AGENTS || []).find(a => a.id === agentId) || (window.AGENTS || [])[0];
   const recentNotes = (window.NOTES || []).slice(0, 4);
 
   const launch = (payload = {}) => {
     const text = (payload.message || message || 'Open a workroom review for the current task.').trim();
     window.openScene?.({
-      agentId: payload.agentId || agent?.id || 'orchestra',
+      agentId: payload.agentId || agent?.id || 'atlas',
       message: text,
       title: text.slice(0, 80),
       tag: 'scene',
@@ -460,7 +460,7 @@ const SceneLaunchPage = ({ onOpenAgent }) => {
                 className="scene-note-card"
                 onClick={() => window.openScene?.({
                   noteId: n.id,
-                  agentId: n.agentId || agent?.id || 'orchestra',
+                  agentId: n.agentId || agent?.id || 'atlas',
                   message: n.body || n.title,
                   title: n.title,
                 })}

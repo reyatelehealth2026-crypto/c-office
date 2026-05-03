@@ -42,6 +42,31 @@ curl -X POST http://127.0.0.1:7878/hooks/event \
 
 ---
 
+## ติดตั้งบน Windows ด้วยคำสั่งเดียว
+
+สำหรับผู้ใช้ Windows ที่ยังไม่มี Node.js หรือ Git ติดตั้งอยู่ — เปิด **PowerShell** แล้ว
+paste คำสั่งบรรทัดเดียวด้านล่าง รอประมาณ 3–5 นาที จะได้ c-office พร้อม
+Claude CLI ที่ login เรียบร้อย:
+
+```powershell
+irm https://raw.githubusercontent.com/reyatelehealth2026-crypto/c-office/main/scripts/install.ps1 | iex
+```
+
+สคริปต์จะทำให้อัตโนมัติ:
+
+- ติดตั้ง **Node.js LTS** และ **Git** ผ่าน `winget` (ข้ามถ้ามีอยู่แล้ว)
+- ติดตั้ง **Claude Code CLI** (`@anthropic-ai/claude-code`) แบบ global
+- Clone repo ไปที่ `%USERPROFILE%\c-office` แล้วรัน `npm install`
+- เปิดเบราว์เซอร์ให้ `claude login` (ผู้ใช้ยืนยันด้วยตนเอง)
+- ติดตั้ง Claude Code hooks ผ่าน `npm run install-hooks`
+
+ขั้นตอนหลังติดตั้งเสร็จ: เปิด terminal ใหม่ → `cd c-office` → `npm run dev` →
+เปิด `http://127.0.0.1:7878`
+
+> macOS / Linux ใช้วิธี clone + `npm install` ตามด้านบนได้เลย — ยังไม่มีสคริปต์ติดตั้งสำเร็จรูป
+
+---
+
 ## 1. What This Is
 
 C-Office คือ command deck สำหรับคนที่ใช้หลายเอเจนต์ทำงานจริง ไม่ใช่แค่หน้า dashboard สวย ๆ
@@ -50,7 +75,7 @@ C-Office คือ command deck สำหรับคนที่ใช้หล
 
 1. **Observe** — อ่าน Claude Code session, transcript, hook payload, tool call และ status แบบ realtime
 2. **Route** — map subagent จำนวนมากให้กลายเป็น 9 persona ที่อ่านง่ายใน dashboard
-3. **Command** — สั่งงานผ่าน Notes, provider CLI, หรือ Send to Orchestra
+3. **Command** — สั่งงานผ่าน Notes, provider CLI, หรือ Send to Atlas
 4. **Remember** — เก็บ notes, skill summaries, credentials และ runtime state แบบ local-first
 
 อารมณ์ของระบบคือ **AI ops room + gacha RPG overlay + local command console**: เห็นภาพ, สั่งได้, debug ได้, และไม่ต้องตั้ง infrastructure ใหญ่โต.
@@ -73,7 +98,7 @@ C-Office คือ command deck สำหรับคนที่ใช้หล
 - **Inline chat indicators** — เห็นสถานะคิด / พิมพ์ / ใช้เครื่องมือ
 - **Provider picker** — เลือก Claude / Codex / Gemini ก่อนยิงงาน (persist ใน localStorage)
 - **CLI provider abstraction** — รองรับ `echo`, `claude`, `codex`, `gpt`
-- **Send to Orchestra** — ยิง goal ให้ Orchestra delegate ต่อให้เอเจนต์อื่น
+- **Send to Atlas** — ยิง goal ให้ Atlas delegate ต่อให้เอเจนต์อื่น
 - **Claude subagent files** — ใช้ `.claude/agents/*.md` ผ่าน Claude Code Task tool ได้
 
 ### Real-AI Skill Catalog
@@ -94,7 +119,7 @@ delegate time, so the agent actually behaves differently.
 
 ### Granular Run Control
 
-Stop and resume an Orchestra run without losing the work that's already done.
+Stop and resume an Atlas run without losing the work that's already done.
 All step results are persisted under `~/.c-office/runs/<run_id>.json` and
 survive server restarts.
 
@@ -112,7 +137,7 @@ survive server restarts.
 ### RPG Progression
 
 - **Levels** — เอเจนต์ level up เมื่อ task สำเร็จ
-- **Learned skills** — auto-persist past Orchestra runs as Hermes-style
+- **Learned skills** — auto-persist past Atlas runs as Hermes-style
   playbooks under `~/.c-office/skills/` (separate from the curated catalog
   above)
 - **Playbooks** — matrix skill mastery ของแต่ละ persona
@@ -348,7 +373,7 @@ Expected response:
 
 ---
 
-## 7. Use Send to Orchestra
+## 7. Use Send to Atlas
 
 1. Run the server:
 
@@ -366,10 +391,10 @@ http://127.0.0.1:7878
 4. Click **Connect Anthropic**
 5. Make sure `claude login` has already been completed on the machine
 6. Return to dashboard
-7. Type a goal into **Send to Orchestra**
-8. Watch Orchestra delegate the mission
+7. Type a goal into **Send to Atlas**
+8. Watch Atlas delegate the mission
 
-Orchestra can route work through persona logic and report progress into the feed.
+Atlas can route work through persona logic and report progress into the feed.
 
 ---
 
@@ -399,15 +424,15 @@ Notes are stored locally at:
 
 | # | Persona | id | Role | Best at |
 |---|---|---:|---|---|
-| 1 | Orchestra | `orchestra` | Maestro · Lead Conductor | planning, routing, delegation |
-| 2 | Aira | `astra` | Mentor · Knowledge Architect | learning, docs structure, curriculum |
-| 3 | Luna | `lumen` | Scribe · Content Lead | copy, docs, narrative, proposals |
-| 4 | Vivi | `vex` | Sentinel · Audit & Security | security, compliance, review, QA |
-| 5 | Kira | `kai` | Builder · Code Forge | full-stack code, backend, data, AI engineering |
-| 6 | Miku | `mira` | Growth · Multi-platform Strategist | marketing, sales, paid media, commerce |
-| 7 | Emi | `echo` | Studio · Visual Craft | UI, image prompts, design, video, 3D, games |
-| 8 | Nana | `nyx` | Intel · Insights Analyst | research, analytics, trends, benchmarks |
-| 9 | Ori | `orbit` | Operations · DevOps Lead | DevOps, SRE, PM, workflows, support |
+| 1 | Atlas | `atlas` | Conductor · Lead Orchestrator | planning, routing, delegation |
+| 2 | Oracle | `oracle` | Seer · Mentor & Knowledge | learning, docs structure, curriculum |
+| 3 | Scribe | `scribe` | Quill · Content & Copy | copy, docs, narrative, proposals |
+| 4 | Warden | `warden` | Guardian · Audit & Security | security, compliance, review, QA |
+| 5 | Vector | `vector` | Engineer · Code Forge | full-stack code, backend, data, AI engineering |
+| 6 | Pulse | `pulse` | Signal · Growth Strategist | marketing, sales, paid media, commerce |
+| 7 | Forge | `forge` | Smith · Visual Synthesis | UI, image prompts, design, video, 3D, games |
+| 8 | Scout | `scout` | Recon · Intel & Trends | research, analytics, trends, benchmarks |
+| 9 | Relay | `relay` | Operator · Ops & Workflow | DevOps, SRE, PM, workflows, support |
 
 Important:
 
@@ -417,9 +442,9 @@ persona id ≠ display name
 
 Examples:
 
-- Nana is `nyx`
-- Luna is `lumen`
-- Kira is `kai`
+- Scout is `scout`
+- Scribe is `scribe`
+- Vector is `vector`
 
 Routing rules live in:
 
@@ -432,6 +457,16 @@ Test routing:
 ```bash
 node -e "import('./server/mapping/personas.js').then(m => console.log(m.mapPersona('security-auditor', 'agent')))"
 ```
+
+### สร้าง Portrait ทั้งวง / Generate the roster portraits
+
+1. ติดตั้ง + รันเซิร์ฟเวอร์: `npm install && npm run dev`
+2. ตั้งค่า image provider ใน Settings → Connections (Gemini / Replicate / OpenAI)
+3. รันสคริปต์ในอีกเทอร์มินอล: `npm run generate-portraits`
+   - เพิ่ม `-- --workers-only` เพื่อข้าม Atlas และสร้างเฉพาะ 8 ตัวที่เหลือ
+   - ตั้ง `COFFICE_BASE_URL=...` หรือ `C_OFFICE_ACCESS_TOKEN=...` ถ้า server รันบนพอร์ตอื่นหรือเปิด access gate
+4. ภาพ 9 รูปจะถูกบันทึกที่ `public/portraits/<id>.png`
+5. รีเฟรชหน้า dashboard — Atlas และทีมจะแสดงรูปใหม่
 
 ---
 
@@ -448,7 +483,7 @@ A persona becomes `busy` when:
 
 1. Task/Agent tool spawns a subagent
 2. A recent tool use belongs to that persona
-3. Orchestra delegates a running task to that persona
+3. Atlas delegates a running task to that persona
 4. Stop hook has not cleared activity yet
 
 Busy decay is handled by a background tick.
@@ -496,12 +531,12 @@ Busy decay is handled by a background tick.
 | `server/api/hooks.js` | `POST /hooks/event` receiver |
 | `server/api/stream.js` | SSE endpoint |
 | `server/api/notes.js` | Notes inbox CRUD + dispatch endpoint |
-| `server/api/task.js` | Send to Orchestra API |
+| `server/api/task.js` | Send to Atlas API |
 | `server/api/auth.js` | Auth, token, OAuth endpoints |
 | `server/api/images.js` | Image generation/upload/library endpoints |
 | `server/api/projects.js` | Project management endpoints |
 | `server/api/task-board.js` | Task board endpoints |
-| `server/agents/runner.js` | Orchestra multi-agent loop |
+| `server/agents/runner.js` | Atlas multi-agent loop |
 | `server/agents/personas.js` | Agent SDK system prompts and tool allowlists |
 | `server/agents/image.js` | Image provider adapter |
 | `server/auth/credentials.js` | AES-256-GCM local credential store |
@@ -538,7 +573,7 @@ Busy decay is handled by a background tick.
 | `/api/skills` | GET | Learned skill summaries (auto-persisted from past runs) |
 | `/api/agent-skills` | GET | Catalog of installable AI capabilities |
 | `/api/agent-skills/:id` | GET | Single skill record |
-| `/api/tasks` | GET | Recent Orchestra runs |
+| `/api/tasks` | GET | Recent Atlas runs |
 | `/api/task/:run_id` | GET | Run detail |
 | `/api/task/:run_id/trace` | GET | Run trace as markdown |
 | `/api/images/status` | GET | Image provider status |
@@ -671,7 +706,7 @@ Add specific rules above broad rules:
 
 ```js
 const PERSONA_RULES = [
-  { match: /(my-special-agent)/i, persona: 'kai' },
+  { match: /(my-special-agent)/i, persona: 'vector' },
   // existing rules...
 ];
 ```
@@ -767,7 +802,7 @@ Or provider-specific:
 C_OFFICE_CLAUDE_TIMEOUT_MS=120000 npm run dev
 ```
 
-### Send to Orchestra does not work
+### Send to Atlas does not work
 
 Check:
 

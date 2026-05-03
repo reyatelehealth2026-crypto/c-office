@@ -21,7 +21,7 @@ const KitTopbar = ({ page }) => {
     'mission-control':{ title:'Mission Control', kicker:'Event Stream' },
     agents:{ title:'Agents', kicker:'Roster' },
     notes:{ title:'Notes', kicker:'Work Inbox' },
-    tasks:{ title:'Tasks', kicker:'Orchestra Runs' },
+    tasks:{ title:'Tasks', kicker:'Atlas Runs' },
     images:{ title:'Images', kicker:'Studio' },
     skills:{ title:'Playbooks', kicker:'Skills' },
     memory:{ title:'Archive', kicker:'Memory' },
@@ -45,7 +45,7 @@ const KitTopbar = ({ page }) => {
       React.createElement('div', { style:{ font:'750 clamp(18px,2vw,24px) var(--font-display)', letterSpacing:'-0.02em', color:'#fff' } }, meta.title),
     ),
     React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr auto', gap:8, padding:6, border:'2px solid #2a2d5a', borderRadius:14, background:'#1a1d42' } },
-      React.createElement('input', { placeholder:'Send a mission to Orchestra...', readOnly:true, style:{ border:0, outline:'none', background:'transparent', color:'#f8fafc', padding:'8px 10px', font:'500 13px var(--font-body)' } }),
+      React.createElement('input', { placeholder:'Send a mission to Atlas...', readOnly:true, style:{ border:0, outline:'none', background:'transparent', color:'#f8fafc', padding:'8px 10px', font:'500 13px var(--font-body)' } }),
       React.createElement('button', { style:{ border:0, borderRadius:10, padding:'8px 14px', color:'#080a14', cursor:'pointer', font:'800 11px var(--font-mono)', letterSpacing:'0.08em', textTransform:'uppercase', background:'linear-gradient(135deg,#22d3ee,#9d5cff)' } }, 'Launch'),
     ),
     React.createElement('div', { style:{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:8, flexWrap:'wrap' } },
@@ -63,7 +63,7 @@ const AgenticCard = ({ agent, onClick }) => {
   const borderColor = isBusy ? '#fbbf24' : isActive ? '#34d399' : agent.status === 'offline' ? '#334155' : '#2a2d5a';
   
   const TASKS = {
-    orchestra: { tool:'Agent', detail:'Delegating to Kira: deploy landing page', progress:45 },
+    atlas: { tool:'Agent', detail:'Delegating to Vector: deploy landing page', progress:45 },
     kai: { tool:'Edit', detail:'server/api/hooks.js — rate limiter', progress:72 },
     mira: { tool:'Read', detail:'analytics/dashboard-metrics-Q2.json', progress:30 },
     astra: { tool:'Write', detail:'curriculum/onboarding-v3-outline.md', progress:88 },
@@ -126,8 +126,8 @@ const AgenticCard = ({ agent, onClick }) => {
 
 /* Active Mission panel */
 const ActiveMission = () => {
-  const orch = PERSONAS.find(a=>a.id==='orchestra');
-  const kira = PERSONAS.find(a=>a.id==='kai');
+  const orch = PERSONAS.find(a=>a.id==='atlas');
+  const kira = PERSONAS.find(a=>a.id==='vector');
   const steps = [
     { agent:orch, action:'Received goal', detail:'"Deploy landing page v2 with updated copy"', done:true, time:'2m ago' },
     { agent:orch, action:'Decomposed into 3 subtasks', detail:'copy update → code deploy → security audit', done:true, time:'1m ago' },
@@ -140,7 +140,7 @@ const ActiveMission = () => {
         React.createElement('img', { src:orch.image, style:{ width:32, height:32, borderRadius:8, objectFit:'cover', objectPosition:'center top', border:'2px solid #fbbf24' } }),
         React.createElement('div', {},
           React.createElement('div', { style:{ font:'800 14px var(--font-display)', color:'#fff' } }, 'Active Mission'),
-          React.createElement('div', { style:{ font:'600 10px var(--font-mono)', color:'#fbbf24', letterSpacing:'0.08em', textTransform:'uppercase' } }, 'Orchestra conducting'),
+          React.createElement('div', { style:{ font:'600 10px var(--font-mono)', color:'#fbbf24', letterSpacing:'0.08em', textTransform:'uppercase' } }, 'Atlas conducting'),
         ),
       ),
       React.createElement('div', { className:'ag-thinking', style:{ display:'flex', gap:3 } },
@@ -173,12 +173,12 @@ const ActiveMission = () => {
 
 /* Live feed with agent avatars */
 const MOCK_FEED = [
-  { agent:'orchestra', tool:'Agent', title:'Delegating to Kira: deploy landing page v2', time:'12s ago' },
-  { agent:'kai', tool:'Edit', title:'server/api/hooks.js — added rate limiter middleware', time:'28s ago' },
-  { agent:'mira', tool:'Read', title:'analytics/dashboard-metrics-Q2.json — 42 rows', time:'1m ago' },
-  { agent:'astra', tool:'Write', title:'curriculum/onboarding-v3-outline.md — 2,400 tokens', time:'3m ago' },
-  { agent:'nyx', tool:'Bash', title:'npm test — 14 passed, 0 failed', time:'5m ago' },
-  { agent:'kai', tool:'Read', title:'package.json — checking dependencies', time:'8m ago' },
+  { agent:'atlas', tool:'Agent', title:'Delegating to Vector: deploy landing page v2', time:'12s ago' },
+  { agent:'vector', tool:'Edit', title:'server/api/hooks.js — added rate limiter middleware', time:'28s ago' },
+  { agent:'pulse', tool:'Read', title:'analytics/dashboard-metrics-Q2.json — 42 rows', time:'1m ago' },
+  { agent:'oracle', tool:'Write', title:'curriculum/onboarding-v3-outline.md — 2,400 tokens', time:'3m ago' },
+  { agent:'scout', tool:'Bash', title:'npm test — 14 passed, 0 failed', time:'5m ago' },
+  { agent:'vector', tool:'Read', title:'package.json — checking dependencies', time:'8m ago' },
 ];
 
 const KitDashboard = ({ onOpenAgent }) => {
@@ -247,7 +247,7 @@ const KitDashboard = ({ onOpenAgent }) => {
     React.createElement('section', { style:{ padding:18, border:'2px solid #2a2d5a', borderRadius:12, background:'#161938' } },
       React.createElement('h3', { style:{ font:'800 16px var(--font-display)', color:'#fff', marginBottom:14 } }, 'Provider Connections'),
       React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))', gap:10 } },
-        [{ name:'Anthropic', hint:'Orchestra / Claude SDK', ready:true },{ name:'Google', hint:'Gemini / Imagen', ready:true },{ name:'OpenAI', hint:'GPT compatible', ready:false },{ name:'Replicate', hint:'Image fallback', ready:true }].map((p,i) =>
+        [{ name:'Anthropic', hint:'Atlas / Claude SDK', ready:true },{ name:'Google', hint:'Gemini / Imagen', ready:true },{ name:'OpenAI', hint:'GPT compatible', ready:false },{ name:'Replicate', hint:'Image fallback', ready:true }].map((p,i) =>
           React.createElement('div', { key:i, style:{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 14px', border:'2px solid', borderColor: p.ready ? '#2a2d5a' : 'rgba(251,113,133,0.3)', borderRadius:10, background:'#1e2148' } },
             React.createElement('div', {},
               React.createElement('div', { style:{ font:'700 13px var(--font-body)', color:'#fff' } }, p.name),

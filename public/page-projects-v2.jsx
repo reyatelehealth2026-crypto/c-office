@@ -29,7 +29,7 @@ const deriveProjects = (apiProjects) => {
     curr.updatedAt = Math.max(curr.updatedAt || 0, item?.updatedAt || item?.createdAt || item?.ts || item?.t || 0);
     buckets.set(key, curr);
   };
-  (window.RUNS || []).forEach(r => add(r.project || r.projectId || 'Orchestra Runs', 'runs', r));
+  (window.RUNS || []).forEach(r => add(r.project || r.projectId || 'Atlas Runs', 'runs', r));
   (window.NOTES || []).forEach(n => add(n.project || n.projectId || 'Notes Inbox', 'notes', n));
   (window.ACTIVITY || []).forEach(e => add(e.project || e.projectId || e.cwd || 'Live Activity', 'events', e));
   if (!buckets.size) buckets.set('General Ops', { id:'general-ops', name:'General Ops', description:'Default project for C-Office work.', runs:0, notes:0, events:0, updatedAt: Date.now() });

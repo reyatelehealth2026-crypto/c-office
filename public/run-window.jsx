@@ -347,7 +347,7 @@ const RunWindow = ({ runId, position, onClose, onMinimize, minimized }) => {
             borderLeft: '3px solid var(--red)',
             fontSize: 11, color: 'var(--text-2)',
           }}>
-            <b style={{color: 'var(--red)'}}>Vivi · {run.critique.severity}</b>
+            <b style={{color: 'var(--red)'}}>Warden · {run.critique.severity}</b>
             <div style={{whiteSpace: 'pre-wrap'}}>{run.critique.text}</div>
           </div>
         )}

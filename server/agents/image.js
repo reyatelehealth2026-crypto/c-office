@@ -122,7 +122,7 @@ const ADAPTERS = {
   openai:    generateOpenAI,
 };
 
-export async function generateImage({ prompt, persona = 'echo' }) {
+export async function generateImage({ prompt, persona = 'forge' }) {
   const fn = ADAPTERS[PROVIDER];
   if (!fn) throw new Error(`Unknown IMAGE_PROVIDER: ${PROVIDER}`);
   return fn({ prompt, slug: persona });

@@ -20,7 +20,7 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
 
   const [activeId, setActiveId] = React.useState(null);
   const [composerOpen, setComposerOpen] = React.useState(false);
-  const [draft, setDraft] = React.useState({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'orchestra' });
+  const [draft, setDraft] = React.useState({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'atlas' });
 
   // Auto-select first note when list arrives
   React.useEffect(() => {
@@ -39,7 +39,7 @@ const NotesPage = ({ onOpenAgent, presetAgentId }) => {
       body: JSON.stringify(draft),
     });
     const note = await r.json();
-    setDraft({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'orchestra' });
+    setDraft({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'atlas' });
     setComposerOpen(false);
     setActiveId(note.id);
     refresh();
@@ -320,7 +320,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             provider,
-            agentId: note.agentId || 'orchestra',
+            agentId: note.agentId || 'atlas',
             message: message.trim(),
           }),
         });
@@ -340,21 +340,21 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
     }
   }
 
-  // Orchestra-flow path — same pipeline as the Dashboard's "Send to
-  // Orchestra" button. Posts goal to /api/task, polls for completion, then
+  // Atlas-flow path — same pipeline as the Dashboard's "Send to
+  // Atlas" button. Posts goal to /api/task, polls for completion, then
   // mirrors the synthesized result back into the note's chat log.
   async function dispatchViaOrchestra(message) {
-    const ownerName = agent?.name || note.agentId || 'Orchestra';
+    const ownerName = agent?.name || note.agentId || 'Atlas';
     const goalParts = [];
     if (note.title) goalParts.push(`เรื่อง: ${note.title}`);
     if (note.body)  goalParts.push(`บริบท:\n${note.body}`);
-    if (note.agentId && note.agentId !== 'orchestra') {
+    if (note.agentId && note.agentId !== 'atlas') {
       goalParts.push(`(แนะนำให้ส่งต่อหรือร่วมงานกับ ${ownerName})`);
     }
     goalParts.push(`คำสั่งจากผู้ใช้: ${message}`);
     const goal = goalParts.join('\n\n');
 
-    setOrchestraStatus('Orchestra: กำลังวางแผน…');
+    setOrchestraStatus('Atlas: กำลังวางแผน…');
     const startResp = await fetch('/api/task', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -362,7 +362,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
     });
     const startJson = await startResp.json().catch(() => ({}));
     if (!startResp.ok || !startJson.run_id) {
-      throw new Error(startJson.error || 'Orchestra ไม่ตอบรับงาน');
+      throw new Error(startJson.error || 'Atlas ไม่ตอบรับงาน');
     }
     const runId = startJson.run_id;
     setActiveRunId(runId);
@@ -383,7 +383,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
       const run = await r.json();
       if (run.phase && run.phase !== lastPhase) {
         lastPhase = run.phase;
-        setOrchestraStatus(`Orchestra: ${run.phase}…`);
+        setOrchestraStatus(`Atlas: ${run.phase}…`);
       }
       if (run.status === 'done' || run.status === 'failed' || run.status === 'cancelled') {
         final = run.final || '';
@@ -392,13 +392,13 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
       }
     }
 
-    const content = final.trim() || lastErr || '(Orchestra ไม่มีข้อความตอบกลับ)';
+    const content = final.trim() || lastErr || '(Atlas ไม่มีข้อความตอบกลับ)';
     await fetch(`/api/notes/${note.id}/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         role: 'agent',
-        content: `[via Orchestra · run ${runId}]\n\n${content}`,
+        content: `[via Atlas · run ${runId}]\n\n${content}`,
       }),
     }).catch(() => {});
   }
@@ -474,7 +474,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
         <span className="mono-s">มอบหมาย →</span>
         <AgentPicker
           agents={agents}
-          value={note.agentId || 'orchestra'}
+          value={note.agentId || 'atlas'}
           onChange={(id) => onPatch({ agentId: id })}
         />
         {agent && (
@@ -484,9 +484,9 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
         )}
         <div style={{flex: 1}}/>
         <label className="mono-s" style={{display:'flex', alignItems:'center', gap:6, cursor:'pointer'}}
-               title="ใช้ flow เดียวกับ Dashboard: Orchestra วางแผน → delegate → critique → synthesize">
+               title="ใช้ flow เดียวกับ Dashboard: Atlas วางแผน → delegate → critique → synthesize">
           <input type="checkbox" checked={useOrchestra} onChange={e => setUseOrchestra(e.target.checked)}/>
-          Orchestra Flow
+          Atlas Flow
         </label>
         <span className="mono-s">ตัวรัน →</span>
         <select className="provider-select" value={provider} onChange={e => setProvider(e.target.value)}>
@@ -564,7 +564,7 @@ const NoteDetail = ({ note, agents, providers, defaultProvider, onChange, onPatc
         />
         <div className="row" style={{gap: 8, marginTop: 8, justifyContent: 'flex-end'}}>
           <span className="mono-s" style={{marginRight: 'auto'}}>
-            Ctrl/⌘+Enter to dispatch · {useOrchestra ? <>flow <b>Orchestra</b></> : <>provider <b>{provider}</b></>}
+            Ctrl/⌘+Enter to dispatch · {useOrchestra ? <>flow <b>Atlas</b></> : <>provider <b>{provider}</b></>}
             {orchestraStatus && <span style={{marginLeft:8, color:'var(--gold)'}}>· {orchestraStatus}</span>}
             {activeRunId && <a href={`/run.html?id=${activeRunId}`} target="_blank" rel="noreferrer" style={{marginLeft:8, color:'var(--cyan)'}}>เปิด run →</a>}
           </span>

@@ -1,0 +1,3 @@
+# Portrait output directory for scripts/generate-roster-portraits.js.
+# Generated <id>.png files land here. Kept under git so the dir exists
+# before the first run.

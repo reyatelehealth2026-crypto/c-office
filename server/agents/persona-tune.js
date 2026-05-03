@@ -78,7 +78,7 @@ function incrementStat(stats, key, field) {
  * Record an outcome for a persona after a run completes.
  *
  * @param {object} opts
- * @param {string} opts.personaId   - persona id (e.g. 'nyx')
+ * @param {string} opts.personaId   - persona id (e.g. 'scout')
  * @param {string} [opts.projectId] - project scoping (omit for global-only)
  * @param {'success'|'failure'|'critic-high'|'verify-fail'} opts.outcome
  */

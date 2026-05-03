@@ -36,7 +36,7 @@ const KitSidebar = ({ page, setPage }) => {
   },
     // Brand
     React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10, padding:'8px 2px 18px', borderBottom:'2px solid #2a2d5a', marginBottom:10, minWidth:216 } },
-      React.createElement('div', { style:{ width:46, height:46, borderRadius:12, flexShrink:0, backgroundImage:'url(../../assets/images/Orchestra.png)', backgroundSize:'180% auto', backgroundPosition:'center 10%', backgroundRepeat:'no-repeat', backgroundColor:'var(--bg-2)', boxShadow:'0 0 0 1px rgba(255,255,255,0.10),0 0 22px rgba(34,211,238,0.26),0 14px 28px rgba(0,0,0,0.28)' } }),
+      React.createElement('div', { style:{ width:46, height:46, borderRadius:12, flexShrink:0, backgroundImage:'url(../../assets/portraits/atlas.png)', backgroundSize:'180% auto', backgroundPosition:'center 10%', backgroundRepeat:'no-repeat', backgroundColor:'var(--bg-2)', boxShadow:'0 0 0 1px rgba(255,255,255,0.10),0 0 22px rgba(34,211,238,0.26),0 14px 28px rgba(0,0,0,0.28)' } }),
       React.createElement('div', { style:{ transition:'opacity 160ms', opacity: expanded ? 1 : 0 } },
         React.createElement('div', { style:{ font:'700 15px var(--font-display)', letterSpacing:'0.08em', color:'var(--ux-text-primary)' } }, 'C-OFFICE'),
         React.createElement('div', { style:{ fontSize:10, color:'var(--ux-text-muted)', fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.12em' } }, 'AI Agent Hub'),

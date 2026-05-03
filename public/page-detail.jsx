@@ -21,25 +21,25 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
   const quickActions = React.useMemo(() => {
     const id = agent.id;
     const actions = [];
-    if (id === 'nana' || id === 'mira') {
+    if (id === 'pulse') {
       actions.push({ label: 'Content Queue', prompt: 'Review today\'s content queue and propose priorities' });
       actions.push({ label: 'Analytics', prompt: 'Analyze this week\'s performance and suggest adjustments' });
       actions.push({ label: 'Campaign Brief', prompt: 'Draft a campaign brief with owner, timeline, and KPI targets' });
-    } else if (id === 'emi' || id === 'vex' || id === 'kai') {
+    } else if (id === 'warden' || id === 'vector') {
       actions.push({ label: 'Bug Report', prompt: 'Investigate and fix the reported bug' });
       actions.push({ label: 'Implementation', prompt: 'Implement the requested feature with a clear rollout plan' });
       actions.push({ label: 'Tests', prompt: 'Write tests for the specified module' });
-    } else if (id === 'luna' || id === 'lumen' || id === 'astra') {
+    } else if (id === 'scribe' || id === 'oracle') {
       actions.push({ label: 'Draft Memo', prompt: 'Draft a clear internal memo on the specified topic' });
       actions.push({ label: 'Summary', prompt: 'Summarize the provided document' });
       actions.push({ label: 'Email', prompt: 'Write a professional email' });
-    } else if (id === 'nyx') {
+    } else if (id === 'scout') {
       actions.push({ label: 'Research', prompt: 'Research the specified topic' });
       actions.push({ label: 'Analysis', prompt: 'Analyze the provided data' });
-    } else if (id === 'echo') {
+    } else if (id === 'forge') {
       actions.push({ label: 'Design', prompt: 'Create a design concept' });
       actions.push({ label: 'Visual', prompt: 'Generate a visual asset' });
-    } else if (id === 'orchestra') {
+    } else if (id === 'atlas') {
       actions.push({ label: 'Orchestrate', prompt: 'Break down this work order and delegate to specialist agents' });
       actions.push({ label: 'Status', prompt: 'Summarize current status of all active tasks' });
     } else {
@@ -48,8 +48,8 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
     return actions;
   }, [agent.id]);
 
-  // Desk Chat now drives the same Orchestra pipeline as the Dashboard's
-  // "Send to Orchestra" — every message is a real run, biased toward this
+  // Desk Chat now drives the same Atlas pipeline as the Dashboard's
+  // "Send to Atlas" — every message is a real run, biased toward this
   // agent. The reply lands as the synthesized final and the row links into
   // the run viewer for full step-by-step detail.
   const sendChat = async (text) => {
@@ -60,7 +60,7 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
     const userMsg = { id: ts, role: 'user', content: msg, ts };
     const placeholderId = ts + 1;
     setChatMessages(prev => [...prev, userMsg, {
-      id: placeholderId, role: 'agent', content: 'Orchestra: กำลังวางแผน…',
+      id: placeholderId, role: 'agent', content: 'Atlas: กำลังวางแผน…',
       ts: placeholderId, pending: true,
     }]);
     setChatInput('');
@@ -77,10 +77,10 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
       });
       const startJson = await startResp.json().catch(() => ({}));
       if (!startResp.ok || !startJson.run_id) {
-        throw new Error(startJson.error || 'Orchestra ไม่ตอบรับงาน');
+        throw new Error(startJson.error || 'Atlas ไม่ตอบรับงาน');
       }
       const runId = startJson.run_id;
-      updatePlaceholder({ runId, content: `Orchestra: กำลังวางแผน… (run ${runId})` });
+      updatePlaceholder({ runId, content: `Atlas: กำลังวางแผน… (run ${runId})` });
 
       let lastPhase = '';
       let final = '';
@@ -96,7 +96,7 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
         const run = await r.json();
         if (run.phase && run.phase !== lastPhase) {
           lastPhase = run.phase;
-          updatePlaceholder({ content: `Orchestra: ${run.phase}… (run ${runId})` });
+          updatePlaceholder({ content: `Atlas: ${run.phase}… (run ${runId})` });
         }
         if (run.status === 'done' || run.status === 'failed' || run.status === 'cancelled') {
           final = run.final || '';
@@ -105,7 +105,7 @@ const AgentDetail = ({ agent, onBack, onOpenAgent }) => {
         }
       }
       updatePlaceholder({
-        content: (final && final.trim()) || lastErr || '(Orchestra ไม่มีผลตอบกลับ)',
+        content: (final && final.trim()) || lastErr || '(Atlas ไม่มีผลตอบกลับ)',
         pending: false,
       });
     } catch (e) {
@@ -445,7 +445,7 @@ const HistoryPanel = ({ agent }) => {
         <div className="stack" style={{gap:6}}>
           {!runsLoading && runs.length === 0 && (
             <div className="muted" style={{fontSize:12, padding:'14px 4px'}}>
-              ยังไม่มีงานที่ผ่าน Orchestra แล้วถึง {agent.name}. ลองสั่งงานจาก Desk Chat หรือ Dashboard ดู
+              ยังไม่มีงานที่ผ่าน Atlas แล้วถึง {agent.name}. ลองสั่งงานจาก Desk Chat หรือ Dashboard ดู
             </div>
           )}
           {runs.map((r) => {

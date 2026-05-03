@@ -14,7 +14,7 @@ It turns scattered CLI activity into a live operational dashboard:
 - maps many subagents into 9 high-level personas
 - exposes a browser UI for mission control, notes, tasks, images, projects, and agent status
 - supports multi-provider dispatch through echo / Claude / Codex / GPT-style CLIs
-- runs an Orchestra-led multi-agent workflow through Anthropic Agent SDK
+- runs an Atlas-led multi-agent workflow through Anthropic Agent SDK
 - stores lightweight state in memory and local JSON files under `~/.c-office/`
 - keeps credentials out of env sprawl through an encrypted local credential store
 
@@ -31,7 +31,7 @@ The product identity is not plain admin software. It is a **JRPG command room fo
 5. **Preserve Node ESM.** The backend uses `type: module`; use `import` / `export`, not CommonJS.
 6. **Keep realtime behavior stable.** SSE event names and snapshot shapes should remain backward-compatible unless the README and UI are updated together.
 7. **Do not break Claude Code hooks.** `server/install-hooks.js` and `hooks/post-event.sh` must stay fast, fire-and-forget, and safe.
-8. **Persona id is not display name.** Code routes by id such as `nyx`, `lumen`, `kai`; UI displays names such as Nana, Luna, Kira.
+8. **Persona id is not display name.** Code routes by id such as `scout`, `scribe`, `vector`; UI displays names such as Scout, Scribe, Vector.
 9. **Fail soft in UI.** Missing provider, missing credentials, empty generated image directory, or inactive watcher should show useful states, not crash the page.
 10. **Write docs like operators will use them at 2 AM.** Commands first, then explanation.
 
@@ -48,7 +48,7 @@ The product identity is not plain admin software. It is a **JRPG command room fo
 | Agent history | `server/api/agents.js` | persona history endpoints |
 | Notes | `server/api/notes.js`, `server/runner/notes.js` | note CRUD, chat messages, provider dispatch |
 | Provider runner | `server/runner/providers.js` | echo / claude / codex / gpt command abstraction |
-| Orchestra tasks | `server/api/task.js`, `server/agents/runner.js` | server-side multi-agent run loop |
+| Atlas tasks | `server/api/task.js`, `server/agents/runner.js` | server-side multi-agent run loop |
 | Persona prompts | `server/agents/personas.js` | system prompts and allowlists for SDK agents |
 | Persona mapping | `server/mapping/personas.js` | 9 persona definitions and regex routing |
 | Auth | `server/api/auth.js`, `server/auth/*` | credential store and OAuth flows |
@@ -182,15 +182,15 @@ C-Office compresses many real subagents into 9 visual personas.
 
 | Persona | id | Function |
 |---|---:|---|
-| Orchestra | `orchestra` | conductor, planner, routing, multi-agent leadership |
-| Aira | `astra` | education, mentoring, curriculum, knowledge systems |
-| Luna | `lumen` | copy, docs, narrative, proposals, content |
-| Vivi | `vex` | security, audit, compliance, QA, code review |
-| Kira | `kai` | code, backend, frontend, data, AI engineering, fallback builder |
-| Miku | `mira` | growth, marketing, sales, paid media, commerce |
-| Emi | `echo` | UI, brand, video, image prompts, games, 3D, XR |
-| Nana | `nyx` | research, analytics, trends, benchmarks, insights |
-| Ori | `orbit` | DevOps, SRE, workflows, PM, support, operations |
+| Atlas | `atlas` | conductor, planner, routing, multi-agent leadership |
+| Oracle | `oracle` | mentoring, knowledge systems, curriculum, learning |
+| Scribe | `scribe` | copy, docs, narrative, proposals, content |
+| Warden | `warden` | security, audit, compliance, QA, code review |
+| Vector | `vector` | code, backend, frontend, data, AI engineering, fallback builder |
+| Pulse | `pulse` | growth, marketing, sales, paid media, commerce |
+| Forge | `forge` | UI, brand, video, image prompts, games, 3D, XR |
+| Scout | `scout` | research, analytics, trends, benchmarks, insights |
+| Relay | `relay` | DevOps, SRE, workflows, PM, support, operations |
 
 ### Persona routing rules
 

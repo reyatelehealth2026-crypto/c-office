@@ -10,6 +10,7 @@
     "test": "node --test",
     "install-hooks": "node server/install-hooks.js install",
     "uninstall-hooks": "node server/install-hooks.js uninstall",
+    "generate-portraits": "node scripts/generate-roster-portraits.js",
     "tunnel": "node scripts/tunnel.js",
     "tunnel:cloudflare": "npx -y cloudflared@latest tunnel --url http://127.0.0.1:7878",
     "tunnel:localtunnel": "npx -y localtunnel --port 7878"

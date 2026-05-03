@@ -16,27 +16,27 @@ const BUILT_INS = {
     name: 'research-write-publish',
     description: 'Trend research → long-form draft → distribution plan',
     plan: [
-      { persona: 'nyx', instruction: 'Pull 5-7 recent signals on the goal topic with source URLs.', depends_on: null },
-      { persona: 'lumen', instruction: 'Write a 600-word article weaving in the research findings.', depends_on: 0 },
-      { persona: 'mira', instruction: 'Build a multi-platform distribution plan for the article.', depends_on: 1 },
+      { persona: 'scout', instruction: 'Pull 5-7 recent signals on the goal topic with source URLs.', depends_on: null },
+      { persona: 'scribe', instruction: 'Write a 600-word article weaving in the research findings.', depends_on: 0 },
+      { persona: 'pulse', instruction: 'Build a multi-platform distribution plan for the article.', depends_on: 1 },
     ],
   },
   'code-review-ship': {
     name: 'code-review-ship',
     description: 'Engineering implementation → security review → ops runbook',
     plan: [
-      { persona: 'kai', instruction: 'Implement the requested change. Return diff or final code.', depends_on: null },
-      { persona: 'vex', instruction: 'Security and quality review of the implementation.', depends_on: 0 },
-      { persona: 'orbit', instruction: 'Produce a deploy runbook with rollback steps.', depends_on: 0 },
+      { persona: 'vector', instruction: 'Implement the requested change. Return diff or final code.', depends_on: null },
+      { persona: 'warden', instruction: 'Security and quality review of the implementation.', depends_on: 0 },
+      { persona: 'relay', instruction: 'Produce a deploy runbook with rollback steps.', depends_on: 0 },
     ],
   },
   'content-brief-distribute': {
     name: 'content-brief-distribute',
     description: 'Content draft → critique → distribution',
     plan: [
-      { persona: 'lumen', instruction: 'Draft the requested content piece.', depends_on: null },
-      { persona: 'vex', instruction: 'Audit the draft for accuracy, brand voice, and compliance.', depends_on: 0 },
-      { persona: 'mira', instruction: 'Build a distribution plan for the (revised) draft.', depends_on: 0 },
+      { persona: 'scribe', instruction: 'Draft the requested content piece.', depends_on: null },
+      { persona: 'warden', instruction: 'Audit the draft for accuracy, brand voice, and compliance.', depends_on: 0 },
+      { persona: 'pulse', instruction: 'Build a distribution plan for the (revised) draft.', depends_on: 0 },
     ],
   },
 };

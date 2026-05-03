@@ -1,5 +1,5 @@
 /* Notes Workspace V2 — three-panel override.
-   Reuses legacy AgentPicker and NoteDetail so existing dispatch / Orchestra /
+   Reuses legacy AgentPicker and NoteDetail so existing dispatch / Atlas /
    image-generation behavior remains intact. */
 
 const uxNoteFmt = (ts) => {
@@ -100,7 +100,7 @@ const NotesPageV2 = ({ onOpenAgent, presetAgentId }) => {
   const [query, setQuery] = React.useState('');
   const [tag, setTag] = React.useState('all');
   const [composerOpen, setComposerOpen] = React.useState(false);
-  const [draft, setDraft] = React.useState({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'orchestra' });
+  const [draft, setDraft] = React.useState({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'atlas' });
 
   React.useEffect(() => {
     if (!activeId && notes.length > 0) setActiveId(notes[0].id);
@@ -125,7 +125,7 @@ const NotesPageV2 = ({ onOpenAgent, presetAgentId }) => {
       body: JSON.stringify(draft),
     });
     const note = await r.json();
-    setDraft({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'orchestra' });
+    setDraft({ title: '', body: '', tag: 'idea', agentId: presetAgentId || 'atlas' });
     setComposerOpen(false);
     setActiveId(note.id);
     refresh();
@@ -157,7 +157,7 @@ const NotesPageV2 = ({ onOpenAgent, presetAgentId }) => {
             <h3 className="ux-notes-title">Work inbox</h3>
             <UXStatusChip label={`${notes.length} notes`} state={notes.length ? 'active' : 'muted'} />
           </div>
-          <div className="ux-notes-subtitle">Capture work, assign a persona, then dispatch through provider or Orchestra.</div>
+          <div className="ux-notes-subtitle">Capture work, assign a persona, then dispatch through provider or Atlas.</div>
           <input className="ux-notes-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search notes and messages..." />
           <div className="ux-note-tags">
             {tags.map(t => <button key={t} className={'ux-note-tag ' + (tag === t ? 'is-active' : '')} onClick={() => setTag(t)}>{t}</button>)}

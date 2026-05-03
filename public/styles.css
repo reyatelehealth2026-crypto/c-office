@@ -566,7 +566,7 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; letter-spac
   border-radius: 10px;
   position: relative;
   flex-shrink: 0;
-  background-image: url('/images/Orchestra.png');
+  background-image: url('/portraits/atlas.png');
   background-size: 180% auto;
   background-position: center 10%;
   background-repeat: no-repeat;

@@ -147,8 +147,8 @@ const renderMarkdown = (md) => {
   return out.join('\n');
 };
 
-const POST_PERSONAS = new Set(['lumen', 'mira']);
-const RESEARCH_PERSONAS = new Set(['nyx', 'vex', 'astra', 'kai', 'orbit']);
+const POST_PERSONAS = new Set(['scribe', 'pulse']);
+const RESEARCH_PERSONAS = new Set(['scout', 'warden', 'oracle', 'vector', 'relay']);
 
 const categorizeRunSteps = (run) => {
   const steps = Array.isArray(run?.steps) ? run.steps : [];
@@ -169,7 +169,7 @@ const categorizeRunSteps = (run) => {
     const imageUrl = step.result?.image?.url
       || (text.match(/\/generated\/[^\s)]+\.png/) || [])[0]
       || null;
-    if (persona === 'echo' || imageUrl) {
+    if (persona === 'forge' || imageUrl) {
       images.push({ persona, url: imageUrl, text, model: step.result?.image?.model });
     } else if (POST_PERSONAS.has(persona)) {
       posts.push({ persona, text });
@@ -311,8 +311,8 @@ const FinalDeliverable = ({ run, copy, copiedKey, openInNotes }) => {
 // of {persona, instruction} steps. Built-in plans are read-only. Saved plans
 // land in `.claude/workflows/<slug>.json` via POST /api/workflows.
 const PlanEditor = ({ workflows, onClose, onSaved }) => {
-  const agents = (window.AGENTS || []).filter(a => a.id !== 'orchestra');
-  const personaIds = agents.length ? agents.map(a => a.id) : ['nyx','lumen','mira','vex','kai','echo','astra','orbit'];
+  const agents = (window.AGENTS || []).filter(a => a.id !== 'atlas');
+  const personaIds = agents.length ? agents.map(a => a.id) : ['scout','scribe','pulse','warden','vector','forge','oracle','relay'];
   const blank = () => ({ name: '', description: '', plan: [{ persona: personaIds[0], instruction: '', depends_on: null }] });
   const [draft, setDraft] = React.useState(blank);
   const [busy, setBusy] = React.useState(false);
@@ -855,7 +855,7 @@ const TeamTimeline = ({ forceRunId }) => {
   // the static-plan path (executeRun iterates plan in order) and team-flow
   // (planLive.push happens immediately before executeStep). Matching by
   // instruction string is fragile because setRunPlan truncates to 320 chars
-  // while stepRun truncates to 220, so long Orchestra-authored instructions
+  // while stepRun truncates to 220, so long Atlas-authored instructions
   // never compare equal and every card stays "pending".
   const stepsArr = Array.isArray(run.steps) ? run.steps : [];
   const cards = plan.map((p, i) => {
@@ -1212,7 +1212,7 @@ const CommandCenter = ({ onOpenAgent }) => {
   window.useCOfficeRefresh();
   const [prompt, setPrompt] = React.useState('');
   const [provider, setProvider] = React.useState('claude');
-  const [personaId, setPersonaId] = React.useState('orchestra');
+  const [personaId, setPersonaId] = React.useState('atlas');
   const [selectedId, setSelectedId] = React.useState(null);
   const [chatText, setChatText] = React.useState('');
   const [copied, setCopied] = React.useState('');
@@ -1455,7 +1455,7 @@ const RunWorkspacePage = ({ runId, onBack }) => {
               <textarea
                 value={comment}
                 onChange={e => setComment(e.target.value)}
-                placeholder="เช่น 'ใช้ tone friendlier', 'อย่าใส่ราคาเป็นบาท', 'รอ research จาก Nana ก่อน'…"
+                placeholder="เช่น 'ใช้ tone friendlier', 'อย่าใส่ราคาเป็นบาท', 'รอ research จาก Scout ก่อน'…"
                 rows={2}
                 style={{ flex: 1, minWidth: 240, padding: '8px 10px', background: 'var(--bg-2)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, resize: 'vertical' }}/>
               <button

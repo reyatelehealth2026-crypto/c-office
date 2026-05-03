@@ -13,9 +13,9 @@ const axFmt = (ts) => {
 };
 
 const axQuick = (agent) => {
-  if (agent?.id === 'orchestra') return ['Break down this work order and delegate it.', 'Summarize active work and blockers.', 'Create an execution plan.'];
-  if (['emi','vex','kai'].includes(agent?.id)) return ['Investigate and fix this bug.', 'Implement this feature safely.', 'Review this code or plan.'];
-  if (agent?.id === 'echo') return ['Create a premium design concept.', 'Write a detailed visual asset brief.', 'Polish this UI or brand direction.'];
+  if (agent?.id === 'atlas') return ['Break down this work order and delegate it.', 'Summarize active work and blockers.', 'Create an execution plan.'];
+  if (['warden','vector'].includes(agent?.id)) return ['Investigate and fix this bug.', 'Implement this feature safely.', 'Review this code or plan.'];
+  if (agent?.id === 'forge') return ['Create a premium design concept.', 'Write a detailed visual asset brief.', 'Polish this UI or brand direction.'];
   return ['Help complete this work order.', 'Summarize this context.', 'Draft a clean usable output.'];
 };
 
@@ -39,14 +39,14 @@ const AgentDetailV2 = ({ agent, onBack }) => {
     const pid = id + 1;
     setBusy(true);
     setInput('');
-    setMessages(x => [...x, { id, role:'user', text: msg }, { id: pid, role:'agent', text:'Orchestra is starting…', pending:true }]);
+    setMessages(x => [...x, { id, role:'user', text: msg }, { id: pid, role:'agent', text:'Atlas is starting…', pending:true }]);
     const update = (patch) => setMessages(x => x.map(m => m.id === pid ? { ...m, ...patch } : m));
     try {
       const goal = `Desk Chat for ${agent.name}:\n\n${msg}`;
       const r = await fetch('/api/task', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ goal }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.run_id) throw new Error(j.error || 'Failed to start run');
-      update({ runId: j.run_id, text:`Orchestra is running… (${j.run_id})` });
+      update({ runId: j.run_id, text:`Atlas is running… (${j.run_id})` });
       let final = '';
       let err = '';
       const stop = Date.now() + 600000;
@@ -55,7 +55,7 @@ const AgentDetailV2 = ({ agent, onBack }) => {
         const rr = await fetch(`/api/task/${j.run_id}`);
         if (!rr.ok) continue;
         const run = await rr.json();
-        if (run.phase) update({ text:`Orchestra: ${run.phase}… (${j.run_id})` });
+        if (run.phase) update({ text:`Atlas: ${run.phase}… (${j.run_id})` });
         if (['done','failed','cancelled'].includes(run.status)) { final = run.final || ''; err = run.error || ''; break; }
       }
       update({ pending:false, text: final || err || 'Run finished without a final message.' });

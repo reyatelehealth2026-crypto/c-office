@@ -885,7 +885,7 @@ export async function generateImageRoute(req, res) {
 
     const message = {
       role: 'agent',
-      agentId: note?.agentId || 'echo',
+      agentId: note?.agentId || 'forge',
       provider: useCodexCli ? 'codex-cli-image' : useGoogle ? googleDisplayForProvider(provider) : useTransparentOpenAI ? 'codex-image-edit' : 'openai-image',
       kind: 'image',
       content: `สร้างภาพจริงเสร็จแล้ว\n${imageUrl}`,
@@ -928,7 +928,7 @@ export async function generateImageRoute(req, res) {
     if (note?.id) {
       await appendMessage(note.id, {
         role: 'agent',
-        agentId: note.agentId || 'echo',
+        agentId: note.agentId || 'forge',
         provider: useCodexCli ? 'codex-cli-image' : 'openai-image',
         kind: 'error',
         content: response.body.error,

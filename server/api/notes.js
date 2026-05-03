@@ -41,7 +41,7 @@ export function resolveHandoffAgentId(message, currentAgentId) {
   const text = String(message || '').trim();
   if (!text || !hasHandoffIntent(text)) return null;
 
-  const current = resolveAgentIdSync(currentAgentId || 'orchestra');
+  const current = resolveAgentIdSync(currentAgentId || 'atlas');
   const agents = listAgentsSync({ includeDisabled: false });
   for (const match of text.matchAll(/@([a-z0-9_-]+)/gi)) {
     const agent = findMentionedAgent(match[1], agents);
@@ -124,7 +124,7 @@ export async function dispatchRoute(req, res) {
             agentId } = req.body || {};
 
     providerName = requestedProvider;
-    const requestedPersonaId = resolveAgentIdSync(agentId || note.agentId || 'orchestra');
+    const requestedPersonaId = resolveAgentIdSync(agentId || note.agentId || 'atlas');
     const handoffPersonaId = resolveHandoffAgentId(message, requestedPersonaId);
     personaId = handoffPersonaId || requestedPersonaId;
     const persona = getAgentSync(personaId);
@@ -239,7 +239,7 @@ export async function dispatchRoute(req, res) {
     if (note?.id) {
       await appendMessage(note.id, {
         role: 'agent',
-        agentId: personaId || note.agentId || 'orchestra',
+        agentId: personaId || note.agentId || 'atlas',
         provider: providerName || defaultProvider(),
         content: e.message || String(e),
         ok: false,

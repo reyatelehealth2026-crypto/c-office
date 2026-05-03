@@ -48,27 +48,27 @@ const categoryMeta = (agent) => {
 };
 
 const DEFAULT_AGENT_IMAGES = {
-  orchestra: '/images/Orchestra.png',
-  astra: '/images/Aira.png',
-  lumen: '/images/Luna.png',
-  vex: '/images/Vivi.png',
-  kai: '/images/Kira.png',
-  mira: '/images/Miku.png',
-  echo: '/images/Emi.png',
-  nyx: '/images/Nana.png',
-  orbit: '/images/Ori.png',
+  atlas: '/portraits/atlas.png',
+  oracle: '/portraits/oracle.png',
+  scribe: '/portraits/scribe.png',
+  warden: '/portraits/warden.png',
+  vector: '/portraits/vector.png',
+  pulse: '/portraits/pulse.png',
+  forge: '/portraits/forge.png',
+  scout: '/portraits/scout.png',
+  relay: '/portraits/relay.png',
 };
 
 const DEFAULT_AGENT_AVATARS = {
-  orchestra: 'OC',
-  astra: 'AI',
-  lumen: 'LN',
-  vex: 'VV',
-  kai: 'KR',
-  mira: 'MK',
-  echo: 'EM',
-  nyx: 'NN',
-  orbit: 'OR',
+  atlas: 'AT',
+  oracle: 'OR',
+  scribe: 'SC',
+  warden: 'WD',
+  vector: 'VC',
+  pulse: 'PL',
+  forge: 'FG',
+  scout: 'ST',
+  relay: 'RL',
 };
 
 const defaultImageForAgent = (agent) => DEFAULT_AGENT_IMAGES[agent?.id] || '';
@@ -76,41 +76,56 @@ const defaultAvatarForAgent = (agent) => DEFAULT_AGENT_AVATARS[agent?.id] || age
 
 const statValue = (agent, key) => agent.personality?.[key] ?? 50;
 
+// Provider list is fixed by Phase 5 contract: claude (Anthropic SDK), codex (OpenAI Codex CLI),
+// image (Echo/portrait pipeline). Anything else is rejected by the persona runner downstream.
+const PROVIDER_CHOICES = ['claude', 'codex', 'image'];
+
+// Allowed tools chip catalog — kept in sync with the Claude Agent SDK tool surface so the
+// persona runner can pass them through to maxToolUseLimit / allowedTools without translation.
+const TOOL_CATALOG = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'delegate'];
+
 const blankAgentDraft = () => ({
   name: '',
   role: '',
+  tagline: '',
   avatar: '',
   color: '#00f0ff',
-  provider: window.PROVIDERS?.default || 'claude',
+  provider: 'claude',
   systemPrompt: '',
   enabled: true,
-  toolsAllowed: '',
+  toolsAllowed: [],
   category: 'general',
+  deletable: true,
 });
 
 const agentToDraft = (agent) => ({
   id: agent?.id || '',
   name: agent?.name || '',
   role: agent?.role || '',
+  tagline: agent?.tagline || '',
   avatar: agent?.avatar || agent?.avatarInitials || '',
   color: agent?.color || '#00f0ff',
-  provider: agent?.provider || window.PROVIDERS?.default || 'claude',
+  provider: PROVIDER_CHOICES.includes(agent?.provider) ? agent.provider : 'claude',
   systemPrompt: agent?.systemPrompt || '',
   enabled: agent?.enabled !== false,
-  toolsAllowed: (agent?.toolsAllowed || []).join(', '),
+  toolsAllowed: Array.isArray(agent?.toolsAllowed) ? [...agent.toolsAllowed] : [],
   category: inferCategoryKey(agent || {}),
+  deletable: agent?.deletable !== false,
 });
 
 const draftPayload = (draft) => ({
   name: draft.name,
   role: draft.role,
+  tagline: draft.tagline,
   avatar: draft.avatar,
   color: draft.color,
   provider: draft.provider,
   systemPrompt: draft.systemPrompt,
   enabled: !!draft.enabled,
   category: draft.category,
-  toolsAllowed: String(draft.toolsAllowed || '').split(',').map((tool) => tool.trim()).filter(Boolean),
+  toolsAllowed: Array.isArray(draft.toolsAllowed)
+    ? draft.toolsAllowed.map((tool) => String(tool).trim()).filter(Boolean)
+    : [],
 });
 
 const characterPromptPreview = (agent) => {
@@ -147,6 +162,19 @@ const AgentModelUnit = ({ agent, selected, onSelect, onOpenAgent }) => {
         <span className="agent-element" aria-hidden="true">{PERSONA_ELEMENTS[agent.id] || '✦'}</span>
         <span className="agent-status-pill"><i/> {status.label}</span>
         <span className="agent-rarity">{agent.rarity || agent.provider || 'agent'}</span>
+        {agent.deletable === false && (
+          <span
+            className="agent-lock-badge"
+            title="ลบไม่ได้ — orchestrator ลำดับสำคัญ"
+            aria-label="locked"
+            style={{
+              position: 'absolute', top: 8, right: 8, zIndex: 2,
+              fontSize: 12, padding: '2px 6px', borderRadius: 999,
+              background: 'rgba(255,215,0,0.16)', border: '1px solid rgba(255,215,0,0.45)',
+              color: '#ffd86b', font: '700 10px var(--font-mono)', letterSpacing: '0.06em',
+            }}
+          >🔒</span>
+        )}
       </div>
 
       <div className="agent-model-stage">
@@ -298,16 +326,64 @@ const AgentSkillsSection = ({ agent }) => {
   );
 };
 
+// JRPG portrait prompt template — used by the "Regenerate portrait" button. Keeps the
+// look-lock vocabulary the rest of the Image Studio pipeline already understands so the
+// generated card slots cleanly into agent.image.
+const buildPortraitPrompt = (agent) => {
+  const name = agent?.name || 'Agent';
+  const role = agent?.role || 'AI teammate';
+  const tagline = agent?.tagline || agent?.systemPrompt || 'capable, focused, dependable';
+  const color = agent?.color || '#00f0ff';
+  return [
+    `JRPG anime character portrait of ${name}, ${role}.`,
+    `${tagline}.`,
+    `Style: high-detail anime / JRPG splash art, vibrant gradient background using ${color}, soft rim light, head-and-shoulders framing.`,
+    'No text, no logos, no watermarks.',
+  ].join('\n');
+};
+
+// Lightweight inline toast — keeps the agents page free of new top-level UI plumbing.
+const Toast = ({ tone = 'info', children }) => {
+  if (!children) return null;
+  const palette = tone === 'error'
+    ? { bg: 'rgba(244, 63, 94, 0.12)', border: 'rgba(244, 63, 94, 0.5)', color: '#fca5a5' }
+    : tone === 'success'
+      ? { bg: 'rgba(34, 197, 94, 0.12)', border: 'rgba(34, 197, 94, 0.5)', color: '#86efac' }
+      : { bg: 'rgba(0, 240, 255, 0.10)', border: 'rgba(0, 240, 255, 0.4)', color: 'var(--accent-cyan)' };
+  return (
+    <div
+      role="status"
+      style={{
+        marginTop: 6, padding: '8px 10px', borderRadius: 8,
+        background: palette.bg, border: `1px solid ${palette.border}`, color: palette.color,
+        font: '500 12px var(--font-body)', whiteSpace: 'pre-wrap',
+      }}
+    >{children}</div>
+  );
+};
+
 const AgentEditorPanel = ({ selected, onOpenAgent }) => {
   const [draft, setDraft] = React.useState(() => agentToDraft(selected));
   const [busy, setBusy] = React.useState(false);
-  const providers = window.PROVIDERS?.providers || [];
+  const [regenBusy, setRegenBusy] = React.useState(false);
+  const [toast, setToast] = React.useState(null); // { tone, message }
+  const showToast = React.useCallback((tone, message, ms = 4000) => {
+    setToast({ tone, message });
+    if (ms > 0) setTimeout(() => setToast(null), ms);
+  }, []);
 
   React.useEffect(() => setDraft(agentToDraft(selected)), [selected?.id]);
   const set = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
+  const toggleTool = (tool) => setDraft((current) => {
+    const list = Array.isArray(current.toolsAllowed) ? current.toolsAllowed : [];
+    const next = list.includes(tool) ? list.filter((t) => t !== tool) : [...list, tool];
+    return { ...current, toolsAllowed: next };
+  });
+
+  const isLocked = draft.deletable === false;
 
   const save = async () => {
-    if (!draft.name.trim() || !draft.role.trim()) return alert('name and role required');
+    if (!draft.name.trim() || !draft.role.trim()) return showToast('error', 'ต้องกรอก name และ role');
     setBusy(true);
     try {
       const method = draft.id ? 'PATCH' : 'POST';
@@ -319,8 +395,9 @@ const AgentEditorPanel = ({ selected, onOpenAgent }) => {
       });
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'save failed');
       await window.fetchCOfficeState?.();
+      showToast('success', draft.id ? 'บันทึก persona แล้ว' : 'สร้าง persona ใหม่แล้ว');
     } catch (error) {
-      alert(error.message || String(error));
+      showToast('error', error.message || String(error));
     } finally {
       setBusy(false);
     }
@@ -328,26 +405,67 @@ const AgentEditorPanel = ({ selected, onOpenAgent }) => {
 
   const remove = async () => {
     if (!draft.id) return;
+    if (isLocked) return showToast('error', '🔒 ลบไม่ได้ — orchestrator ลำดับสำคัญ');
+    if (!confirm(`ลบ persona "${draft.name}" ใช่ไหม?`)) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/agents/${draft.id}`, { method: 'DELETE' });
+      if (response.status === 403) {
+        const j = await response.json().catch(() => ({}));
+        throw new Error(`🔒 ลบไม่ได้ — ${j.error || 'persona นี้ถูกล็อก'}`);
+      }
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'delete failed');
       setDraft(blankAgentDraft());
       await window.fetchCOfficeState?.();
+      showToast('success', 'ลบ persona แล้ว');
     } catch (error) {
-      alert(error.message || String(error));
+      showToast('error', error.message || String(error));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // POSTs the JRPG portrait prompt to the same image pipeline the Look Lock uses, then
+  // lets the agents store mirror the generated card back into agent.image via existing flow.
+  const regeneratePortrait = async () => {
+    if (!selected?.id) return showToast('error', 'เลือก persona ก่อน');
+    setRegenBusy(true);
+    try {
+      const response = await fetch('/api/images/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'codex-image2',
+          mode: 'character',
+          agentId: selected.id,
+          kind: 'card',
+          prompt: buildPortraitPrompt(selected),
+          size: '1024x1536',
+          quality: 'high',
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || 'image generation failed');
+      await window.fetchCOfficeState?.();
+      showToast('success', 'สร้าง portrait ใหม่แล้ว — ดู draft ใน Avatar Generator');
+    } catch (error) {
+      showToast('error', error.message || String(error));
+    } finally {
+      setRegenBusy(false);
     }
   };
 
   return (
     <aside className="agent-brief-panel agent-editor-panel" style={{ '--cat-color': draft.color || 'var(--accent-cyan)' }}>
       <div className="brief-kicker">Dynamic Staff JSON</div>
-      <h2>{draft.id ? 'Edit Staff Profile' : 'New Staff Profile'}</h2>
+      <h2>
+        {draft.id ? 'Edit Staff Profile' : 'New Staff Profile'}
+        {isLocked && <span style={{ marginLeft: 8, fontSize: 13, color: '#ffd86b' }} title="ลบไม่ได้ — orchestrator ลำดับสำคัญ">🔒</span>}
+      </h2>
 
       <label>Name<input value={draft.name} onChange={(e) => set('name', e.target.value)} placeholder="Agent name"/></label>
       <label>Role<input value={draft.role} onChange={(e) => set('role', e.target.value)} placeholder="Role / responsibility"/></label>
+      <label>Tagline<textarea value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} rows="2" placeholder="คำโปรยสั้น ๆ ว่า persona นี้ทำอะไรเก่ง"/></label>
       <div className="agent-editor-row">
         <label>Avatar<input value={draft.avatar} onChange={(e) => set('avatar', e.target.value)} placeholder="AB or /image.png"/></label>
         <label>Color<input type="color" value={draft.color} onChange={(e) => set('color', e.target.value)}/></label>
@@ -355,23 +473,66 @@ const AgentEditorPanel = ({ selected, onOpenAgent }) => {
       <div className="agent-editor-row">
         <label>Provider
           <select value={draft.provider} onChange={(e) => set('provider', e.target.value)}>
-            {[draft.provider, ...providers.map((provider) => provider.name)].filter(Boolean).filter((value, index, list) => list.indexOf(value) === index).map((name) => (
+            {PROVIDER_CHOICES.map((name) => (
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
         </label>
         <label>Category<input value={draft.category} onChange={(e) => set('category', e.target.value)} placeholder="ops"/></label>
       </div>
-      <label>Tools allowed<input value={draft.toolsAllowed} onChange={(e) => set('toolsAllowed', e.target.value)} placeholder="Read, Write, Task"/></label>
-      <label>System prompt<textarea value={draft.systemPrompt} onChange={(e) => set('systemPrompt', e.target.value)} rows="5"/></label>
+      <label>
+        Tools allowed
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+          {TOOL_CATALOG.map((tool) => {
+            const active = (draft.toolsAllowed || []).includes(tool);
+            return (
+              <button
+                type="button"
+                key={tool}
+                onClick={() => toggleTool(tool)}
+                aria-pressed={active}
+                style={{
+                  padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
+                  font: '600 11px var(--font-mono)', letterSpacing: '0.04em',
+                  border: active
+                    ? '1px solid color-mix(in srgb, var(--cat-color) 65%, var(--border))'
+                    : '1px solid var(--border)',
+                  background: active
+                    ? 'color-mix(in srgb, var(--cat-color) 22%, rgba(0,0,0,0.32))'
+                    : 'rgba(0,0,0,0.26)',
+                  color: active ? 'var(--text)' : 'var(--text-3)',
+                }}
+              >{tool}</button>
+            );
+          })}
+        </div>
+      </label>
+      <label>System prompt<textarea value={draft.systemPrompt} onChange={(e) => set('systemPrompt', e.target.value)} rows="10" style={{ fontFamily: 'var(--font-mono)' }}/></label>
       <AgentSkillsSection agent={selected}/>
       <label className="agent-toggle"><input type="checkbox" checked={draft.enabled} onChange={(e) => set('enabled', e.target.checked)}/> Enabled</label>
 
       <div className="agent-editor-actions">
-        <button className="btn" disabled={busy} onClick={() => setDraft(blankAgentDraft())}>New</button>
+        <button className="btn" disabled={busy} onClick={() => setDraft(blankAgentDraft())} title="เปิดฟอร์มเปล่าเพื่อสร้าง persona ใหม่">+ New persona</button>
         <button className="btn primary" disabled={busy} onClick={save}>Save</button>
-        {draft.id && <button className="btn ghost" disabled={busy} onClick={remove}>Delete</button>}
+        {draft.id && (
+          <button
+            className="btn ghost"
+            disabled={busy || isLocked}
+            onClick={remove}
+            title={isLocked ? '🔒 ลบไม่ได้ — orchestrator ลำดับสำคัญ' : 'ลบ persona นี้'}
+            style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+          >{isLocked ? '🔒 Delete' : 'Delete'}</button>
+        )}
+        {selected?.id && (
+          <button
+            className="btn"
+            disabled={regenBusy}
+            onClick={regeneratePortrait}
+            title="สร้าง JRPG portrait ใหม่จากชื่อ/role/tagline/color ของ persona"
+          >{regenBusy ? 'กำลังเจน…' : '🎨 Regenerate portrait'}</button>
+        )}
       </div>
+      {toast && <Toast tone={toast.tone}>{toast.message}</Toast>}
       <CharacterImagePanel agent={selected}/>
       {selected && <button className="btn gold" onClick={() => onOpenAgent(selected.id)}>Open Profile</button>}
     </aside>

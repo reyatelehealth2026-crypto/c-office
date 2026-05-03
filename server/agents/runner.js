@@ -44,8 +44,8 @@ import { registerGateResolver } from '../state.js';
 import { recordPersonaOutcome } from './persona-tune.js';
 import { composedRecall, recordSkillCoOccurrence } from './skill-graph.js';
 
-const ORCHESTRA_PERSONA = 'orchestra';
-const CRITIC_PERSONA = 'vex';
+const ORCHESTRA_PERSONA = 'atlas';
+const CRITIC_PERSONA = 'warden';
 const MAX_TURNS = 14;
 const MAX_REVISIONS = 1;
 
@@ -262,11 +262,11 @@ Available personas:
 {ROSTER}
 
 --- IMPORTANT INSTRUCTIONS FOR 2026 REAL-TIME DATA ---
-1. Your internal knowledge is OUTDATED (it stops at 2024). 
-2. If the goal involves "latest trends", "news", "current events", or anything regarding the year 2026, you MUST start by delegating a research task to 'nana' (NOT nyx, NOT lumen, NOT yourself).
-3. The instruction for 'nana' MUST include the phrase "Search the internet for current May 2026 information".
-4. DO NOT assign research or drafting of current events to 'orchestra'. Orchestra only synthesizes.
-5. You are FORBIDDEN from hallucinating 2026 facts. Use 'nana' first.
+1. Your internal knowledge is OUTDATED (it stops at 2024).
+2. If the goal involves "latest trends", "news", "current events", or anything regarding the year 2026, you MUST start by delegating a research task to 'scout' (NOT yourself, NOT 'scribe').
+3. The instruction for 'scout' MUST include the phrase "Search the internet for current May 2026 information".
+4. DO NOT assign research or drafting of current events to 'atlas'. Atlas only synthesizes.
+5. You are FORBIDDEN from hallucinating 2026 facts. Use 'scout' first.
 -------------------------------------------------------
 
 You MUST reply with exactly and only a JSON array. DO NOT wrap the array in an object.
@@ -748,8 +748,25 @@ deliverable as your last assistant message — no tool call.`;
 async function executeStep(runId, goal, step, idx, prior, opts = {}) {
   const personaId = step.persona;
   const persona = getAgentSync(personaId) || { id: personaId, name: personaId, role: 'agent' };
-  const provider = opts.provider || 'claude';
-  const model = persona.model || (provider === 'codex' ? 'gpt-4o' : provider === 'gemini' ? 'gemini-3.1-pro-preview' : 'claude-sonnet-4-6');
+  // Per-persona provider wins over the run-level default. This is what makes
+  // codex personas (Vector, Relay) actually execute through the Codex CLI even
+  // when the orchestrator itself is on Claude. Run-level opts.provider is the
+  // fallback when the persona record doesn't pin a provider.
+  const personaProvider = String(persona.provider || '').trim().toLowerCase();
+  const provider = (personaProvider && personaProvider !== 'image' ? personaProvider : null)
+    || opts.provider
+    || 'claude';
+  // Drop a model that doesn't match the resolved provider (e.g. persona stored
+  // a Claude-shaped model id but the persona is now on codex) so the provider
+  // can fall back to its own default in DEFAULT_MODELS / callLLM.
+  const personaModel = persona.model || '';
+  const modelMatchesProvider = !personaModel
+    || (provider === 'claude' && /claude/i.test(personaModel))
+    || (provider === 'codex' && /^(gpt|o\d|codex)/i.test(personaModel))
+    || (provider === 'gemini' && /gemini/i.test(personaModel));
+  const model = (modelMatchesProvider && personaModel)
+    ? personaModel
+    : (provider === 'codex' ? 'gpt-4o' : provider === 'gemini' ? 'gemini-3.1-pro-preview' : 'claude-sonnet-4-6');
   const toolUseId = `step_${runId}_${idx}_${crypto.randomBytes(3).toString('hex')}`;
 
   startTask({
@@ -800,7 +817,7 @@ async function executeStep(runId, goal, step, idx, prior, opts = {}) {
   // which is why generated images were generic. Now we (a) distill priors
   // + instruction into a focused visual prompt via a cheap LLM call, and
   // (b) fall back to a direct concat if the distillation fails.
-  if (personaId === 'echo') {
+  if (personaId === 'forge' || personaId === 'echo') {
     // Compose ONE OR MANY image prompts based on the prior context. The
     // composer LLM returns a JSON array — if the prior text contained
     // "post 1 / post 2" or the instruction asks for N images, we get
@@ -1522,8 +1539,8 @@ Rules:
   you write here, plus the prior transcript you decide to quote inline.
 - Use 'done' as soon as the goal is satisfied. Do not pad with extra steps.
 - Hard cap: if the transcript already has ${TEAM_FLOW_MAX_ITERATIONS - 1} entries, you MUST reply 'done' with the best assembly you can.
-- For real-time / 2026 facts, delegate to nyx (Nana) FIRST before anyone writes copy.
-- Do NOT delegate to 'orchestra' — that's you.
+- For real-time / 2026 facts, delegate to 'scout' FIRST before anyone writes copy.
+- Do NOT delegate to 'atlas' — that's you.
 - Do NOT repeat a persona on the SAME sub-task. If a persona already produced what you need, move on.
 - When 'done', 'final' must be the COMPLETE artifact the user asked for, not a summary of what happened.`;
 

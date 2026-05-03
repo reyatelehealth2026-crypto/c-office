@@ -85,10 +85,14 @@ router.patch('/:id', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  const ok = deleteAgent(req.params.id);
-  if (!ok) return res.status(404).json({ error: 'unknown agent' });
-  broadcastAgents();
-  res.json({ ok: true });
+  try {
+    const ok = deleteAgent(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'unknown agent' });
+    broadcastAgents();
+    res.json({ ok: true });
+  } catch (error) {
+    sendError(res, error);
+  }
 });
 
 export default router;

@@ -441,8 +441,8 @@ export function setRunCritique(runId, critique) {
   if (critique?.text) {
     run.scratchpad.push({
       ts: Date.now(),
-      persona: 'vex',
-      personaName: getAgentSync('vex')?.name || 'Vivi',
+      persona: 'warden',
+      personaName: getAgentSync('warden')?.name || 'Warden',
       kind: 'critique',
       text: summarize(critique.text, 1200),
     });
@@ -467,8 +467,8 @@ export function requestRunCancellation(runId, reason = 'user-cancelled') {
   run.cancelReason = String(reason).slice(0, 200);
   run.scratchpad.push({
     ts: Date.now(),
-    persona: 'orchestra',
-    personaName: getAgentSync('orchestra')?.name || 'Orchestra',
+    persona: 'atlas',
+    personaName: getAgentSync('atlas')?.name || 'Atlas',
     kind: 'cancel-requested',
     text: `Cancellation requested: ${run.cancelReason}`,
   });
@@ -531,8 +531,8 @@ export function setRunVerification(runId, verification) {
   if (verification?.text) {
     run.scratchpad.push({
       ts: Date.now(),
-      persona: 'orchestra',
-      personaName: getAgentSync('orchestra')?.name || 'Orchestra',
+      persona: 'atlas',
+      personaName: getAgentSync('atlas')?.name || 'Atlas',
       kind: verification.passed ? 'verify-pass' : 'verify-fail',
       text: summarize(verification.text, 800),
     });
@@ -587,7 +587,7 @@ export function approveRunPhase(runId, phase) {
   const run = state.runs.get(runId);
   if (!run) throw new Error("unknown run: " + runId);
   run.status = "running";
-  run.scratchpad.push({ ts: Date.now(), persona: "orchestra", personaName: "Orchestra", kind: "gate-approved", text: "Phase " + phase + " approved" });
+  run.scratchpad.push({ ts: Date.now(), persona: "atlas", personaName: "Atlas", kind: "gate-approved", text: "Phase " + phase + " approved" });
   if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
   emitRun(run);
   const gate = gateResolvers.get(runId);
@@ -601,7 +601,7 @@ export function rejectRunPhase(runId, phase, reason) {
   run.status = "failed";
   run.error = String(reason);
   run.endedAt = Date.now();
-  run.scratchpad.push({ ts: Date.now(), persona: "orchestra", personaName: "Orchestra", kind: "gate-rejected", text: "Phase " + phase + " rejected: " + reason });
+  run.scratchpad.push({ ts: Date.now(), persona: "atlas", personaName: "Atlas", kind: "gate-rejected", text: "Phase " + phase + " rejected: " + reason });
   if (run.scratchpad.length > 200) run.scratchpad.splice(0, run.scratchpad.length - 200);
   emitRun(run);
   const gate = gateResolvers.get(runId);

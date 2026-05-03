@@ -608,7 +608,7 @@ const DynamicTasksPage = ({ onOpenAgent }) => {
   const cancelOrchestraRun = async (run) => {
     const id = run?.id;
     if (!id || runCancelBusy[id] || run.cancelRequested) return;
-    if (!window.confirm('ยกเลิกรัน Orchestra นี้หรือไม่?\nขั้นที่กำลังทำอยู่จะเล่นจบก่อน แล้วจะหยุดไม่ทำขั้นถัดไป')) return;
+    if (!window.confirm('ยกเลิกรัน Atlas นี้หรือไม่?\nขั้นที่กำลังทำอยู่จะเล่นจบก่อน แล้วจะหยุดไม่ทำขั้นถัดไป')) return;
     setRunCancelBusy((b) => ({ ...b, [id]: true }));
     try {
       await fetch(`/api/task/${id}/cancel`, {

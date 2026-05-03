@@ -26,20 +26,20 @@ function bossTier(text) {
 // Boss weaknesses — lookup from text → personaIds that get a damage boost
 // against this boss. Encourages routing the right agent at the right quest.
 const WEAKNESS_RULES = [
-  { match: /(bug|crash|fix|debug|error|fail|broken)/i,                 weak: ['vex', 'kai'],     element: '🛡️ Audit' },
-  { match: /(write|article|blog|copy|narrative|story|doc|content)/i,    weak: ['lumen', 'astra'], element: '✍️ Word' },
-  { match: /(design|ui|ux|visual|video|render|game|3d|xr)/i,            weak: ['echo'],           element: '🎨 Visual' },
-  { match: /(deploy|infra|incident|ops|workflow|sprint|pipeline)/i,    weak: ['orbit'],          element: '🛰️ Ops' },
-  { match: /(market|tiktok|instagram|sales|growth|seo|ad|campaign)/i,   weak: ['mira'],           element: '📈 Growth' },
-  { match: /(research|trend|analy|benchmark|investig|insight)/i,        weak: ['nyx'],            element: '🔍 Intel' },
-  { match: /(teach|train|course|mentor|learn|tutor)/i,                  weak: ['astra'],          element: '🎓 Sage' },
-  { match: /(plan|coord|orchestrat|delegat|route)/i,                    weak: ['orchestra'],      element: '👑 Lead' },
+  { match: /(bug|crash|fix|debug|error|fail|broken)/i,                 weak: ['warden', 'vector'], element: '🛡️ Audit' },
+  { match: /(write|article|blog|copy|narrative|story|doc|content)/i,    weak: ['scribe', 'oracle'], element: '✍️ Word' },
+  { match: /(design|ui|ux|visual|video|render|game|3d|xr)/i,            weak: ['forge'],           element: '🎨 Visual' },
+  { match: /(deploy|infra|incident|ops|workflow|sprint|pipeline)/i,    weak: ['relay'],           element: '🛰️ Ops' },
+  { match: /(market|tiktok|instagram|sales|growth|seo|ad|campaign)/i,   weak: ['pulse'],           element: '📈 Growth' },
+  { match: /(research|trend|analy|benchmark|investig|insight)/i,        weak: ['scout'],           element: '🔍 Intel' },
+  { match: /(teach|train|course|mentor|learn|tutor)/i,                  weak: ['oracle'],          element: '🎓 Sage' },
+  { match: /(plan|coord|orchestrat|delegat|route)/i,                    weak: ['atlas'],           element: '👑 Lead' },
 ];
 
 function weaknessOf(text) {
   const t = (text || '').toLowerCase();
   for (const r of WEAKNESS_RULES) if (r.match.test(t)) return r;
-  return { match: /./, weak: ['orchestra'], element: '✦ Generic' };
+  return { match: /./, weak: ['atlas'], element: '✦ Generic' };
 }
 
 // ── Boss SVG — stylized 4-armed crystal wizard silhouette ────────────────────
@@ -371,7 +371,7 @@ const AdventurePage = ({ onOpenAgent }) => {
     if (quickBusy) return;
     setQuickBusy(true);
     const def = window.PROVIDERS?.default || 'claude';
-    const targetAgent = weakness.weak[0] || 'orchestra';
+    const targetAgent = weakness.weak[0] || 'atlas';
     window.openScene({
       title: bossDisplayName,
       body: bossText,
@@ -403,7 +403,7 @@ const AdventurePage = ({ onOpenAgent }) => {
             className="btn primary"
             onClick={quickStrike}
             disabled={quickBusy || bossHp === 0}
-            title={'Dispatch ' + (weakness.weak[0] || 'orchestra') + ' against this quest'}
+            title={'Dispatch ' + (weakness.weak[0] || 'atlas') + ' against this quest'}
           >
             {quickBusy ? 'Striking…' : '⚔ Quick Strike'}
           </button>
