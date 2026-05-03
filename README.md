@@ -141,6 +141,8 @@ ls "C-Office Design System/preview/"
 - **OAuth-first credential store** — เก็บใน `~/.c-office/credentials.json` แบบ encrypted local file
 - **Settings → Connections** — connect Anthropic, Google, Replicate, OpenAI
 - **No env-var sprawl** — ไม่จำเป็นต้องโยน token ลง shell ทุกครั้ง
+- **Provider setup guides:**
+  - [Codex CLI](docs/CODEX_SETUP.md) — ChatGPT login + token refresh + image gen
 
 ---
 
