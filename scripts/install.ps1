@@ -11,10 +11,17 @@ $ProgressPreference   = 'SilentlyContinue'
 
 # ---------- Banner ----------
 Write-Host ""
-Write-Host "+--------------------------------------------+" -ForegroundColor Magenta
-Write-Host "|  C-OFFICE  -  AI Agent Command Center      |" -ForegroundColor Magenta
-Write-Host "|  Installer for Windows  /  ตัวติดตั้งสำหรับ Windows |" -ForegroundColor Magenta
-Write-Host "+--------------------------------------------+" -ForegroundColor Magenta
+Write-Host "  ___       _____   __  __  _      ___    " -ForegroundColor Magenta
+Write-Host " / __|     / __ \ \ / _|/ _|(_)__ |__ \   " -ForegroundColor Magenta
+Write-Host "| (__   - | |  | | | |_| |_  / _|/ _/    " -ForegroundColor Magenta
+Write-Host " \___|     \____/  |_| |_|  \__|\__|     " -ForegroundColor Magenta
+Write-Host ""
+Write-Host "  AI Agent Command Center  -  ศูนย์สั่งงานเอเจนต์ AI" -ForegroundColor White
+Write-Host "  Roster: Atlas + Scout + Scribe + Forge + Vector +" -ForegroundColor DarkGray
+Write-Host "          Pulse + Warden + Relay + Oracle" -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "  Installer for Windows  /  ตัวติดตั้งสำหรับ Windows" -ForegroundColor Cyan
+Write-Host "  https://github.com/vrzycodex/c-office" -ForegroundColor DarkGray
 Write-Host ""
 
 # ---------- Config ----------
