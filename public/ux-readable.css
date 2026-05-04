@@ -241,6 +241,7 @@ body::before {
   min-height: 44px;
   padding: 10px 14px !important;
   border: 1px solid transparent;
+  background: transparent !important;
   font-weight: 600 !important;
   color: var(--text-primary) !important;
   transition: all 140ms ease;
@@ -1929,4 +1930,81 @@ a:focus-visible,
 
 .ux-mini-panel p {
   color: var(--text-body) !important;
+}
+
+/* ── Sim Office overrides — kill the dark navy "office floor" that
+   clashes with the light #efefef theme. The Workfloor hero, stats,
+   and stage become clean light cards. */
+.agent-office-page {
+  --office-wall: #f3f3f3 !important;
+  --office-floor: #ededed !important;
+}
+
+.agent-office-hero {
+  background:
+    linear-gradient(135deg, rgba(157, 92, 255, 0.05), rgba(34, 211, 238, 0.04) 60%, transparent),
+    #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: var(--text-primary) !important;
+}
+
+.agent-office-hero::before {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 23px, rgba(0,0,0,0.025) 23px 24px),
+    linear-gradient(90deg, rgba(0,0,0,0.03), transparent 18%, transparent 82%, rgba(0,0,0,0.025)) !important;
+  opacity: 0.7 !important;
+}
+
+.agent-office-hero h1,
+.agent-office-hero h2,
+.dashboard-office-floor h1,
+.dashboard-office-floor h2 {
+  color: var(--text-primary) !important;
+}
+
+.agent-office-hero p,
+.dashboard-office-floor p {
+  color: var(--text-body) !important;
+}
+
+.agent-office-stats span,
+.agent-office-stats strong {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.agent-office-room,
+.agent-party-stage,
+.dashboard-office-floor .agent-office-room {
+  background:
+    linear-gradient(180deg, #f5f5f5 0 37%, #ededed 37% 100%) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.room-window {
+  background:
+    linear-gradient(90deg, transparent 0 24%, rgba(0,0,0,0.06) 24% 25%, transparent 25% 49%, rgba(0,0,0,0.06) 49% 50%, transparent 50% 74%, rgba(0,0,0,0.06) 74% 75%, transparent 75%),
+    linear-gradient(180deg, rgba(157, 92, 255, 0.10), rgba(34, 211, 238, 0.06)) !important;
+}
+
+.room-light.one,
+.room-light.two {
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.07), transparent 78%) !important;
+}
+
+/* Office category chips (ALL / OPS / SCRIPTORIUM ...) — match light theme */
+.office-floor .chip,
+.agent-office-page .chip {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: var(--text-primary) !important;
+}
+
+.office-floor .chip.active,
+.agent-office-page .chip.active {
+  background: rgba(157, 92, 255, 0.10) !important;
+  border-color: var(--accent-violet) !important;
+  color: var(--accent-violet) !important;
 }
