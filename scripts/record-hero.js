@@ -65,7 +65,7 @@ async function main() {
 
   try {
     // 1. Land on dashboard, wait for window.AGENTS to populate.
-    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(
       () => Array.isArray(window.AGENTS) && window.AGENTS.length > 0,
       { timeout: 15_000 },
@@ -75,14 +75,14 @@ async function main() {
 
     // 2. Navigate to the agents (roster) page if available.
     try {
-      await page.goto(`${BASE_URL}/#/agents`, { waitUntil: 'networkidle', timeout: 8_000 });
+      await page.goto(`${BASE_URL}/#/agents`, { waitUntil: 'domcontentloaded', timeout: 8_000 });
     } catch {
       /* not all builds expose this route — keep going */
     }
     await page.waitForTimeout(3_000);
 
     // 3. Back to dashboard for the prompt input.
-    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
 
     // 4. Find the Send-to-Atlas input. We try a list of known selectors; the
