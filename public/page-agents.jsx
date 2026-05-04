@@ -1,919 +1,539 @@
-/* ====== SIM OFFICE - dynamic agent workfloor with editable roster ====== */
+/* ============================================================
+   SIM OFFICE CONTROL — C-Office Workfloor (full redesign)
+   Agents shown as employees at desks with live workload / focus /
+   energy / queue / current-task ticker. Inspector on the right
+   has Profile + Live + free-form Image Lab (no rigid Look Lock).
+   Backed by /api/state, /api/agents, /api/images/generate.
+   ============================================================ */
 
-const CATEGORY_META = {
-  growth:      { label: 'Growth',      color: 'var(--accent-magenta)' },
-  forge:       { label: 'Forge',       color: 'var(--accent-cyan)' },
-  intel:       { label: 'Intel',       color: 'var(--accent-violet)' },
-  scriptorium: { label: 'Scriptorium', color: 'var(--accent-gold)' },
-  studio:      { label: 'Studio',      color: 'var(--accent-lime)' },
-  ops:         { label: 'Ops',         color: 'var(--accent-orange)' },
-  general:     { label: 'General',     color: 'var(--text-2)' },
+const PROVIDER_CHOICES = ['claude', 'codex', 'image'];
+const TOOL_CATALOG = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'delegate'];
+
+const DEFAULT_AGENT_IMAGES = {
+  atlas: '/portraits/atlas.png',  oracle: '/portraits/oracle.png',
+  scribe: '/portraits/scribe.png', warden: '/portraits/warden.png',
+  vector: '/portraits/vector.png', pulse: '/portraits/pulse.png',
+  forge: '/portraits/forge.png',   scout: '/portraits/scout.png',
+  relay: '/portraits/relay.png',
 };
-
-const AGENT_STATUS_META = {
-  busy:    { label: 'Working', tone: 'busy' },
-  active:  { label: 'Online',  tone: 'active' },
-  idle:    { label: 'Standby', tone: 'idle' },
-  offline: { label: 'Offline', tone: 'offline' },
+const DEFAULT_AGENT_AVATARS = {
+  atlas: 'AT', oracle: 'OR', scribe: 'SC', warden: 'WD', vector: 'VC',
+  pulse: 'PL', forge: 'FG', scout: 'ST', relay: 'RL',
 };
-
-const PERSONA_ELEMENTS = {
-  orchestra: '👑',
-  astra: '🎓',
-  lumen: '✒️',
-  vex: '🛡️',
-  kai: '⚡',
-  mira: '📈',
-  echo: '🎨',
-  nyx: '🔍',
-  orbit: '⚙️',
+const PERSONA_GLYPH = {
+  atlas: '👑', oracle: '🔮', scribe: '✒️', warden: '🛡️', vector: '⚡',
+  pulse: '📈', forge: '🎨', scout: '🔍', relay: '⚙️',
 };
 
 const inferCategoryKey = (agent) => {
-  const explicit = (agent.category || '').toLowerCase().trim();
+  const explicit = (agent?.category || '').toLowerCase().trim();
   if (explicit) return explicit;
-  const text = `${agent.name || ''} ${agent.role || ''}`.toLowerCase();
+  const text = `${agent?.name || ''} ${agent?.role || ''}`.toLowerCase();
   if (/growth|market|sales|commerce|social|seo/.test(text)) return 'growth';
   if (/build|code|engineer|dev|frontend|backend|forge/.test(text)) return 'forge';
   if (/research|intel|analyst|data|insight/.test(text)) return 'intel';
   if (/content|write|scribe|mentor|knowledge|course/.test(text)) return 'scriptorium';
-  if (/visual|studio|design|video|game|creative/.test(text)) return 'studio';
+  if (/visual|studio|design|video|game|creative|image/.test(text)) return 'studio';
   if (/ops|devops|sre|orchestr|project|workflow/.test(text)) return 'ops';
   return 'general';
 };
-
-const categoryMeta = (agent) => {
-  const key = inferCategoryKey(agent);
-  return { key, ...(CATEGORY_META[key] || { label: key || 'General', color: agent.color || 'var(--accent-cyan)' }) };
+const CATEGORY_COLOR = {
+  growth: '#ec4899', forge: '#7cd3ff', intel: '#a78bfa',
+  scriptorium: '#f5b942', studio: '#84cc16', ops: '#fb923c', general: '#94a3b8',
+};
+const CATEGORY_LABEL = {
+  growth: 'Growth', forge: 'Forge', intel: 'Intel',
+  scriptorium: 'Scriptorium', studio: 'Studio', ops: 'Ops', general: 'General',
 };
 
-const DEFAULT_AGENT_IMAGES = {
-  atlas: '/portraits/atlas.png',
-  oracle: '/portraits/oracle.png',
-  scribe: '/portraits/scribe.png',
-  warden: '/portraits/warden.png',
-  vector: '/portraits/vector.png',
-  pulse: '/portraits/pulse.png',
-  forge: '/portraits/forge.png',
-  scout: '/portraits/scout.png',
-  relay: '/portraits/relay.png',
+const STATUS_LABEL = { busy: 'Working', active: 'Online', idle: 'Standby', offline: 'Off shift' };
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+const hashSeed = (s) => {
+  let h = 0; const str = String(s || '');
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
 };
 
-const DEFAULT_AGENT_AVATARS = {
-  atlas: 'AT',
-  oracle: 'OR',
-  scribe: 'SC',
-  warden: 'WD',
-  vector: 'VC',
-  pulse: 'PL',
-  forge: 'FG',
-  scout: 'ST',
-  relay: 'RL',
-};
+/* --------- live metric derivation -------------------------- */
+function computeMetrics(agent, tasks, now) {
+  const queue = (tasks || []).filter((t) => t.personaId === agent.id && t.status === 'running').length;
+  const success = clamp(agent?.stats?.success ?? 100, 0, 100);
+  const seed = hashSeed(agent.id);
+  const wave = Math.sin((now / 4000) + seed * 0.13) * 8;
+  let workload = 5;
+  if (agent.status === 'busy')   workload = clamp(55 + queue * 12 + wave, 30, 100);
+  else if (agent.status === 'active') workload = clamp(25 + queue * 10 + wave, 12, 65);
+  else if (agent.status === 'offline') workload = 0;
+  const focus = clamp(success - Math.abs(wave) * 0.4, 8, 100);
+  let energy;
+  if (agent.status === 'busy')   energy = clamp(72 - Math.sin((now / 7000) + seed * 0.21) * 10, 35, 88);
+  else if (agent.status === 'active') energy = clamp(86 - Math.sin((now / 9000) + seed * 0.17) * 6, 70, 96);
+  else if (agent.status === 'offline') energy = 0;
+  else energy = clamp(96 - Math.sin((now / 11000) + seed * 0.09) * 4, 86, 100);
+  return { queue, workload: Math.round(workload), focus: Math.round(focus), energy: Math.round(energy) };
+}
 
-const defaultImageForAgent = (agent) => DEFAULT_AGENT_IMAGES[agent?.id] || '';
-const defaultAvatarForAgent = (agent) => DEFAULT_AGENT_AVATARS[agent?.id] || agent?.avatarInitials || '';
-
-const statValue = (agent, key) => agent.personality?.[key] ?? 50;
-
-// Provider list is fixed by Phase 5 contract: claude (Anthropic SDK), codex (OpenAI Codex CLI),
-// image (Echo/portrait pipeline). Anything else is rejected by the persona runner downstream.
-const PROVIDER_CHOICES = ['claude', 'codex', 'image'];
-
-// Allowed tools chip catalog — kept in sync with the Claude Agent SDK tool surface so the
-// persona runner can pass them through to maxToolUseLimit / allowedTools without translation.
-const TOOL_CATALOG = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'delegate'];
-
-const blankAgentDraft = () => ({
-  name: '',
-  role: '',
-  tagline: '',
-  avatar: '',
-  color: '#00f0ff',
-  provider: 'claude',
-  systemPrompt: '',
-  enabled: true,
-  toolsAllowed: [],
-  category: 'general',
-  deletable: true,
-});
-
-const agentToDraft = (agent) => ({
-  id: agent?.id || '',
-  name: agent?.name || '',
-  role: agent?.role || '',
-  tagline: agent?.tagline || '',
-  avatar: agent?.avatar || agent?.avatarInitials || '',
-  color: agent?.color || '#00f0ff',
-  provider: PROVIDER_CHOICES.includes(agent?.provider) ? agent.provider : 'claude',
-  systemPrompt: agent?.systemPrompt || '',
-  enabled: agent?.enabled !== false,
-  toolsAllowed: Array.isArray(agent?.toolsAllowed) ? [...agent.toolsAllowed] : [],
-  category: inferCategoryKey(agent || {}),
-  deletable: agent?.deletable !== false,
-});
-
-const draftPayload = (draft) => ({
-  name: draft.name,
-  role: draft.role,
-  tagline: draft.tagline,
-  avatar: draft.avatar,
-  color: draft.color,
-  provider: draft.provider,
-  systemPrompt: draft.systemPrompt,
-  enabled: !!draft.enabled,
-  category: draft.category,
-  toolsAllowed: Array.isArray(draft.toolsAllowed)
-    ? draft.toolsAllowed.map((tool) => String(tool).trim()).filter(Boolean)
-    : [],
-});
-
-const characterPromptPreview = (agent) => {
-  if (!agent) return '';
-  return [
-    `Create a full-body staff avatar illustration for "${agent.name}".`,
-    `Work role: ${agent.role || 'AI teammate'}. Team category: ${inferCategoryKey(agent)}.`,
-    `Profile cues: ${agent.systemPrompt || agent.tagline || 'capable, focused, dependable'}.`,
-    'Visual direction: professional digital art style, clean silhouette, expressive face, detailed fabric/materials, natural standing pose, clean studio lighting.',
-    'Asset target: transparent-background full-body PNG for a staff roster UI.',
-    'Canvas: portrait ratio, head-to-toe full body, feet visible, centered.',
-    'Composition: one isolated full-body staff avatar only, alpha/transparent background preferred.',
-    'Quality: high detail, clean anatomy, polished 3D-game-key-art feel.',
-    'Avoid: watermark, logo, signature, cropped limbs, landscape orientation.',
-  ].join('\n');
-};
-
-const AgentModelUnit = ({ agent, selected, onSelect, onOpenAgent }) => {
-  const category = categoryMeta(agent);
-  const status = AGENT_STATUS_META[agent.status] || AGENT_STATUS_META.idle;
-  const load = Math.max(8, Math.min(100, Math.round((statValue(agent, 'speed') + statValue(agent, 'autonomy')) / 2)));
-  const focus = Math.max(8, Math.min(100, Math.round((statValue(agent, 'precision') + statValue(agent, 'collab')) / 2)));
-  const energy = Math.max(8, Math.min(100, Math.round((statValue(agent, 'empathy') + statValue(agent, 'creativity')) / 2)));
+/* --------- desk tile --------------------------------------- */
+const DeskTile = ({ agent, tasks, now, selected, onSelect, onOpen }) => {
+  const cat = inferCategoryKey(agent);
+  const color = CATEGORY_COLOR[cat] || agent.color || '#7cd3ff';
+  const m = computeMetrics(agent, tasks, now);
+  const portrait = agent.image || DEFAULT_AGENT_IMAGES[agent.id];
+  const initials = agent.avatarInitials || DEFAULT_AGENT_AVATARS[agent.id] || (agent.name || '??').slice(0, 2).toUpperCase();
+  const ticker = (agent.currentTask && agent.currentTask !== '— idle' && agent.currentTask !== 'awaiting work')
+    ? agent.currentTask
+    : (agent.tagline || agent.role || 'รอรับงานใหม่');
+  const isLive = agent.status === 'busy' || agent.status === 'active';
 
   return (
     <button
-      className={`agent-model-unit status-${status.tone} rarity-${agent.rarity || 'R'} ${selected ? 'is-selected' : ''}`}
-      style={{ '--agent-gradient': agent.gradient, '--cat-color': category.color }}
+      type="button"
+      className={`wf-desk status-${agent.status || 'idle'} ${agent.status === 'busy' ? 'is-busy' : ''} ${selected ? 'is-selected' : ''}`}
+      style={{ '--cat-color': color }}
       onClick={() => onSelect(agent.id)}
-      onDoubleClick={() => onOpenAgent(agent.id)}
-      title={agent.currentTask || agent.tagline || agent.role}
+      onDoubleClick={() => onOpen && onOpen(agent.id)}
+      title={agent.tagline || agent.role || agent.name}
     >
-      <div className="agent-station-hud">
-        <span className="agent-element" aria-hidden="true">{PERSONA_ELEMENTS[agent.id] || '✦'}</span>
-        <span className="agent-status-pill"><i/> {status.label}</span>
-        <span className="agent-rarity">{agent.rarity || agent.provider || 'agent'}</span>
-        {agent.deletable === false && (
-          <span
-            className="agent-lock-badge"
-            title="ลบไม่ได้ — orchestrator ลำดับสำคัญ"
-            aria-label="locked"
-            style={{
-              position: 'absolute', top: 8, right: 8, zIndex: 2,
-              fontSize: 12, padding: '2px 6px', borderRadius: 999,
-              background: 'rgba(255,215,0,0.16)', border: '1px solid rgba(255,215,0,0.45)',
-              color: '#ffd86b', font: '700 10px var(--font-mono)', letterSpacing: '0.06em',
-            }}
-          >🔒</span>
-        )}
+      {agent.deletable === false && <span className="wf-lock" title="Locked — orchestrator">🔒</span>}
+      <div className="wf-desk-head">
+        <span className={`wf-status-dot ${agent.status || 'idle'}`}><i/>{STATUS_LABEL[agent.status] || 'Standby'}</span>
+        <span className="wf-rarity-pill">{(agent.provider || 'claude').toUpperCase()}</span>
       </div>
 
-      <div className="agent-model-stage">
-        <div className="agent-workstation">
-          <span className="workstation-monitor"/>
-          <span className="workstation-keyboard"/>
-          <span className="workstation-chair"/>
+      <div className="wf-desk-stage">
+        <div className="wf-meter-legend"><span>W</span><span>F</span><span>E</span></div>
+        <div className="wf-portrait">
+          {portrait ? <img src={portrait} alt={agent.name}/> : <span>{initials}</span>}
         </div>
-        <div className="agent-back-screen screen-left">
-          <b>Queue</b>
-          <span>{agent.currentTask ? '1 task active' : 'clear desk'}</span>
-        </div>
-        <div className="agent-back-screen screen-right">
-          <b>{category.label}</b>
-          <span>{agent.enabled === false ? 'OFF SHIFT' : 'ON SHIFT'}</span>
-        </div>
-        <div className="agent-light-column"/>
-        <div className="agent-model-portrait">
-          {agent.image
-            ? <img src={agent.image} alt={agent.name}/>
-            : <span>{agent.avatarInitials || agent.avatar || 'AG'}</span>}
-        </div>
-        <div className="agent-holo-ring"/>
-        <div className="agent-desk">
-          <span className="desk-light"/>
-          <span className="desk-console"/>
+        <div className="wf-monitor"/>
+        <div className="wf-mug"/>
+        <div className="wf-meters">
+          <div className="wf-meter" data-kind="W" title={`Workload ${m.workload}%`}><i style={{ height: `${m.workload}%` }}/></div>
+          <div className="wf-meter" data-kind="F" title={`Focus ${m.focus}%`}><i style={{ height: `${m.focus}%` }}/></div>
+          <div className="wf-meter" data-kind="E" title={`Energy ${m.energy}%`}><i style={{ height: `${m.energy}%` }}/></div>
         </div>
       </div>
 
-      <div className="agent-unit-footer">
-        <div>
-          {/* Defensive fallbacks — half-migrated records (e.g. user-created agents
-              with single-character Thai names like "กำ") used to render as a bare
-              partial glyph. Normalize to a non-empty display string so cards always
-              show *something* readable, without mutating ~/.c-office/agents.json. */}
-          <strong>{(agent.name && String(agent.name).trim()) || agent.id || 'Untitled agent'}</strong>
-          <span>{(agent.role && String(agent.role).trim()) || category.label || 'Staff'}</span>
+      <div className="wf-desk-foot">
+        <div className="wf-desk-name">
+          <strong>{(agent.name || agent.id || 'Untitled').toString().trim() || 'Untitled'}</strong>
+          <em>{agent.role || CATEGORY_LABEL[cat] || 'Staff'} {PERSONA_GLYPH[agent.id] || ''}</em>
         </div>
-        <div className="agent-meter-row">
-          <span style={{ width: `${load}%` }} title="Workload"/>
-          <span style={{ width: `${focus}%` }} title="Focus"/>
-          <span style={{ width: `${energy}%` }} title="Energy"/>
+        <div className="wf-queue-row">
+          <span className={`wf-queue-chip ${m.queue ? '' : 'empty'}`}>Q · {m.queue}</span>
+          <span className={`wf-queue-chip ${m.queue ? '' : 'empty'}`}>Lv {agent.level || 1}</span>
         </div>
+        <div className={`wf-ticker ${isLive ? 'is-live' : ''}`} title={ticker}>{ticker}</div>
       </div>
     </button>
   );
 };
 
-const AgentSkillsSection = ({ agent }) => {
-  const [catalog, setCatalog] = React.useState([]);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState('');
-  const [open, setOpen] = React.useState(false);
-
-  const installed = Array.isArray(agent?.installedSkills) ? agent.installedSkills : [];
-
-  const refreshCatalog = React.useCallback(async () => {
-    try {
-      const r = await fetch('/api/agent-skills');
-      const j = await r.json();
-      setCatalog(Array.isArray(j.skills) ? j.skills : []);
-    } catch (e) { setError(e.message || String(e)); }
-  }, []);
-
-  React.useEffect(() => { refreshCatalog(); }, [refreshCatalog]);
-
-  if (!agent?.id) {
-    return (
-      <div className="agent-skills-section" style={{ marginTop: 8, padding: 10, border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 12 }}>
-        เลือก agent ก่อน เพื่อจะติดตั้งสกิล
+/* --------- inspector: profile / live / image lab ----------- */
+const InspectorProfile = ({ draft, set, toggleTool, onSave, onDelete, busy, isLocked }) => (
+  <>
+    <div className="wf-fld"><span>Name</span><input value={draft.name} onChange={(e) => set('name', e.target.value)} placeholder="Agent name"/></div>
+    <div className="wf-fld"><span>Role</span><input value={draft.role} onChange={(e) => set('role', e.target.value)} placeholder="Role / responsibility"/></div>
+    <div className="wf-fld"><span>Tagline</span><textarea rows="2" value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} placeholder="คำโปรย persona"/></div>
+    <div className="wf-fld-row">
+      <div className="wf-fld"><span>Provider</span>
+        <select value={draft.provider} onChange={(e) => set('provider', e.target.value)}>
+          {PROVIDER_CHOICES.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
       </div>
-    );
-  }
-
-  const installSkill = async (skillId) => {
-    setBusy(true); setError('');
-    try {
-      const r = await fetch(`/api/agents/${agent.id}/skills`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skillId }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'install failed');
-      await window.fetchCOfficeState?.();
-    } catch (e) { setError(e.message || String(e)); }
-    finally { setBusy(false); }
-  };
-
-  const uninstallSkill = async (skillId) => {
-    setBusy(true); setError('');
-    try {
-      const r = await fetch(`/api/agents/${agent.id}/skills/${encodeURIComponent(skillId)}`, { method: 'DELETE' });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error || 'uninstall failed');
-      await window.fetchCOfficeState?.();
-    } catch (e) { setError(e.message || String(e)); }
-    finally { setBusy(false); }
-  };
-
-  const installedDetails = installed.map((id) => catalog.find((s) => s.id === id) || { id, name: id, summary: '(removed from catalog)' });
-  const available = catalog.filter((s) => !installed.includes(s.id));
-
-  return (
-    <div className="agent-skills-section" style={{ marginTop: 12, padding: 12, border: '2px solid var(--border)', borderRadius: 10, background: 'var(--bg-card-2)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div>
-          <div style={{ font: '800 11px var(--font-mono)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--accent-cyan)' }}>AI Skills</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>real capabilities injected into the agent's system prompt</div>
-        </div>
-        <button type="button" className="btn ghost" style={{ fontSize: 11 }} onClick={() => setOpen((v) => !v)}>
-          {open ? 'Hide catalog' : `Browse catalog (${available.length})`}
-        </button>
-      </div>
-
-      {error && <div style={{ color: 'var(--ux-danger)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {installedDetails.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>ยังไม่มีสกิลติดตั้ง — กด "Browse catalog" เพื่อเลือก</div>
-        )}
-        {installedDetails.map((s) => (
-          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8 }}>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ font: '700 12px var(--font-body)', color: 'var(--text-primary)' }}>{s.name}</div>
-              {s.summary && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.summary}</div>}
-              {s.category && <span style={{ fontSize: 9, font: '700 9px var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-cyan)', marginRight: 6 }}>{s.category}</span>}
-              {Array.isArray(s.tools) && s.tools.length > 0 && s.tools.map((t) => (
-                <span key={t} className="ux-tool-badge" data-tool={t} style={{ marginRight: 4 }}>{t}</span>
-              ))}
-            </div>
-            <button type="button" className="btn ghost" disabled={busy} onClick={() => uninstallSkill(s.id)} style={{ fontSize: 11 }}>Uninstall</button>
-          </div>
+      <div className="wf-fld"><span>Theme color</span><input type="color" value={draft.color} onChange={(e) => set('color', e.target.value)}/></div>
+    </div>
+    <div className="wf-fld">
+      <span>Tools allowed</span>
+      <div className="wf-chip-row">
+        {TOOL_CATALOG.map((t) => (
+          <button type="button" key={t} className={`wf-chip ${(draft.toolsAllowed||[]).includes(t) ? 'is-on' : ''}`} onClick={() => toggleTool(t)}>{t}</button>
         ))}
       </div>
+    </div>
+    <div className="wf-fld">
+      <span>System prompt</span>
+      <textarea rows="8" value={draft.systemPrompt} onChange={(e) => set('systemPrompt', e.target.value)} style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 12 }}/>
+    </div>
+    <div className="wf-fld-row">
+      <button type="button" className="wf-btn primary" disabled={busy} onClick={onSave}>{busy ? '…' : (draft.id ? 'Save' : 'Create persona')}</button>
+      {draft.id && (
+        <button type="button" className="wf-btn ghost" disabled={busy || isLocked} onClick={onDelete} title={isLocked ? 'Locked' : 'Delete'}>{isLocked ? '🔒 Locked' : 'Delete'}</button>
+      )}
+    </div>
+  </>
+);
 
-      {open && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ font: '700 10px var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Catalog</div>
-          {available.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>ติดตั้งครบทุกสกิลแล้ว</div>}
-          {available.map((s) => (
-            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }}>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ font: '700 12px var(--font-body)', color: 'var(--text-primary)' }}>{s.name}{s.builtin && <span style={{ marginLeft: 6, fontSize: 9, font: '700 9px var(--font-mono)', color: 'var(--accent-gold)' }}>BUILTIN</span>}</div>
-                {s.summary && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.summary}</div>}
-                {s.category && <span style={{ fontSize: 9, font: '700 9px var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-cyan)' }}>{s.category}</span>}
-              </div>
-              <button type="button" className="btn primary" disabled={busy} onClick={() => installSkill(s.id)} style={{ fontSize: 11 }}>Install</button>
+const InspectorLive = ({ agent, tasks, events, now }) => {
+  const m = computeMetrics(agent, tasks, now);
+  const myTasks = (tasks || []).filter((t) => t.personaId === agent.id).slice(0, 6);
+  const myEvents = (events || []).filter((e) => e.personaId === agent.id).slice(0, 8);
+  return (
+    <>
+      <div className="wf-live-stats">
+        <div className="wf-live-stat"><b>{m.workload}%</b><span>workload</span></div>
+        <div className="wf-live-stat"><b>{m.focus}%</b><span>focus</span></div>
+        <div className="wf-live-stat"><b>{m.energy}%</b><span>energy</span></div>
+        <div className="wf-live-stat"><b>{m.queue}</b><span>queue</span></div>
+        <div className="wf-live-stat"><b>Lv {agent.level || 1}</b><span>{(agent.progress || 0)}% xp</span></div>
+        <div className="wf-live-stat"><b>{agent?.stats?.tokens || 0}</b><span>tokens</span></div>
+      </div>
+      <div className="wf-fld"><span>Active queue</span>
+        <div className="wf-feed">
+          {myTasks.length === 0 && <div className="wf-feed-row"><time>—</time><span>คิวว่าง</span></div>}
+          {myTasks.map((t) => (
+            <div key={t.id} className="wf-feed-row">
+              <time>{t.status}</time>
+              <span>{t.description || t.subagent_type || t.id}</span>
             </div>
           ))}
         </div>
-      )}
+      </div>
+      <div className="wf-fld"><span>Recent events</span>
+        <div className="wf-feed">
+          {myEvents.length === 0 && <div className="wf-feed-row"><time>—</time><span>ยังไม่มีกิจกรรม</span></div>}
+          {myEvents.map((e) => (
+            <div key={e.id || `${e.kind}:${e.ts}`} className="wf-feed-row">
+              <time>{new Date(e.ts || Date.now()).toLocaleTimeString().slice(0, 5)}</time>
+              <span>{e.kind || e.tool || e.type || 'event'} · {e.summary || e.tool_name || ''}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+};
+
+/* --------- free-form image lab (NO rigid Look Lock UI) ------ */
+const STYLE_HINTS = [
+  { id: 'photoreal',   label: 'Photoreal',    text: 'photorealistic, studio lighting, sharp focus, 8k' },
+  { id: 'cinematic',   label: 'Cinematic',    text: 'cinematic key art, dramatic lighting, depth of field, 4k' },
+  { id: 'anime',       label: 'Anime / JRPG', text: 'high-quality anime/JRPG splash art, vibrant cel shading' },
+  { id: 'manga',       label: 'Manga',        text: 'black & white manga ink, screentone shading, dynamic lines' },
+  { id: '3d',          label: '3D Render',    text: 'Unreal Engine 5 render, octane, subsurface scattering' },
+  { id: 'pixel',       label: 'Pixel art',    text: '32-bit pixel art, retro game palette, clean dithering' },
+  { id: 'oil',         label: 'Oil painting', text: 'oil painting, visible brushwork, classical composition' },
+  { id: 'watercolor',  label: 'Watercolor',   text: 'soft watercolor wash, paper texture, gentle edges' },
+  { id: 'concept',     label: 'Concept art',  text: 'concept art, painterly polish, narrative atmosphere' },
+  { id: 'flat',        label: 'Flat vector',  text: 'flat vector illustration, clean shapes, limited palette' },
+];
+const ASPECTS = [
+  { id: '3:4',  label: 'Portrait',  size: '1024x1536' },
+  { id: '1:1',  label: 'Square',    size: '1024x1024' },
+  { id: '4:3',  label: 'Standard',  size: '1024x1024' },
+  { id: '16:9', label: 'Wide',      size: '1536x1024' },
+  { id: '9:16', label: 'Tall',      size: '1024x1536' },
+];
+
+const InspectorImageLab = ({ agent, onPatch }) => {
+  const [provider, setProvider] = React.useState('codex-image2');
+  const [prompt, setPrompt] = React.useState('');
+  const [negative, setNegative] = React.useState('text, watermark, logo, signature');
+  const [aspect, setAspect] = React.useState('3:4');
+  const [hints, setHints] = React.useState([]);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
+  const toggleHint = (id) => setHints((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  const aspectMeta = ASPECTS.find((a) => a.id === aspect) || ASPECTS[0];
+
+  const compose = () => {
+    const styleLine = hints.map((id) => STYLE_HINTS.find((h) => h.id === id)?.text).filter(Boolean).join(', ');
+    return [
+      '--- LOOK LOCK ---',
+      `Subject: "${agent?.name || 'AI Agent'}", role: ${agent?.role || 'AI teammate'}.`,
+      prompt.trim() || `Free portrait of ${agent?.name || 'agent'}; expressive, characterful.`,
+      styleLine ? `Style hints: ${styleLine}.` : '',
+      negative.trim() ? `Avoid: ${negative.trim()}.` : '',
+    ].filter(Boolean).join('\n');
+  };
+
+  const generate = async (kind) => {
+    if (!agent?.id) return;
+    setBusy(true); setErr('');
+    try {
+      const r = await fetch('/api/images/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider, mode: 'character', agentId: agent.id, kind,
+          prompt: compose(), size: aspectMeta.size, quality: 'high',
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'image generation failed');
+      await window.fetchCOfficeState?.();
+    } catch (e) { setErr(e.message || String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const apply = (key) => {
+    if (!agent?.id) return;
+    const patch = key === 'card' ? { image: agent.generatedImage } : { avatar: agent.generatedAvatar };
+    if (!patch.image && !patch.avatar) return;
+    onPatch && onPatch(patch);
+  };
+  const restore = () => onPatch && onPatch({ image: DEFAULT_AGENT_IMAGES[agent.id] || '', avatar: DEFAULT_AGENT_AVATARS[agent.id] || '' });
+
+  return (
+    <div className="wf-imglab">
+      <div className="wf-imglab-hint">เขียน prompt อะไรก็ได้ — ไม่มีฟอร์มล็อก สไตล์ด้านล่างเป็นแค่ตัวเสริม กดเพื่อแปะข้อความลง prompt</div>
+
+      <div className="wf-imglab-tabs">
+        {['codex-image2', '3.1flashgen', 'nanobanana-2-pro'].map((p) => (
+          <button key={p} type="button" className={provider === p ? 'is-on' : ''} onClick={() => setProvider(p)}>{p}</button>
+        ))}
+      </div>
+
+      <div className="wf-imglab-compare">
+        <div data-label="Card · current">{agent?.image ? <img src={agent.image} alt=""/> : 'no card'}</div>
+        <div data-label="Card · draft">{agent?.generatedImage ? <img src={agent.generatedImage} alt=""/> : 'no draft'}</div>
+        <div data-label="Avatar · current">{agent?.avatar?.startsWith?.('/') ? <img src={agent.avatar} alt=""/> : (agent?.avatar || 'no avatar')}</div>
+        <div data-label="Avatar · draft">{agent?.generatedAvatar ? <img src={agent.generatedAvatar} alt=""/> : 'no draft'}</div>
+      </div>
+
+      <div className="wf-fld">
+        <span>Prompt (free)</span>
+        <textarea rows="6" value={prompt} onChange={(e) => setPrompt(e.target.value)}
+          placeholder="พิมพ์อะไรก็ได้ที่อยากให้รูปออกมาเป็น — outfit, mood, scene, pose, ฯลฯ"/>
+      </div>
+      <div className="wf-fld">
+        <span>Style hints (optional)</span>
+        <div className="wf-chip-row">
+          {STYLE_HINTS.map((h) => (
+            <button type="button" key={h.id} className={`wf-chip ${hints.includes(h.id) ? 'is-on' : ''}`} onClick={() => toggleHint(h.id)}>{h.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="wf-fld-row">
+        <div className="wf-fld"><span>Aspect</span>
+          <select value={aspect} onChange={(e) => setAspect(e.target.value)}>
+            {ASPECTS.map((a) => <option key={a.id} value={a.id}>{a.id} · {a.label}</option>)}
+          </select>
+        </div>
+        <div className="wf-fld"><span>Negative</span><input value={negative} onChange={(e) => setNegative(e.target.value)}/></div>
+      </div>
+
+      <div className="wf-imglab-actions">
+        <button type="button" className="wf-btn primary" disabled={busy || !agent?.id} onClick={() => generate('card')}>{busy ? '…' : '🎬 Generate card'}</button>
+        <button type="button" className="wf-btn" disabled={busy || !agent?.id} onClick={() => generate('avatar')}>{busy ? '…' : '👤 Generate avatar'}</button>
+      </div>
+      <div className="wf-imglab-actions">
+        <button type="button" className="wf-btn ghost" disabled={busy || !agent?.generatedImage}  onClick={() => apply('card')}>Apply card</button>
+        <button type="button" className="wf-btn ghost" disabled={busy || !agent?.generatedAvatar} onClick={() => apply('avatar')}>Apply avatar</button>
+      </div>
+      <button type="button" className="wf-btn ghost" disabled={busy} onClick={restore}>↺ Restore default portrait</button>
+      {busy && <div className="wf-imglab-progress"/>}
+      {err && <div className="wf-imglab-hint" style={{ background: '#fef2f2', borderColor: '#fecaca', color: '#b91c1c' }}>{err}</div>}
     </div>
   );
 };
 
-// JRPG portrait prompt template — used by the "Regenerate portrait" button. Keeps the
-// look-lock vocabulary the rest of the Image Studio pipeline already understands so the
-// generated card slots cleanly into agent.image.
-const buildPortraitPrompt = (agent) => {
-  const name = agent?.name || 'Agent';
-  const role = agent?.role || 'AI teammate';
-  const tagline = agent?.tagline || agent?.systemPrompt || 'capable, focused, dependable';
-  const color = agent?.color || '#00f0ff';
-  return [
-    `JRPG anime character portrait of ${name}, ${role}.`,
-    `${tagline}.`,
-    `Style: high-detail anime / JRPG splash art, vibrant gradient background using ${color}, soft rim light, head-and-shoulders framing.`,
-    'No text, no logos, no watermarks.',
-  ].join('\n');
-};
+/* --------- inspector wrapper -------------------------------- */
+const blankDraft = () => ({
+  name: '', role: '', tagline: '', avatar: '', color: '#7cd3ff',
+  // honor the user's configured default provider; fall back to claude
+  provider: window.PROVIDERS?.default || 'claude',
+  systemPrompt: '', enabled: true, toolsAllowed: [],
+  category: 'general', deletable: true,
+});
+const draftFrom = (a) => a ? ({
+  id: a.id || '', name: a.name || '', role: a.role || '', tagline: a.tagline || '',
+  avatar: a.avatar || a.avatarInitials || '', color: a.color || '#7cd3ff',
+  provider: PROVIDER_CHOICES.includes(a.provider) ? a.provider : 'claude',
+  systemPrompt: a.systemPrompt || '', enabled: a.enabled !== false,
+  toolsAllowed: Array.isArray(a.toolsAllowed) ? [...a.toolsAllowed] : [],
+  category: inferCategoryKey(a), deletable: a.deletable !== false,
+}) : blankDraft();
+const draftPayload = (d) => ({
+  name: d.name, role: d.role, tagline: d.tagline, avatar: d.avatar, color: d.color,
+  provider: d.provider, systemPrompt: d.systemPrompt, enabled: !!d.enabled,
+  category: d.category,
+  toolsAllowed: Array.isArray(d.toolsAllowed) ? d.toolsAllowed.map((t) => String(t).trim()).filter(Boolean) : [],
+});
 
-// Lightweight inline toast — keeps the agents page free of new top-level UI plumbing.
-const Toast = ({ tone = 'info', children }) => {
-  if (!children) return null;
-  const palette = tone === 'error'
-    ? { bg: 'rgba(244, 63, 94, 0.12)', border: 'rgba(244, 63, 94, 0.5)', color: '#fca5a5' }
-    : tone === 'success'
-      ? { bg: 'rgba(34, 197, 94, 0.12)', border: 'rgba(34, 197, 94, 0.5)', color: '#86efac' }
-      : { bg: 'rgba(0, 240, 255, 0.10)', border: 'rgba(0, 240, 255, 0.4)', color: 'var(--accent-cyan)' };
-  return (
-    <div
-      role="status"
-      style={{
-        marginTop: 6, padding: '8px 10px', borderRadius: 8,
-        background: palette.bg, border: `1px solid ${palette.border}`, color: palette.color,
-        font: '500 12px var(--font-body)', whiteSpace: 'pre-wrap',
-      }}
-    >{children}</div>
-  );
-};
-
-const AgentEditorPanel = ({ selected, onOpenAgent }) => {
-  const [draft, setDraft] = React.useState(() => agentToDraft(selected));
+const Inspector = ({ agent, tasks, events, now, onOpen }) => {
+  const [tab, setTab] = React.useState('profile');
+  const [draft, setDraft] = React.useState(() => draftFrom(agent));
   const [busy, setBusy] = React.useState(false);
-  const [regenBusy, setRegenBusy] = React.useState(false);
-  const [toast, setToast] = React.useState(null); // { tone, message }
-  const showToast = React.useCallback((tone, message, ms = 4000) => {
-    setToast({ tone, message });
-    if (ms > 0) setTimeout(() => setToast(null), ms);
-  }, []);
+  React.useEffect(() => { setDraft(draftFrom(agent)); }, [agent?.id]);
 
-  React.useEffect(() => setDraft(agentToDraft(selected)), [selected?.id]);
-  const set = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
-  const toggleTool = (tool) => setDraft((current) => {
-    const list = Array.isArray(current.toolsAllowed) ? current.toolsAllowed : [];
-    const next = list.includes(tool) ? list.filter((t) => t !== tool) : [...list, tool];
-    return { ...current, toolsAllowed: next };
+  const set = (key, value) => setDraft((d) => ({ ...d, [key]: value }));
+  const toggleTool = (tool) => setDraft((d) => {
+    const list = Array.isArray(d.toolsAllowed) ? d.toolsAllowed : [];
+    return { ...d, toolsAllowed: list.includes(tool) ? list.filter((t) => t !== tool) : [...list, tool] };
   });
 
   const isLocked = draft.deletable === false;
+  const color = CATEGORY_COLOR[inferCategoryKey(agent)] || agent?.color || '#7cd3ff';
+  const portrait = agent?.image || DEFAULT_AGENT_IMAGES[agent?.id];
+  const initials = agent?.avatarInitials || DEFAULT_AGENT_AVATARS[agent?.id] || (agent?.name || '??').slice(0, 2).toUpperCase();
 
   const save = async () => {
-    if (!draft.name.trim() || !draft.role.trim()) return showToast('error', 'ต้องกรอก name และ role');
+    if (!draft.name?.trim() || !draft.role?.trim()) return alert('ต้องกรอก name และ role');
     setBusy(true);
     try {
       const method = draft.id ? 'PATCH' : 'POST';
       const url = draft.id ? `/api/agents/${draft.id}` : '/api/agents';
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draftPayload(draft)),
-      });
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'save failed');
+      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draftPayload(draft)) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'save failed');
       await window.fetchCOfficeState?.();
-      showToast('success', draft.id ? 'บันทึก persona แล้ว' : 'สร้าง persona ใหม่แล้ว');
-    } catch (error) {
-      showToast('error', error.message || String(error));
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { alert(e.message || String(e)); }
+    finally { setBusy(false); }
   };
-
   const remove = async () => {
-    if (!draft.id) return;
-    if (isLocked) return showToast('error', '🔒 ลบไม่ได้ — orchestrator ลำดับสำคัญ');
-    if (!confirm(`ลบ persona "${draft.name}" ใช่ไหม?`)) return;
+    if (!draft.id || isLocked) return;
+    if (!confirm(`ลบ persona "${draft.name}"?`)) return;
     setBusy(true);
     try {
-      const response = await fetch(`/api/agents/${draft.id}`, { method: 'DELETE' });
-      if (response.status === 403) {
-        const j = await response.json().catch(() => ({}));
-        throw new Error(`🔒 ลบไม่ได้ — ${j.error || 'persona นี้ถูกล็อก'}`);
-      }
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'delete failed');
-      setDraft(blankAgentDraft());
+      const r = await fetch(`/api/agents/${draft.id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'delete failed');
+      setDraft(blankDraft());
       await window.fetchCOfficeState?.();
-      showToast('success', 'ลบ persona แล้ว');
-    } catch (error) {
-      showToast('error', error.message || String(error));
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { alert(e.message || String(e)); }
+    finally { setBusy(false); }
   };
-
-  // POSTs the JRPG portrait prompt to the same image pipeline the Look Lock uses, then
-  // lets the agents store mirror the generated card back into agent.image via existing flow.
-  const regeneratePortrait = async () => {
-    if (!selected?.id) return showToast('error', 'เลือก persona ก่อน');
-    setRegenBusy(true);
+  const patch = async (body) => {
+    if (!agent?.id) return;
     try {
-      const response = await fetch('/api/images/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: 'codex-image2',
-          mode: 'character',
-          agentId: selected.id,
-          kind: 'card',
-          prompt: buildPortraitPrompt(selected),
-          size: '1024x1536',
-          quality: 'high',
-        }),
-      });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(json.error || 'image generation failed');
+      const r = await fetch(`/api/agents/${agent.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'patch failed');
       await window.fetchCOfficeState?.();
-      showToast('success', 'สร้าง portrait ใหม่แล้ว — ดู draft ใน Avatar Generator');
-    } catch (error) {
-      showToast('error', error.message || String(error));
-    } finally {
-      setRegenBusy(false);
-    }
+    } catch (e) { alert(e.message || String(e)); }
   };
 
   return (
-    <aside className="agent-brief-panel agent-editor-panel" style={{ '--cat-color': draft.color || 'var(--accent-cyan)' }}>
-      <div className="brief-kicker">Dynamic Staff JSON</div>
-      <h2>
-        {draft.id ? 'Edit Staff Profile' : 'New Staff Profile'}
-        {isLocked && <span style={{ marginLeft: 8, fontSize: 13, color: '#ffd86b' }} title="ลบไม่ได้ — orchestrator ลำดับสำคัญ">🔒</span>}
-      </h2>
-
-      <label>Name<input value={draft.name} onChange={(e) => set('name', e.target.value)} placeholder="Agent name"/></label>
-      <label>Role<input value={draft.role} onChange={(e) => set('role', e.target.value)} placeholder="Role / responsibility"/></label>
-      <label>Tagline<textarea value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} rows="2" placeholder="คำโปรยสั้น ๆ ว่า persona นี้ทำอะไรเก่ง"/></label>
-      <div className="agent-editor-row">
-        <label>Avatar<input value={draft.avatar} onChange={(e) => set('avatar', e.target.value)} placeholder="AB or /image.png"/></label>
-        <label>Color<input type="color" value={draft.color} onChange={(e) => set('color', e.target.value)}/></label>
-      </div>
-      <div className="agent-editor-row">
-        <label>Provider
-          <select value={draft.provider} onChange={(e) => set('provider', e.target.value)}>
-            {PROVIDER_CHOICES.map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
-        </label>
-        <label>Category<input value={draft.category} onChange={(e) => set('category', e.target.value)} placeholder="ops"/></label>
-      </div>
-      <label>
-        Tools allowed
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-          {TOOL_CATALOG.map((tool) => {
-            const active = (draft.toolsAllowed || []).includes(tool);
-            return (
-              <button
-                type="button"
-                key={tool}
-                onClick={() => toggleTool(tool)}
-                aria-pressed={active}
-                style={{
-                  padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
-                  font: '600 11px var(--font-mono)', letterSpacing: '0.04em',
-                  border: active
-                    ? '1px solid color-mix(in srgb, var(--cat-color) 65%, var(--border))'
-                    : '1px solid var(--border)',
-                  background: active
-                    ? 'color-mix(in srgb, var(--cat-color) 22%, rgba(0,0,0,0.32))'
-                    : 'rgba(0,0,0,0.26)',
-                  color: active ? 'var(--text)' : 'var(--text-3)',
-                }}
-              >{tool}</button>
-            );
-          })}
+    <aside className="wf-inspector" style={{ '--insp-color': color }}>
+      <div className="wf-insp-head">
+        <div className="wf-insp-portrait">{portrait ? <img src={portrait} alt={agent?.name}/> : <span>{initials}</span>}</div>
+        <div className="wf-insp-name">
+          <h2>{agent?.name || 'New persona'}</h2>
+          <span>{agent?.role || 'unassigned'} · {STATUS_LABEL[agent?.status] || 'standby'}</span>
         </div>
-      </label>
-      <label>System prompt<textarea value={draft.systemPrompt} onChange={(e) => set('systemPrompt', e.target.value)} rows="10" style={{ fontFamily: 'var(--font-mono)' }}/></label>
-      <AgentSkillsSection agent={selected}/>
-      <label className="agent-toggle"><input type="checkbox" checked={draft.enabled} onChange={(e) => set('enabled', e.target.checked)}/> Enabled</label>
-
-      <div className="agent-editor-actions">
-        <button className="btn" disabled={busy} onClick={() => setDraft(blankAgentDraft())} title="เปิดฟอร์มเปล่าเพื่อสร้าง persona ใหม่">+ New persona</button>
-        <button className="btn primary" disabled={busy} onClick={save}>Save</button>
-        {draft.id && (
-          <button
-            className="btn ghost"
-            disabled={busy || isLocked}
-            onClick={remove}
-            title={isLocked ? '🔒 ลบไม่ได้ — orchestrator ลำดับสำคัญ' : 'ลบ persona นี้'}
-            style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
-          >{isLocked ? '🔒 Delete' : 'Delete'}</button>
-        )}
-        {selected?.id && (
-          <button
-            className="btn"
-            disabled={regenBusy}
-            onClick={regeneratePortrait}
-            title="สร้าง JRPG portrait ใหม่จากชื่อ/role/tagline/color ของ persona"
-          >{regenBusy ? 'กำลังเจน…' : '🎨 Regenerate portrait'}</button>
-        )}
+        {agent?.id && <button type="button" className="wf-btn gold" onClick={() => onOpen && onOpen(agent.id)}>Open profile</button>}
       </div>
-      {toast && <Toast tone={toast.tone}>{toast.message}</Toast>}
-      <CharacterImagePanel agent={selected}/>
-      {selected && <button className="btn gold" onClick={() => onOpenAgent(selected.id)}>Open Profile</button>}
+      <div className="wf-insp-tabs">
+        <button className={tab === 'profile' ? 'is-active' : ''} onClick={() => setTab('profile')}>Profile</button>
+        <button className={tab === 'live'    ? 'is-active' : ''} onClick={() => setTab('live')}>Live</button>
+        <button className={tab === 'image'   ? 'is-active' : ''} onClick={() => setTab('image')}>Image lab</button>
+      </div>
+      <div className="wf-insp-body">
+        {tab === 'profile' && <InspectorProfile draft={draft} set={set} toggleTool={toggleTool} onSave={save} onDelete={remove} busy={busy} isLocked={isLocked}/>}
+        {tab === 'live' && agent && <InspectorLive agent={agent} tasks={tasks} events={events} now={now}/>}
+        {tab === 'image' && agent && <InspectorImageLab agent={agent} onPatch={patch}/>}
+        {!agent && <div className="wf-imglab-hint">เลือก agent จากออฟฟิศซ้ายมือ หรือสร้างใหม่จากแท็บ Profile</div>}
+      </div>
     </aside>
   );
 };
 
-const CharacterImagePanel = ({ agent }) => {
-  const [prompt, setPrompt] = React.useState('');
-  const [imageProvider, setImageProvider] = React.useState('codex-image2');
-  const [busy, setBusy] = React.useState(false);
-  const preview = characterPromptPreview(agent);
-  const defaultImage = defaultImageForAgent(agent);
-
-  // Character Builder State
-  const [charGender, setCharGender] = React.useState('หญิง');
-  const [charStyle, setCharStyle] = React.useState('อนิเมะญี่ปุ่นแฟนตาซี');
-  const [charRole, setCharRole] = React.useState('นักเวทย์ (Mage)');
-  const [charOutfit, setCharOutfit] = React.useState('ชุดผ้าไหมพริ้วไหวประดับอัญมณี');
-  const [charWeapon, setCharWeapon] = React.useState('คทาเวทย์มนต์เรืองแสง');
-  const [charColor, setCharColor] = React.useState('สีทองสว่าง (Bright Gold)');
-
-  const CHAR_OPTIONS = {
-    gender: ['ชาย (Male)', 'หญิง (Female)', 'Androgynous (ไร้เพศ)', 'หุ่นยนต์/จักรกล', 'สัตว์ป่ากึ่งมนุษย์'],
-    style: ['อนิเมะญี่ปุ่นแฟนตาซี', 'แฟนตาซีตะวันตก', 'จอมยุทธ์จีน', 'ไทยประยุกต์แฟนตาซี', 'ไซไฟโลกอนาคต', 'พิกเซลอาร์ต', '3D Render'],
-    role: [
-      'นักดาบ (Swordsman)', 'อัศวินเกราะหนัก (Knight)', 'นักเวทย์ (Mage)', 'มือสังหาร (Assassin)', 
-      'สไนเปอร์ (Sniper)', 'หมอ/นักบุญ (Healer)', 'พ่อค้า (Merchant)', 'วิศวกร (Engineer)',
-      'นินจา (Ninja)', 'ซามูไร (Samurai)', 'นักล่า (Hunter)', 'กัปตันเรือ (Captain)'
-    ],
-    outfit: [
-      'ชุดผ้าไหมพริ้วไหวประดับอัญมณี', 'เกราะเหล็กเต็มตัวขัดเงา', 'ชุดหนังรัดรูปสีดำสไตล์สายลับ',
-      'เสื้อคลุมยาวขอบทองดูหรูหรา', 'ชุดสตรีทแวร์ล้ำยุคมีไฟนีออน', 'ชุดไทยประยุกต์เครื่องทองจัดเต็ม',
-      'ผ้าคลุมขาดๆ ลุคนักเดินทาง', 'ชุดสูททางการมาดเนี้ยบ', 'เกราะเบาประดับขนนก'
-    ],
-    weapon: [
-      'คทาเวทย์มนต์เรืองแสง', 'ดาบใหญ่สองมือ (Greatsword)', 'ปืนคู่สไตล์เลเซอร์',
-      'ธนูไม้มงคลประดับมนต์', 'มีดสั้นคู่สีเงิน', 'ขลุ่ยหยกบรรเลงเพลงยุทธ์',
-      'โดรนจิ๋วบินรอบตัว', 'โล่ขนาดยักษ์', 'พัดเหล็กประดับลวดลาย', 'ไม่มีอาวุธ (มือเปล่า)'
-    ],
-    themeColor: [
-      'สีทองสว่าง (Bright Gold)', 'สีแดงเพลิง (Crimson Red)', 'สีน้ำเงินเข้ม (Deep Blue)',
-      'สีเขียวมรกต (Emerald Green)', 'สีม่วงลึกลับ (Mystic Purple)', 'สีชมพูซากุระ (Sakura Pink)',
-      'สีดำรัตติกาล (Obsidian Black)', 'สีเงินโครเมียม (Chrome Silver)', 'สีขาวบริสุทธิ์ (Pure White)'
-    ]
-  };
-
-  const compilePrompt = () => {
-    const styleMap = {
-      'อนิเมะญี่ปุ่นแฟนตาซี': 'high-quality JRPG anime style, vibrant colors, detailed cel shading',
-      'แฟนตาซีตะวันตก': 'epic western fantasy, semi-realistic, oil painting texture, dramatic lighting',
-      'จอมยุทธ์จีน': 'elegant Wuxia style, flowing ink aesthetics, traditional Chinese elements',
-      'ไทยประยุกต์แฟนตาซี': 'modern Thai fantasy fusion, intricate golden ornaments, tropical mythical atmosphere',
-      'ไซไฟโลกอนาคต': 'cyberpunk sci-fi, neon glows, metallic surfaces, high-tech intricate details',
-      'พิกเซลอาร์ต': 'detailed 32-bit pixel art style, retro game aesthetic, sharp colors',
-      '3D Render': 'modern 3D game render, Unreal Engine 5 style, octane render, cinematic'
-    };
-
-    const promptText = [
-      `A highly detailed ${styleMap[charStyle] || charStyle} character concept illustration for "${agent.name}".`,
-      `Gender: ${charGender}.`,
-      `Role/Profession: ${charRole}.`,
-      `Outfit and Appearance: ${charOutfit}.`,
-      `Weapon/Equipment: ${charWeapon}.`,
-      `Signature theme color: ${charColor}.`,
-      `Pose: heroic professional stance, expressive facial features, full body composition, centered portrait.`,
-      `Quality: masterwork, crisp lines, vivid accents, game-ready art, 8k resolution.`
-    ].join(' ');
-    
-    setPrompt(promptText);
-  };
-
-  React.useEffect(() => setPrompt(''), [agent?.id]);
-
-  const patchAgent = async (patch) => {
-    if (!agent?.id) return;
-    setBusy(true);
-    try {
-      const response = await fetch(`/api/agents/${agent.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(json.error || 'agent update failed');
-      await window.fetchCOfficeState?.();
-    } catch (error) {
-      alert(error.message || String(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const applyGeneratedCard = () => patchAgent({ image: agent.generatedImage });
-  const applyGeneratedAvatar = () => patchAgent({ avatar: agent.generatedAvatar });
-  const restoreDefault = () => patchAgent({ image: defaultImage, avatar: defaultAvatarForAgent(agent) });
-
-  // Builds a Look-Locked prompt with kind-specific cinematography. Both kinds
-  // share the same character data (gender/role/outfit/etc.) but differ in
-  // staging — card is a dramatic environment shot, avatar is a clean cutout.
-  const buildKindPrompt = (kind) => {
-    const styleMap = {
-      'อนิเมะญี่ปุ่นแฟนตาซี': 'high-quality JRPG anime style, vibrant colors, detailed cel shading',
-      'แฟนตาซีตะวันตก': 'epic western fantasy, semi-realistic, oil painting texture, dramatic lighting',
-      'จอมยุทธ์จีน': 'elegant Wuxia style, flowing ink aesthetics, traditional Chinese elements',
-      'ไทยประยุกต์แฟนตาซี': 'modern Thai fantasy fusion, intricate golden ornaments, tropical mythical atmosphere',
-      'ไซไฟโลกอนาคต': 'cyberpunk sci-fi, neon glows, metallic surfaces, high-tech intricate details',
-      'พิกเซลอาร์ต': 'detailed 32-bit pixel art style, retro game aesthetic, sharp colors',
-      '3D Render': 'modern 3D game render, Unreal Engine 5 style, octane render, cinematic',
-    };
-    const styleLine = styleMap[charStyle] || charStyle;
-    const subject = [
-      `Character: "${agent?.name || 'AI Agent'}".`,
-      `Style: ${styleLine}.`,
-      `Gender: ${charGender}.`,
-      `Role: ${charRole}.`,
-      `Outfit: ${charOutfit}.`,
-      `Weapon/Equipment: ${charWeapon}.`,
-      `Theme color: ${charColor}.`,
-    ].join(' ');
-
-    if (kind === 'card') {
-      return [
-        `A cinematic 3D-rendered hero portrait card of "${agent?.name || 'AI Agent'}".`,
-        subject,
-        '--- LOOK LOCK ---',
-        'Composition: dynamic 3/4 hero pose, dramatic perspective, depth of field, subject sharp and background softly blurred.',
-        'Environment: themed atmosphere matching the role (battlefield mist / neon city / temple / arcane sigils), rim lighting in the theme color, volumetric light shafts, floating particles or magical sparks for depth.',
-        'Lighting: cinematic key + rim light + colored bounce, strong contrast, glowing accents on weapon/equipment.',
-        'Camera: portrait 3:4, eye-level slightly low for heroic feel, subtle anamorphic lens flare, shallow depth of field.',
-        'Quality: ultra-detailed 4K hero key art, painterly polish, no text, no watermark, no card frame, no UI overlays.',
-      ].join('\n');
-    }
-
-    // avatar — clean cutout, isolated, transparent-friendly
-    return [
-      `A clean full-body character avatar of "${agent?.name || 'AI Agent'}".`,
-      subject,
-      '--- LOOK LOCK ---',
-      'Composition: one isolated character, full body, feet visible, centered, neutral standing pose, expressive face.',
-      'Background: pure solid white or pure solid gray (transparent-friendly). No scenery, no props in background.',
-      'Lighting: even studio lighting, soft shadow only beneath feet, no atmospheric effects.',
-      'Camera: portrait 3:4, head-to-toe framing, no lens flare.',
-      'Quality: high-detail clean anatomy, polished 3D-game-key-art feel, no watermark, no logo, no signature.',
-    ].join('\n');
-  };
-
-  const generate = async (kind /* 'card' | 'avatar' */) => {
-    if (!agent?.id) return;
-    setBusy(true);
-    try {
-      const composedPrompt = prompt && prompt.includes('--- LOOK LOCK ---')
-        ? prompt
-        : buildKindPrompt(kind);
-      const response = await fetch('/api/images/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: imageProvider,
-          mode: 'character',
-          agentId: agent.id,
-          kind,
-          prompt: composedPrompt,
-          // gpt-image-2 only accepts 1024x1024 / 1536x1024 / 1024x1536 / auto.
-          // Both kinds want portrait framing, so use 1024x1536.
-          size: '1024x1536',
-          quality: 'high',
-        }),
-      });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(json.error || 'image generation failed');
-      await window.fetchCOfficeState?.();
-    } catch (error) {
-      alert(error.message || String(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="character-image-panel">
-      <div className="brief-kicker">Avatar Generator</div>
-      <div className="character-generator-head">
-        <strong>Staff Avatar Cutout</strong>
-        <span>{imageProvider === 'codex-image2' ? 'Codex CLI Image · GPT Image 2' : imageProvider === '3.1flashgen' ? '3.1 Flash Gen' : 'Nano Banana 2 · Gemini 3.1 Flash Image Preview'}</span>
-      </div>
-      <div className="character-compare">
-        <div>
-          <span>Profile Card (current)</span>
-          {agent?.image ? <img src={agent.image} alt={`${agent.name} profile card`}/> : <b>No card</b>}
-        </div>
-        <div>
-          <span>Profile Card (draft)</span>
-          {agent?.generatedImage ? <img src={agent.generatedImage} alt={`${agent.name} profile card draft`}/> : <b>No draft</b>}
-        </div>
-        <div>
-          <span>Avatar (current)</span>
-          {agent?.avatar && agent.avatar.startsWith('/') ? <img src={agent.avatar} alt={`${agent.name} avatar`}/> : <b>{agent?.avatar || 'No avatar'}</b>}
-        </div>
-        <div>
-          <span>Avatar (draft)</span>
-          {agent?.generatedAvatar ? <img src={agent.generatedAvatar} alt={`${agent.name} avatar draft`}/> : <b>No draft</b>}
-        </div>
-      </div>
-      <div className="character-provider-tabs">
-        <button className={imageProvider === 'codex-image2' ? 'active' : ''} onClick={() => setImageProvider('codex-image2')}>Codex CLI Image</button>
-        <button className={imageProvider === '3.1flashgen' ? 'active' : ''} onClick={() => setImageProvider('3.1flashgen')}>3.1 Flash Gen</button>
-        <button className={imageProvider === 'nanobanana-2-pro' ? 'active' : ''} onClick={() => setImageProvider('nanobanana-2-pro')}>Nano Banana 2 Pro</button>
-      </div>
-      
-      <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: 8, padding: '12px 16px', marginBottom: 12, marginTop: 12, fontSize: 13, color: 'var(--text-1)' }}>
-        <div style={{ fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 16 }}>✨</span> ระบบปั้นตัวละคร (Pro Character Builder)
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 10 }}>
-            <label className="image-field">
-              <span>เพศ:</span>
-              <select value={charGender} onChange={e => setCharGender(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
-                {CHAR_OPTIONS.gender.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </label>
-            <label className="image-field">
-              <span>สไตล์ภาพ:</span>
-              <select value={charStyle} onChange={e => setCharStyle(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
-                {CHAR_OPTIONS.style.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </label>
-          </div>
-          
-          <label className="image-field">
-            <span>อาชีพ / บทบาท:</span>
-            <select value={charRole} onChange={e => setCharRole(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
-              {CHAR_OPTIONS.role.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-
-          <label className="image-field">
-            <span>ชุดและรูปลักษณ์:</span>
-            <select value={charOutfit} onChange={e => setCharOutfit(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
-              {CHAR_OPTIONS.outfit.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-
-          <label className="image-field">
-            <span>อาวุธและอุปกรณ์:</span>
-            <select value={charWeapon} onChange={e => setCharWeapon(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
-              {CHAR_OPTIONS.weapon.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-
-          <label className="image-field">
-            <span>โทนสีหลัก (Theme):</span>
-            <select value={charColor} onChange={e => setCharColor(e.target.value)} style={{padding: 6, borderRadius: 4, background: 'var(--bg-3)', color: 'var(--text)', border: '1px solid var(--border)'}}>
-              {CHAR_OPTIONS.themeColor.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-
-          <button className="btn gold" style={{ marginTop: 8, height: 40, fontWeight: 700 }} onClick={compilePrompt}>
-            อัปเกรดเป็น Pro Prompt และสรุปด้านล่าง 👇
-          </button>
-        </div>
-      </div>
-
-      <textarea 
-        value={prompt || preview} 
-        onChange={(e) => setPrompt(e.target.value)} 
-        rows="7"
-        placeholder="พิมพ์รายละเอียดเพิ่มเติมที่ต้องการปรับแต่งที่นี่..."
-      />
-      <div className="character-actions">
-        <button className="btn ghost" disabled={busy || !agent?.generatedImage} onClick={applyGeneratedCard}>Apply as Profile Card</button>
-        <button className="btn ghost" disabled={busy || !agent?.generatedAvatar} onClick={applyGeneratedAvatar}>Apply as Avatar</button>
-        <button className="btn ghost" disabled={busy || !defaultImage} onClick={restoreDefault}>Restore Default</button>
-      </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:8 }}>
-        <button className="btn primary" disabled={busy || !agent?.id} onClick={() => generate('card')} title="Cinematic hero card with depth, environment, rim lighting — for the big roster card.">
-          {busy ? '…' : '🎬 Generate Profile Card'}
-        </button>
-        <button className="btn" disabled={busy || !agent?.id} onClick={() => generate('avatar')} title="Clean transparent cutout — for thumbnails and small avatars.">
-          {busy ? '…' : '👤 Generate Avatar Cutout'}
-        </button>
-      </div>
-      {busy && (
-        <div style={{ marginTop:10 }}>
-          <div style={{ fontSize:11, color:'var(--text-2)', marginBottom:4 }}>กำลังเจนรูป... (Codex CLI ใช้เวลา ~60–90 วินาที, Gemini ~10–20 วินาที)</div>
-          <div style={{ height:6, borderRadius:999, background:'var(--bg-2)', overflow:'hidden', position:'relative' }}>
-            <div style={{
-              position:'absolute', top:0, bottom:0, left:0, right:0,
-              background:'linear-gradient(90deg, transparent 0%, var(--accent-cyan) 50%, transparent 100%)',
-              backgroundSize:'200% 100%',
-              animation:'cofficeProgressShimmer 1.6s linear infinite',
-            }}/>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
+/* --------- main page ---------------------------------------- */
 const AgentsPage = ({ onOpenAgent, setPage }) => {
   window.useCOfficeRefresh?.();
   const agents = window.AGENTS || [];
+  const tasks = window.TASKS || [];
+  const events = window.ACTIVITY || [];
+
   const [filter, setFilter] = React.useState('ALL');
   const [selectedId, setSelectedId] = React.useState(() => agents[0]?.id || '');
+  const [now, setNow] = React.useState(() => Date.now());
 
   React.useEffect(() => {
-    if (!agents.find((agent) => agent.id === selectedId) && agents[0]) setSelectedId(agents[0].id);
+    const id = setInterval(() => setNow(Date.now()), 1500);
+    return () => clearInterval(id);
+  }, []);
+  React.useEffect(() => {
+    if (!agents.find((a) => a.id === selectedId) && agents[0]) setSelectedId(agents[0].id);
   }, [agents.length, selectedId]);
 
-  const categories = ['ALL', ...Array.from(new Set(agents.map(inferCategoryKey)))];
-  const filtered = filter === 'ALL' ? agents : agents.filter((agent) => inferCategoryKey(agent) === filter);
-  const selected = agents.find((agent) => agent.id === selectedId) || filtered[0] || agents[0] || null;
-  const working = agents.filter((agent) => agent.status === 'busy').length;
-  const online = agents.filter((agent) => agent.status === 'active' || agent.status === 'busy').length;
+  const cats = ['ALL', ...Array.from(new Set(agents.map(inferCategoryKey)))];
+  const filtered = filter === 'ALL' ? agents : agents.filter((a) => inferCategoryKey(a) === filter);
+  const selected = agents.find((a) => a.id === selectedId) || filtered[0] || agents[0] || null;
+
+  const onShift = agents.filter((a) => a.status === 'busy' || a.status === 'active').length;
+  const busy    = agents.filter((a) => a.status === 'busy').length;
+  const totalQueue = (tasks || []).filter((t) => t.status === 'running').length;
+  const totalTokens = agents.reduce((sum, a) => {
+    const v = String(a.stats?.tokens || '0');
+    const num = v.endsWith('k') ? parseFloat(v) * 1000 : parseFloat(v);
+    return sum + (Number.isFinite(num) ? num : 0);
+  }, 0);
+
+  const newDraftMode = () => { setSelectedId(''); };
+
+  const news = events.slice(0, 12).map((e) => ({
+    id: e.id || `${e.kind}:${e.ts}`,
+    text: `${e.personaId || '—'} · ${e.kind || e.type || 'event'} · ${e.summary || e.tool_name || ''}`,
+  }));
 
   return (
-    <div className="agent-office-page">
-      <div className="agent-office-hero">
-        <div>
-          <div className="mono-s">SIM OFFICE CONTROL</div>
-          <h1>C-Office <span className="accent">Workfloor</span></h1>
-          <p>มุมมองแบบเกมบริหารออฟฟิศ เห็น agent เป็นพนักงานประจำโต๊ะ ดู workload, focus, energy, queue และสถานะงานสดแบบ dynamic</p>
+    <div className="wf-page">
+      {/* HUD */}
+      <header className="wf-hud">
+        <div className="wf-hud-title">
+          <span className="kicker">Sim Office Control</span>
+          <h1>C-Office <em>Workfloor</em></h1>
         </div>
-        <div className="agent-office-stats">
-          <span><b>{agents.length}</b> staff</span>
-          <span><b>{online}</b> on shift</span>
-          <span><b>{working}</b> busy desks</span>
+        <div className="wf-hud-stats">
+          <div className="wf-hud-chip"><b>{agents.length}</b><span>staff</span></div>
+          <div className="wf-hud-chip"><b>{onShift}</b><span>on shift</span></div>
+          <div className="wf-hud-chip"><b>{busy}</b><span>working</span></div>
+          <div className="wf-hud-chip"><b>{totalQueue}</b><span>queue</span></div>
+          <div className="wf-hud-chip"><b>{totalTokens > 1000 ? `${(totalTokens/1000).toFixed(1)}k` : totalTokens}</b><span>tokens today</span></div>
         </div>
-      </div>
+      </header>
 
-      <div className="agent-office-toolbar">
-        <div className="agent-filter-tabs">
-          {categories.map((categoryKey) => {
-            const meta = CATEGORY_META[categoryKey] || { label: categoryKey === 'ALL' ? 'All' : categoryKey, color: 'var(--accent-cyan)' };
-            const count = categoryKey === 'ALL' ? agents.length : agents.filter((agent) => inferCategoryKey(agent) === categoryKey).length;
+      {/* Toolbar */}
+      <div className="wf-toolbar">
+        <div className="wf-tabs">
+          {cats.map((k) => {
+            const label = k === 'ALL' ? 'All' : (CATEGORY_LABEL[k] || k);
+            const count = k === 'ALL' ? agents.length : agents.filter((a) => inferCategoryKey(a) === k).length;
             return (
-              <button
-                key={categoryKey}
-                className={filter === categoryKey ? 'active' : ''}
-                style={{ '--tab-color': meta.color }}
-                onClick={() => setFilter(categoryKey)}
-              >
-                <span>{meta.label}</span>
-                <b>{count}</b>
+              <button key={k} className={filter === k ? 'is-active' : ''} style={{ '--tab-color': CATEGORY_COLOR[k] || '#15233a' }} onClick={() => setFilter(k)}>
+                <span>{label}</span><b>{count}</b>
               </button>
             );
           })}
         </div>
-        <button className="btn gold" onClick={() => setPage && setPage('tasks')}>Task Board</button>
+        <div className="wf-toolbar-actions">
+          <button type="button" className="wf-btn" onClick={newDraftMode}>+ Hire new staff</button>
+          <button type="button" className="wf-btn gold" onClick={() => setPage && setPage('tasks')}>Task board</button>
+        </div>
       </div>
 
-      <div className="agent-office-layout">
-        <section className="agent-party-stage">
-          <div className="office-room-backdrop">
-            <span className="room-window"/>
-            <span className="room-light one"/>
-            <span className="room-light two"/>
-            <span className="office-wall-board"/>
-            <span className="office-coffee-bar"/>
-            <span className="room-floor-grid"/>
-          </div>
-          <div className="agent-party-lineup">
-            {filtered.map((agent) => (
-              <AgentModelUnit
-                key={agent.id}
-                agent={agent}
-                selected={selected?.id === agent.id}
+      {/* Floor + Inspector */}
+      <div className="wf-grid">
+        <section className="wf-floor">
+          <div className="wf-desk-grid">
+            {filtered.map((a) => (
+              <DeskTile
+                key={a.id}
+                agent={a}
+                tasks={tasks}
+                now={now}
+                selected={selected?.id === a.id}
                 onSelect={setSelectedId}
-                onOpenAgent={onOpenAgent}
+                onOpen={onOpenAgent}
               />
             ))}
+            <button type="button" className="wf-desk is-new" onClick={newDraftMode}>
+              <span><b>+</b>New desk<br/><em style={{ font: '600 10px var(--font-mono, monospace)', letterSpacing: '0.10em', textTransform: 'uppercase', color: '#94a3b8' }}>hire persona</em></span>
+            </button>
           </div>
         </section>
-        <AgentEditorPanel selected={selected} onOpenAgent={onOpenAgent}/>
+        <Inspector agent={selected} tasks={tasks} events={events} now={now} onOpen={onOpenAgent}/>
       </div>
+
+      {/* Live news ticker */}
+      <footer className="wf-news">
+        <span className="wf-news-label">LIVE</span>
+        <div className="wf-news-track">
+          {news.length === 0 && <span>idle floor — รอกิจกรรมจาก agent…</span>}
+          {news.map((n) => <span key={n.id}><b>›</b>{n.text}</span>)}
+        </div>
+      </footer>
     </div>
   );
 };
 
-Object.assign(window, { AgentsPage, AgentModelUnit, AgentEditorPanel });
+Object.assign(window, { AgentsPage, DeskTile, Inspector });

@@ -7,27 +7,36 @@ const dashboard = readFileSync(new URL('../public/page-dashboard.jsx', import.me
 const css = readFileSync(new URL('../public/agent-office.css', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 
-test('agents page renders the HUD office model layout', () => {
-  assert.match(page, /AgentModelUnit/);
-  assert.match(page, /agent-party-stage/);
-  assert.match(page, /agent-model-portrait/);
-  assert.match(page, /SIM OFFICE CONTROL/);
-  assert.match(page, /agent-workstation/);
-  assert.match(page, /workstation-monitor/);
-  assert.match(page, /Workload/);
-  assert.match(page, /Energy/);
+test('agents page renders the SIM office workfloor layout', () => {
+  // 2026-05 redesign: AgentModelUnit → DeskTile, agent-party-stage → wf-floor,
+  // agent-workstation → wf-desk-stage. The intent is unchanged: SIM office
+  // concept with desk + monitor + live workload/energy meters.
+  assert.match(page, /DeskTile/);
+  assert.match(page, /wf-floor/);
+  assert.match(page, /wf-portrait/);
+  assert.match(page, /Sim Office Control/i);
+  assert.match(page, /wf-desk-stage/);
+  assert.match(page, /wf-monitor/);
+  assert.match(page, /workload/i);
+  assert.match(page, /energy/i);
   assert.doesNotMatch(page, /<AgentCard/);
 });
 
-test('agents page exposes character generation controls with nano banana pro', () => {
-  assert.match(page, /CharacterImagePanel/);
+test('agents page exposes free-form image generation across all three providers', () => {
+  // 2026-05 redesign: CharacterImagePanel → InspectorImageLab. No rigid
+  // Look Lock UI — user types a free prompt; provider tabs cover codex CLI,
+  // 3.1 flash gen, and nano banana 2 pro.
+  assert.match(page, /InspectorImageLab/);
   assert.match(page, /\/api\/images\/generate/);
-  assert.match(page, /Nano Banana 2 Pro/);
+  assert.match(page, /nanobanana-2-pro/);
+  assert.match(page, /codex-image2/);
+  assert.match(page, /Style hints/);
 });
 
 test('agents page is not locked to the original fixed persona id groups', () => {
   assert.doesNotMatch(page, /ids:\s*\[/);
-  assert.match(page, /AgentEditorPanel/);
+  // 2026-05 redesign: AgentEditorPanel → Inspector + InspectorProfile.
+  assert.match(page, /InspectorProfile/);
   assert.match(page, /\/api\/agents/);
 });
 
