@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-C-Office is a real-time monitor for Claude Code CLI sessions, themed as a gacha-RPG "office" of 9 personas. Hooks installed into `~/.claude/settings.json` POST event payloads to a local Express server, which also tails JSONL transcripts under `~/.claude/projects/`. State is held in memory and pushed to a React dashboard via SSE.
+C-Office is a clone-and-run, Thai-marketing-first AI agent command center built on top of Claude Code CLI. It both **monitors** every Claude Code session running on the machine (hooks → local Express server → SSE → React) AND **dispatches** new missions to a 9-persona team (Atlas leads, 8 specialists execute). State is held in memory and pushed to a React dashboard.
 
-There is **no build step**. Backend is ESM Node, frontend is React 18 (UMD) + Babel Standalone transpiling JSX in the browser.
+The default roster is Atlas / Scout / Scribe / Forge / Vector / Pulse / Warden / Relay / Oracle — Western, agent-tone names. Persona prompts default to Thai because the primary user is a Thai content/marketing operator, but every persona is fully user-editable through the Agents UI.
+
+There is **no build step**. Backend is ESM Node, frontend is React 18 (UMD) + Babel Standalone transpiling JSX in the browser. Theme is light (`#efefef` base, white panels) — only the dark "Executing" run-trace modal stays dark, intentionally, as the readability reference.
 
 ## Commands
 
@@ -18,7 +20,13 @@ npm run uninstall-hooks   # removes c-office hook entries (matched by `c-office:
 npm run tunnel            # expose http://127.0.0.1:7878 publicly (Cloudflare Quick Tunnel, fallback to localtunnel)
 npm run tunnel:cloudflare # force Cloudflare Quick Tunnel via npx cloudflared
 npm run tunnel:localtunnel# force localtunnel.me via npx localtunnel
+npm run generate-portraits # regenerate persona portraits via /api/images/generate (-- --workers-only skips Atlas)
+npm run record-hero        # Playwright walkthrough → docs/hero/c-office-hero.{webm,mp4,gif}
+npm test                  # node --test (only persona-routing.test.mjs exists today)
+node --test test/persona-routing.test.mjs  # run that single test directly
 ```
+
+For the Windows one-line installer (non-dev users), `scripts/install.ps1` is idempotent — winget Node + Git, npm Claude/Codex CLI, clone repo, install hooks. Skip-detection on every step. Invoked via `irm https://raw.githubusercontent.com/<repo>/main/scripts/install.ps1 | iex`.
 
 ### Public-link access
 
@@ -92,6 +100,31 @@ Special cases handled inside `mapPersona`:
 - `sessionKind === 'interactive'` or no `subagent_type` → always `atlas`.
 - Anything that falls through every rule → `vector` (default for unclassified engineering work).
 
+### Dynamic agent registry (`server/store/agents.js`)
+
+`mapping/personas.js` is **seed data only**. The live, mutable roster is `~/.c-office/agents.json` — created on first boot from the seed, then read/written by `getAgentSync / listAgentsSync / createAgent / updateAgent / deleteAgent`. Everything downstream — `runner.js` (`rosterText()`), the Agents page, all delegation prompts — pulls from this dynamic store.
+
+| Field | Meaning |
+|---|---|
+| `id` | slug, unique |
+| `name`, `role`, `tagline` | display strings (Thai or English — user editable) |
+| `provider` | `'claude'` \| `'codex'` \| `'image'`. `runner.js:executeStep` reads this first, then falls back to the run-level provider, then `'claude'`. Vector + Relay default to `codex`; Forge to `image`. |
+| `toolsAllowed` | string[] passed into the Claude SDK call as the tool allowlist |
+| `systemPrompt` | persona's Thai default, but anything goes |
+| `deletable` | `false` for Atlas (orchestrator). API `DELETE /api/agents/atlas` returns 403 |
+| `enabled` | toggle off without deleting |
+
+Two backwards-compat layers keep the rename pain-free:
+
+1. **`LEGACY_ID_ALIASES`** in `mapping/personas.js` (orchestra→atlas, vex→warden, nyx→scout, …). `resolveAgentIdSync` and `mapAgentSync` consult it whenever a caller passes an unknown id, so any stale string in code, hooks, or older `agents.json` files still resolves.
+2. **One-shot file migration** in `readRaw()` — on first boot after upgrade, every record with a legacy id is rewritten in place (id swapped, anime display data replaced with seed values for that role). Custom user-created agents (ids not in the alias map) pass through untouched. Duplicate (legacy + already-migrated) entries collapse to one.
+
+CRUD surface lives at `/api/agents` (router in `server/api/agents.js`): `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`. Mutations broadcast via `bus.emit('agents', list)` → SSE channel `agents` → `data.js` refetches `/api/state`.
+
+The Agents UI (`public/page-agents.jsx`) exposes the same CRUD: provider dropdown, tools chip multi-select, system-prompt textarea, "+ New persona" button, "🎨 Regenerate portrait" (POSTs to `/api/images/generate` with a JRPG template), 🔒 lock badge on Atlas.
+
+Codex agent definitions also live in `.codex/agents/<id>.toml` (parallel to `.claude/agents/<id>.md`) — used by Codex CLI's Task tool. Keep both directories in sync when adding a persona.
+
 ### Server entry points (`server/index.js`)
 
 | Route | Purpose |
@@ -140,6 +173,10 @@ Each run flows through `analyze → plan → plan-critique → execute → criti
 - **Tool-using personas** get `maxTurns = 30` and the prompt includes an explicit "TOOL BUDGET: at most 6 tool calls, then STOP and write final" instruction. On `error_max_turns` we keep any accumulated assistant text; if there's still nothing, we fire one **synthesis turn** (no tools, `maxTurns=1`) to force a final answer instead of failing the step.
 - **Forge (image) step** distills `prior` (research/writing outputs) + `step.instruction` into a focused image prompt via a Haiku 4.5 composer call before invoking `generateImage()`. The composed prompt is logged to scratchpad as `[image-prompt]` so it shows up in the run trace. Falls back to direct concat if the composer fails.
 
+### Provider routing per persona
+
+`runner.js:executeStep` resolves provider in this order: `persona.provider` (from the live agents.json record) → run-level `opts.provider` → `'claude'`. So when Atlas delegates to Vector, the runner takes the codex path automatically. If the persona record carries a stale `model` field whose vendor doesn't match the resolved provider (e.g. legacy Claude model id on a now-codex persona), `executeStep` drops it and falls back to the codex default (`gpt-4o`).
+
 ### Image Studio Look Lock (`public/page-images.jsx`)
 
 Image generation has three top-level controls — `IMAGE_STYLES` (Photorealistic / Cinematic / Anime / Manga / 3D / Pixel / Oil / Watercolor / Concept / Flat), `ASPECT_RATIOS` (1:1, 4:3, 3:4, 16:9, 9:16, 21:9), and `RESOLUTIONS` (1K/2K/4K/8K). At send time `decoratePrompt()` appends the chosen modifiers after a `--- LOOK LOCK ---` marker, and `generate()` also passes `size`/`quality` to `/api/images/generate`. Server-side `buildImagePrompt()` recognises the marker and passes the prompt through verbatim instead of wrapping it in the legacy "vivid fantasy game illustration" preamble that used to override user style.
@@ -163,6 +200,16 @@ When adding a new provider:
 2. Wire it in `server/api/auth.js` (route + status snapshot).
 3. Read it from the consuming adapter — never `process.env.X_API_KEY`.
 
+## Frontend / theme gotchas
+
+- **`public/ux-readable.css` is the override layer** and loads LAST in `index.html`. To beat dark-theme tokens that styles.css ships under `:root[data-theme="anime_command|dark_ops|game_guild|rpg_guild"]`, the `:root` block in ux-readable.css matches the same theme attribute selectors so light values win regardless of which `<html data-theme>` is set.
+- **`.app { grid-template-columns: 72px 1fr }`** in styles.css fixes the sidebar grid track at 72px — fine for the collapsed rail but it makes the 232px expanded sidebar overlay main content. ux-readable.css overrides to `auto minmax(0, 1fr) !important` so the track auto-tracks the sidebar's actual width.
+- **`.nav-item { min-width: 216px }`** in styles.css line 610 forces every sidebar button to ≥216px even inside a 72px collapsed rail. Any narrow-sidebar mode must `min-width: 0 !important` or icons render outside the visible sidebar (hidden behind main content).
+- **Sidebar collapse state** is `localStorage['coffice.sidebar.collapsed']` (`'1'` or `'0'`). The chevron toggle in the brand row flips it; the JSX reads it once at mount via `useState`.
+- **Live activity panel was removed from `/dashboard`** by intent — events still surface at `/#/mission-control`. The dashboard side stack (Provider readiness + Current runs) is now the only main-row child of `.ux-dashboard-main`.
+- **Playwright scripts must use `waitUntil: 'domcontentloaded'`** (or `'load'`) — `'networkidle'` will time out because the SSE `/api/stream` connection stays open for the lifetime of the page. See `scripts/record-hero.js`.
+- **`window.AGENTS`** is the post-merge agent list (live store + runtime stats). It's bootstrapped in `data.js` from `/api/state` and live-patched on the SSE `agents` event. `applyAgents` re-fetches `/api/state` on update so cards reflect the full snapshot. Don't mutate `window.AGENTS` directly from page code.
+
 ## Conventions to follow
 
 - **ESM only** — `package.json` has `"type": "module"`. Use `import`, no CommonJS.
@@ -179,3 +226,7 @@ When adding a new provider:
 - "Persona stuck idle while clearly busy": likely a `PERSONA_RULES` miss. Test interactively: `node -e "import('./server/mapping/personas.js').then(m => console.log(m.mapPersona('Your Subagent Name', 'agent')))"`.
 - "Persona stuck busy after Stop": check that the `Stop` hook entry actually exists in settings (re-run `npm run install-hooks`); only `Stop` clears `lastToolActivity` immediately.
 - "Duplicated events in feed": a new code path is missing a `dedupeKey` — same `tool_use_id` is being fed by both `hooks.js` and `transcripts.js`.
+- "Sidebar renders as a blank white column" / "Can't see icons in collapsed mode": cache, then specificity. (a) Bump the `?v=` query string on the `<link href="ux-readable.css">` in `public/index.html` — Brave/Chrome aggressively caches stylesheets even on hard refresh. (b) Confirm `.nav-item { min-width: 0 }` is winning in collapsed mode (see "Frontend / theme gotchas").
+- "DELETE /api/agents/atlas returns 403": expected. Atlas has `deletable: false` in seed/store/agents.json. To rename/edit, use PATCH instead.
+- "Codex personas keep calling Claude anyway": stale `persona.model` field on the agent record. Either clear it in agents.json or PATCH the record without a `model` so `runner.js` falls back to the codex default for that provider.
+- "agents.json has both `orchestra` and `atlas` rows after upgrade": one-shot migration in `readRaw()` runs on first read; if you edited the file mid-boot, restart the server and the duplicate collapses to one record.
