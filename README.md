@@ -7,8 +7,14 @@
 ![runtime: local-first](https://img.shields.io/badge/runtime-local--first-22c55e)
 ![license: MIT](https://img.shields.io/badge/license-MIT-22c55e)
 
-<!-- Hero video: run `npm run record-hero` to (re)generate docs/hero/c-office-hero.{webm,mp4,gif}.
-     Once captured, swap the placeholder line below for: ![C-Office hero](docs/hero/c-office-hero.gif) -->
+<p align="center">
+  <img src="docs/hero/c-office-pages.gif" alt="C-Office walkthrough — Dashboard, Mission Control, Sim Office Workfloor, Tasks, Images, Memory, Settings" width="960"/>
+</p>
+
+<p align="center"><sub>↑ Walkthrough ทุกหน้าหลัก: Dashboard · Mission Control · <b>Sim Office Workfloor</b> · Notes · Tasks · Projects · Images · Playbooks · Memory · Settings — สร้างใหม่: <code>node scripts/record-hero-pages.js</code></sub></p>
+
+<!-- Single-page hero clip lives at docs/hero/c-office-hero.gif via `npm run record-hero`. -->
+<!-- Multi-page walkthrough (this one) lives at docs/hero/c-office-pages.gif via `node scripts/record-hero-pages.js`. -->
 
 ---
 

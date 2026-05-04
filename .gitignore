@@ -30,3 +30,9 @@ tmp/
 Thumbs.db
 *.swp
 *.swo
+
+# Hero recorder intermediates — keep only the published files at
+# docs/hero/c-office-{hero,pages}.* and ignore working artifacts.
+docs/hero/frames/
+docs/hero/page@*.webm
+docs/hero/.palette*.png
