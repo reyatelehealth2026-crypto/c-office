@@ -63,6 +63,21 @@ async function main() {
   });
   const page = await context.newPage();
 
+  // Sidebar tour — every menu the user can click. Each route gets a 2.5s
+  // dwell so a viewer can see it. Order matches the visual sidebar.
+  const SIDEBAR_TOUR = [
+    { hash: '/dashboard',      dwellMs: 2_500 },
+    { hash: '/mission-control', dwellMs: 2_500 },
+    { hash: '/agents',         dwellMs: 3_500 },
+    { hash: '/notes',          dwellMs: 2_000 },
+    { hash: '/tasks',          dwellMs: 2_000 },
+    { hash: '/projects',       dwellMs: 2_000 },
+    { hash: '/images',         dwellMs: 2_500 },
+    { hash: '/playbooks',      dwellMs: 2_000 },
+    { hash: '/archive',        dwellMs: 1_500 },
+    { hash: '/settings',       dwellMs: 2_000 },
+  ];
+
   try {
     // 1. Land on dashboard, wait for window.AGENTS to populate.
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
@@ -71,15 +86,19 @@ async function main() {
       { timeout: 15_000 },
     );
     console.log('[record-hero] dashboard loaded');
-    await page.waitForTimeout(2_000);
+    await page.waitForTimeout(1_500);
 
-    // 2. Navigate to the agents (roster) page if available.
-    try {
-      await page.goto(`${BASE_URL}/#/agents`, { waitUntil: 'domcontentloaded', timeout: 8_000 });
-    } catch {
-      /* not all builds expose this route — keep going */
+    // 2. Walk every sidebar menu in order, dwelling on each.
+    for (const stop of SIDEBAR_TOUR) {
+      const url = `${BASE_URL}/#${stop.hash}`;
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 8_000 });
+        console.log(`[record-hero] tour → ${stop.hash}`);
+      } catch {
+        /* tolerate missing routes */
+      }
+      await page.waitForTimeout(stop.dwellMs);
     }
-    await page.waitForTimeout(3_000);
 
     // 3. Back to dashboard for the prompt input.
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });

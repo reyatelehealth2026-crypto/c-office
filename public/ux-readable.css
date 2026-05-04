@@ -8,39 +8,43 @@
    ========================================================================== */
 
 :root {
-  /* ── Background System (BRIGHT navy — clear visual hierarchy) ──────── */
-  --bg-app: #12142e;
-  --bg-app-soft: #161938;
-  --bg-panel: #161938;
-  --bg-card: #1a1d42;
-  --bg-card-2: #1e2148;
-  --bg-elevated: #252850;
+  /* ── Background System ("Lighter Steam" — Steam-inspired blue-grey) ──
+     Page bg is a deep blue-grey similar to Steam's #1b2838, with panels
+     stepping up toward the cool "Steam Deck" surface tone. Borders read
+     as faint white instead of black so the lighter base stays crisp. */
+  --bg-app: #0f1620;          /* page bg base — slightly darker than Steam's #171a21 to keep contrast under glow gradients */
+  --bg-app-soft: #15202e;     /* alt page surface */
+  --bg-panel: #1b2838;        /* Steam signature blue-grey */
+  --bg-card: #21364a;         /* Steam-like card surface */
+  --bg-card-2: #2a4159;       /* hover/elevated card */
+  --bg-elevated: #314a64;     /* highest elevation (inputs, chips) */
 
   --bg-0: var(--bg-app);
   --bg-1: var(--bg-app-soft);
   --bg-2: var(--bg-panel);
   --bg-3: var(--bg-card);
 
-  /* ── Borders (SOLID — no rgba glass) ───────────────────────────────── */
-  --border:   #2a2d5a;
-  --border-2: #3a3d6a;
-  --border-3: #4a4d8a;
+  /* ── Borders (faint white on lighter base — reads cleanly without slate) */
+  --border:   rgba(255, 255, 255, 0.08);
+  --border-2: rgba(255, 255, 255, 0.14);
+  --border-3: rgba(255, 255, 255, 0.22);
 
-  /* ── Text Hierarchy ────────────────────────────────────────────────── */
-  --text-primary:   #ffffff;
-  --text-body:      #cbd5e1;
-  --text-secondary: #a0a3c0;
-  --text-muted:     #7f8da3;
-  --text-faint:     #526072;
+  /* ── Text Hierarchy (Steam cool-light-grey scheme) ─────────────────── */
+  --text-primary:   #e6edf3;  /* primary copy on cards */
+  --text-body:      #c7d5e0;  /* Steam signature body text */
+  --text-secondary: #9aa9bd;  /* secondary muted */
+  --text-muted:     #7a8a9e;  /* tertiary labels */
+  --text-faint:     #56697d;  /* hint */
   --text: var(--text-primary);
 
-  /* ── Neon Accent Palette ───────────────────────────────────────────── */
+  /* ── Neon Accent Palette (brand violet/cyan kept; Steam blue added as link tone) */
   --accent-violet:  #9d5cff;
   --accent-cyan:    #22d3ee;
   --accent-gold:    #fbbf24;
   --accent-pink:    #f472b6;
   --accent-magenta: #ec4899;
   --accent-lime:    #34d399;
+  --accent-steam:   #66c0f4;  /* Steam signature blue — used for hover/link tones */
 
   /* ── UX layer aliases (drives existing ux-* CSS) ───────────────────── */
   --ux-bg-app: var(--bg-app);
@@ -121,13 +125,16 @@
   --font-thai:    'Sarabun', 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 
-/* ── App Canvas (3 soft radial glows + 48px grid) ─────────────────────── */
+/* ── App Canvas (Steam-style: deep blue-grey gradient, soft accents) ───
+   Gradient runs from #0f1620 at top to #1b2838 at bottom — same shift as
+   Steam's launcher. Accent radials are kept but dimmed since the base is
+   lighter than before (more contrast → glows can be softer). */
 body {
   background:
-    radial-gradient(900px 520px at 14% -12%, rgba(157, 92, 255, 0.10), transparent 62%),
-    radial-gradient(780px 480px at 94% 2%, rgba(34, 211, 238, 0.08), transparent 62%),
-    radial-gradient(640px 380px at 54% 110%, rgba(251, 191, 36, 0.05), transparent 64%),
-    var(--bg-app) !important;
+    radial-gradient(900px 520px at 14% -12%, rgba(157, 92, 255, 0.08), transparent 62%),
+    radial-gradient(780px 480px at 94% 2%, rgba(102, 192, 244, 0.07), transparent 62%),
+    radial-gradient(640px 380px at 54% 110%, rgba(251, 191, 36, 0.04), transparent 64%),
+    linear-gradient(180deg, #0f1620 0%, #1b2838 100%) !important;
   color: var(--text-primary);
 }
 
@@ -146,15 +153,21 @@ body::before {
           mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5), transparent 85%);
 }
 
-/* ── Sidebar (per-route accent colors via --nav-color) ────────────────── */
+/* ── Sidebar (Steam-style elevation: blue-tinted panel, faint right border) */
 .sidebar {
-  background: #0e1028 !important;
-  border-right: 2px solid var(--border) !important;
-  box-shadow: none !important;
+  background: #1f2a36 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.02), 6px 0 24px rgba(0, 0, 0, 0.32) !important;
+}
+
+/* Tighten the expanded width — was 240px in styles.css, keep parity but
+   ensure ux-readable wins if anything else stretches it. */
+.sidebar.expanded {
+  width: 240px !important;
 }
 
 .brand {
-  border-bottom: 2px solid var(--border) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
 }
 
 .brand-mark {
@@ -172,12 +185,14 @@ body::before {
 }
 
 .nav-item:hover:not(.active) {
+  /* Subtle Steam-style hover — light-on-dark wash, no full-bg highlight */
   background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--text-primary) !important;
 }
 
 .nav-item .ico {
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(42, 45, 90, 0.45);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-muted);
   border-radius: var(--radius);
   font: 600 10px var(--font-mono);
@@ -186,9 +201,10 @@ body::before {
 }
 
 .nav-item.active {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 18%, transparent), rgba(255, 255, 255, 0.04)) !important;
-  border-color: color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 42%, rgba(255, 255, 255, 0.10)) !important;
-  border-left: 3px solid var(--nav-color, var(--accent-cyan)) !important;
+  /* Strong 3px violet left-border, no full-bg fill — keeps the row light */
+  background: rgba(157, 92, 255, 0.08) !important;
+  border-color: transparent !important;
+  border-left: 3px solid var(--accent-violet) !important;
   color: #ffffff !important;
 }
 

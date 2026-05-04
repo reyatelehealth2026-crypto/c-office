@@ -206,8 +206,12 @@ const AgentModelUnit = ({ agent, selected, onSelect, onOpenAgent }) => {
 
       <div className="agent-unit-footer">
         <div>
-          <strong>{agent.name}</strong>
-          <span>{agent.role || category.label}</span>
+          {/* Defensive fallbacks — half-migrated records (e.g. user-created agents
+              with single-character Thai names like "กำ") used to render as a bare
+              partial glyph. Normalize to a non-empty display string so cards always
+              show *something* readable, without mutating ~/.c-office/agents.json. */}
+          <strong>{(agent.name && String(agent.name).trim()) || agent.id || 'Untitled agent'}</strong>
+          <span>{(agent.role && String(agent.role).trim()) || category.label || 'Staff'}</span>
         </div>
         <div className="agent-meter-row">
           <span style={{ width: `${load}%` }} title="Workload"/>
