@@ -83,6 +83,58 @@ function seedAgents() {
   }));
 }
 
+// One-shot migration: rewrite legacy persona ids in place using
+// LEGACY_ID_ALIASES, and merge in canonical seed fields (deletable,
+// provider, image, gradient, systemPrompt) for any agent that came from
+// the old seed and hasn't been customized away. Custom user-created
+// agents (ids not in the alias map) are passed through untouched.
+function migrateLegacyIds(list) {
+  if (!Array.isArray(list)) return { list, changed: false };
+  const seedById = new Map(PERSONAS.map((p) => [p.id, p]));
+  let changed = false;
+  const seenIds = new Set();
+  const out = [];
+  for (const agent of list) {
+    if (!agent || typeof agent !== 'object') continue;
+    const oldId = String(agent.id || '').trim().toLowerCase();
+    const newId = LEGACY_ID_ALIASES[oldId] || oldId;
+    if (newId !== oldId) changed = true;
+    if (seenIds.has(newId)) {
+      // Two records collapsed onto same new id — keep the first, drop the dup.
+      changed = true;
+      continue;
+    }
+    seenIds.add(newId);
+    const seed = seedById.get(newId);
+    if (seed) {
+      // Merge seed canonical fields where the existing record lacks them.
+      const merged = {
+        ...agent,
+        id: newId,
+        deletable: typeof agent.deletable === 'boolean' ? agent.deletable : seed.deletable,
+        provider: agent.provider && agent.provider !== 'claude' ? agent.provider : (seed.provider || agent.provider || 'claude'),
+        image: agent.image && !/\/(images|portraits)\/(Orchestra|Aira|Luna|Vivi|Kira|Miku|Emi|Nana|Ori)\.png$/i.test(agent.image)
+          ? agent.image
+          : seed.image,
+        gradient: agent.gradient || seed.gradient,
+        color: agent.color || seed.color,
+        role: agent.role || seed.role,
+        name: agent.name && !['Orchestra','Aira','Luna','Vivi','Kira','Miku','Emi','Nana','Ori'].includes(agent.name)
+          ? agent.name
+          : seed.name,
+        systemPrompt: agent.systemPrompt && !/Orchestra|Aira|Luna|Vivi|Kira|Miku|Emi|Nana|Ori/.test(agent.systemPrompt)
+          ? agent.systemPrompt
+          : (seed.systemPrompt || agent.systemPrompt),
+      };
+      if (JSON.stringify(merged) !== JSON.stringify(agent)) changed = true;
+      out.push(merged);
+    } else {
+      out.push({ ...agent, id: newId });
+    }
+  }
+  return { list: out, changed };
+}
+
 function readRaw() {
   const file = agentsFile();
   ensureDir(file);
@@ -94,7 +146,12 @@ function readRaw() {
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
     const list = Array.isArray(parsed) ? parsed : parsed.agents;
-    return Array.isArray(list) ? list : seedAgents();
+    if (!Array.isArray(list)) return seedAgents();
+    const { list: migrated, changed } = migrateLegacyIds(list);
+    if (changed) {
+      fs.writeFileSync(file, JSON.stringify({ agents: migrated }, null, 2) + '\n');
+    }
+    return migrated;
   } catch {
     return seedAgents();
   }
