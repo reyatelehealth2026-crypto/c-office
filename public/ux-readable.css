@@ -208,19 +208,36 @@ body::before {
   display: inline-flex !important;
   visibility: visible !important;
   opacity: 1 !important;
+  background-color: #9d5cff !important;
   background: var(--nav-color, #9d5cff) !important;
   border: 1px solid var(--nav-color, #9d5cff) !important;
   color: #ffffff !important;
-  width: 40px !important;
-  height: 40px !important;
-  border-radius: 8px !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  border-radius: 10px !important;
   font-weight: 800 !important;
-  font-size: 12px !important;
-  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace) !important;
+  font-size: 13px !important;
+  font-family: 'JetBrains Mono', ui-monospace, monospace !important;
   letter-spacing: 0.04em !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.10) !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12) !important;
   align-items: center !important;
   justify-content: center !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18) !important;
+}
+
+.sidebar.collapsed .nav-item {
+  min-height: 56px !important;
+  padding: 6px 0 !important;
+  background: transparent !important;
+}
+
+/* Force the sidebar itself wide enough to host 44×44 tiles + padding even
+   if the parent grid column is fixed at 72px. */
+.sidebar.collapsed {
+  width: 72px !important;
+  padding: 14px 6px !important;
 }
 
 .sidebar.collapsed .nav-item:not(.active) .ico {
