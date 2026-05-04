@@ -2008,3 +2008,149 @@ a:focus-visible,
   border-color: var(--accent-violet) !important;
   color: var(--accent-violet) !important;
 }
+
+/* ── Tasks page (/tasks) — light surfaces, dark text ──────────────────
+   ux-tasks.css uses rgba(255,255,255,*) for dark-theme highlights;
+   on a light bg those become invisible / white-on-white. Re-skin the
+   key selectors with rgba(0,0,0,*) tints. */
+.ux-task-card-v2 {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.ux-task-card-v2:hover {
+  border-color: rgba(244, 114, 182, 0.50) !important;
+  background: #fffbfd !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.ux-task-card-v2.is-selected {
+  background: rgba(244, 114, 182, 0.06) !important;
+  border-color: var(--accent-pink) !important;
+  box-shadow: 0 4px 14px rgba(244, 114, 182, 0.20);
+}
+
+.ux-task-glyph {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: var(--text-primary) !important;
+}
+
+.ux-task-title {
+  color: var(--text-primary) !important;
+  font-weight: 700 !important;
+}
+
+.ux-task-desc {
+  color: var(--text-body) !important;
+  font-weight: 500 !important;
+}
+
+.ux-task-meta,
+.ux-task-time {
+  color: var(--text-secondary) !important;
+}
+
+.ux-task-progress {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+.ux-tasks-summary,
+.ux-tasks-toolbar {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.ux-task-search,
+.ux-task-select {
+  background: #f5f5f5 !important;
+  border: 1px solid rgba(0, 0, 0, 0.10) !important;
+  color: var(--text-primary) !important;
+}
+
+.ux-task-search::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* ── Run-window dock launcher (bottom-left "💬 Tasks (N)") + popup ─────
+   The button + panel use inline styles tied to var(--bg-1)/var(--bg-2)
+   which now resolve to light values via ux-readable :root overrides.
+   Add a stronger contrast border + shadow so they read as floating
+   elements on the light page. */
+.ux-tasks-toolbar input,
+.ux-tasks-toolbar select {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.10) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ── Topbar Atlas mission input + Launch button ───────────────────────
+   `.ux-command input` and the Launch button. Make sure the text reads
+   dark and the panel feels like a real input field. */
+.ux-topbar .ux-command input,
+.ux-topbar .ux-command select,
+.ux-topbar .ux-command button {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.10) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+}
+
+.ux-topbar .ux-command input::placeholder {
+  color: var(--text-muted) !important;
+  font-weight: 500 !important;
+}
+
+.ux-topbar .ux-command button {
+  background: linear-gradient(180deg, #ffffff, #f5f5f5) !important;
+  font-weight: 700 !important;
+}
+
+.ux-topbar .ux-command button:not(:disabled):hover {
+  background: linear-gradient(180deg, #f8f8f8, #ededed) !important;
+  border-color: rgba(0, 0, 0, 0.18) !important;
+}
+
+.ux-topbar .ux-command button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Chat / dispatch transcript panes (Notes, Mission Control, Desk) ──
+   Anywhere a chat-style transcript is rendered, make the bubbles read
+   correctly on light bg. Generic match for common class names. */
+.chat-transcript,
+.dispatch-transcript,
+.message-list,
+.ux-chat,
+.notes-thread {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  color: var(--text-primary) !important;
+}
+
+.chat-msg,
+.message-bubble,
+.dispatch-msg {
+  background: #f5f5f5 !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  color: var(--text-primary) !important;
+}
+
+.chat-msg.user,
+.message-bubble.user,
+.dispatch-msg.user {
+  background: rgba(157, 92, 255, 0.08) !important;
+  border-color: rgba(157, 92, 255, 0.30) !important;
+}
+
+.chat-msg.assistant,
+.message-bubble.assistant,
+.dispatch-msg.assistant {
+  background: rgba(34, 211, 238, 0.06) !important;
+  border-color: rgba(34, 211, 238, 0.25) !important;
+}
