@@ -194,24 +194,27 @@ body::before {
   min-height: 48px !important;
 }
 
-/* In collapsed mode, every nav-item shows a route-tinted icon tile so
-   the rail isn't just a column of identical white squares. Active item
-   keeps the saturated fill from the general .nav-item.active rule. */
+/* In collapsed mode, every nav-item shows a tinted icon tile so the rail
+   isn't just a column of identical white squares. Uses simple rgba —
+   no color-mix — so it works on every browser the project targets. */
 .sidebar.collapsed .nav-item:not(.active) .ico {
-  background: color-mix(in srgb, var(--nav-color, var(--accent-violet)) 14%, #ffffff) !important;
-  border: 1px solid color-mix(in srgb, var(--nav-color, var(--accent-violet)) 35%, transparent) !important;
-  color: color-mix(in srgb, var(--nav-color, var(--accent-violet)) 80%, #1a1a1a) !important;
+  background: #f5f5f5 !important;
+  border: 1px solid rgba(0, 0, 0, 0.10) !important;
+  color: var(--nav-color, var(--accent-violet)) !important;
   width: 36px !important;
   height: 36px !important;
-  font: 800 11px var(--font-mono) !important;
+  font-weight: 800 !important;
+  font-size: 11px !important;
+  font-family: var(--font-mono) !important;
 }
 
 .sidebar.collapsed .nav-item:hover:not(.active) {
-  background: color-mix(in srgb, var(--nav-color, var(--accent-violet)) 10%, transparent) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
 }
 
 .sidebar.collapsed .nav-item:hover:not(.active) .ico {
-  background: color-mix(in srgb, var(--nav-color, var(--accent-violet)) 22%, #ffffff) !important;
+  background: #ededed !important;
+  border-color: rgba(0, 0, 0, 0.18) !important;
 }
 
 .sidebar.collapsed .nav-item.active {
@@ -222,7 +225,12 @@ body::before {
 .sidebar.collapsed .nav-item.active .ico {
   width: 36px !important;
   height: 36px !important;
-  font: 800 11px var(--font-mono) !important;
+  font-weight: 800 !important;
+  font-size: 11px !important;
+  font-family: var(--font-mono) !important;
+  background: var(--nav-color, var(--accent-violet)) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
 }
 
 .sidebar.collapsed .sidebar-toggle {
