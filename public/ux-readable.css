@@ -7,7 +7,17 @@
    this stylesheet.
    ========================================================================== */
 
-:root {
+/* The :root[data-theme] selectors in styles.css have higher specificity
+   than a plain :root and would otherwise override our light theme. We
+   match the same shape so light values win regardless of which theme
+   attribute the page sets. */
+:root,
+:root[data-theme="anime_command"],
+:root[data-theme="dark_ops"],
+:root[data-theme="game_guild"],
+:root[data-theme="rpg_guild"],
+:root[data-theme="cyber_neon"],
+:root[data-theme] {
   /* ── Background System (Light mode — #efefef base) ──────────────────
      Page bg is a near-white grey (#efefef) per user spec. Cards lift to
      pure white so they read cleanly above the page. Borders flip to
@@ -191,30 +201,78 @@ body::before {
 
 .sidebar-toggle {
   appearance: none;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--accent-violet) !important;
+  border: 1px solid var(--accent-violet) !important;
   border-radius: var(--radius);
-  color: var(--text-secondary);
+  color: #ffffff !important;
   cursor: pointer;
-  font: 700 14px var(--font-mono);
-  height: 26px;
-  width: 26px;
-  margin-left: auto;
-  display: inline-flex;
+  font: 700 16px var(--font-mono) !important;
+  height: 28px !important;
+  width: 28px !important;
+  flex: 0 0 auto;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
   transition: all 140ms ease;
+  position: relative;
+  z-index: 5;
+  box-shadow: 0 2px 6px rgba(157, 92, 255, 0.30);
 }
 
 .sidebar-toggle:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: var(--text-primary);
-  border-color: rgba(0, 0, 0, 0.14);
+  background: #8b3aff !important;
+  border-color: #8b3aff !important;
+  transform: scale(1.05);
+  box-shadow: 0 3px 10px rgba(157, 92, 255, 0.45);
+}
+
+/* When collapsed, the brand-copy is hidden; pin the toggle below the
+   brand-mark so it's still clickable in the 64px rail. */
+.sidebar.collapsed .brand {
+  flex-direction: column !important;
+  gap: 8px !important;
+  align-items: center !important;
+  padding: 12px 8px 14px !important;
+  min-height: auto !important;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  margin: 0 !important;
+}
+
+/* Nav-item separators so the white-on-white list shows distinct rows */
+.sidebar .nav-item + .nav-item {
+  position: relative;
+}
+
+.sidebar .nav-item + .nav-item::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: -1px;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.05);
+  pointer-events: none;
+}
+
+.sidebar .nav-item.active + .nav-item::before,
+.sidebar .nav-item + .nav-item.active::before {
+  display: none;
 }
 
 .brand {
   border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
   min-height: 72px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  position: relative !important;
+}
+
+.brand .brand-copy {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .brand-mark {
