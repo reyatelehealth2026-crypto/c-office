@@ -13,8 +13,20 @@ const UX_NAV_PROJECTS = [
   { id: 'settings', label: 'Settings', icon: 'ST', color: 'var(--ux-text-muted)' },
 ];
 
+const SIDEBAR_COLLAPSED_KEY = 'coffice.sidebar.collapsed';
+
 const SidebarProjectsV2 = ({ page, setPage }) => {
-  const expanded = true;
+  const [collapsed, setCollapsed] = React.useState(() => {
+    try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'; } catch { return false; }
+  });
+  const expanded = !collapsed;
+  const toggle = () => {
+    setCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
   const notesCount = (window.NOTES || []).length;
   const runCount = (window.RUNS || []).length;
   const runningTasks = (window.TASKS || []).filter(t => t.status === 'running').length;
@@ -30,12 +42,25 @@ const SidebarProjectsV2 = ({ page, setPage }) => {
   };
 
   return (
-    <aside className="sidebar expanded" aria-label="Primary navigation">
-      <div className="brand"><div className="brand-mark"/><div className="brand-copy"><div className="brand-name">C-OFFICE</div><div className="brand-sub">AI Agent Hub</div></div></div>
+    <aside className={'sidebar ' + (expanded ? 'expanded' : 'collapsed')} aria-label="Primary navigation">
+      <div className="brand">
+        <div className="brand-mark"/>
+        <div className="brand-copy">
+          <div className="brand-name">C-OFFICE</div>
+          <div className="brand-sub">AI Agent Hub</div>
+        </div>
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={toggle}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >{collapsed ? '›' : '‹'}</button>
+      </div>
       {UX_NAV_PROJECTS.map(n => {
         const badge = badgeFor(n.id);
         return (
-          <button key={n.id} type="button" className={`nav-item ${page === n.id ? 'active' : ''}`} style={{ '--nav-color': n.color }} onClick={() => setPage(n.id)} aria-current={page === n.id ? 'page' : undefined}>
+          <button key={n.id} type="button" className={`nav-item ${page === n.id ? 'active' : ''}`} style={{ '--nav-color': n.color }} onClick={() => setPage(n.id)} aria-current={page === n.id ? 'page' : undefined} title={collapsed ? n.label : undefined}>
             <span className="ico">{n.icon}</span><span className="nav-label">{n.label}</span>{badge != null && <span className="badge cyan" style={{ marginLeft: 'auto', fontSize: 9 }}>{badge}</span>}
           </button>
         );

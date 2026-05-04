@@ -152,6 +152,7 @@ body::before {
 /* ── Sidebar (light: solid white panel, real depth) ─────────────────── */
 .sidebar {
   background: #ffffff !important;
+  backdrop-filter: none !important;
   border-right: 1px solid rgba(0, 0, 0, 0.08) !important;
   box-shadow:
     inset 1px 0 0 #ffffff,
@@ -159,10 +160,56 @@ body::before {
     4px 0 24px rgba(0, 0, 0, 0.05) !important;
 }
 
-/* Always expanded at 232px — the hover-toggle was removed in
-   ux-nav-projects.jsx for stability on the marketing-user layout. */
+/* Default expanded at 232px. Click the chevron toggle in the brand bar
+   to collapse to icon-only at 64px. State persists in localStorage. */
 .sidebar.expanded {
   width: 232px !important;
+}
+
+.sidebar.collapsed {
+  width: 64px !important;
+  background: #ffffff !important;
+}
+
+.sidebar.collapsed .brand-copy,
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .pilot-meta,
+.sidebar.collapsed .badge {
+  display: none !important;
+}
+
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 10px !important;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  /* Move toggle below brand-mark when collapsed */
+  margin-left: 0;
+  align-self: center;
+}
+
+.sidebar-toggle {
+  appearance: none;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 700 14px var(--font-mono);
+  height: 26px;
+  width: 26px;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 140ms ease;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(0, 0, 0, 0.14);
 }
 
 .brand {
