@@ -8,33 +8,33 @@
    ========================================================================== */
 
 :root {
-  /* ── Background System ("Lighter Steam" — Steam-inspired blue-grey) ──
-     Page bg is a deep blue-grey similar to Steam's #1b2838, with panels
-     stepping up toward the cool "Steam Deck" surface tone. Borders read
-     as faint white instead of black so the lighter base stays crisp. */
-  --bg-app: #0f1620;          /* page bg base — slightly darker than Steam's #171a21 to keep contrast under glow gradients */
-  --bg-app-soft: #15202e;     /* alt page surface */
-  --bg-panel: #1b2838;        /* Steam signature blue-grey */
-  --bg-card: #21364a;         /* Steam-like card surface */
-  --bg-card-2: #2a4159;       /* hover/elevated card */
-  --bg-elevated: #314a64;     /* highest elevation (inputs, chips) */
+  /* ── Background System (Light mode — #efefef base) ──────────────────
+     Page bg is a near-white grey (#efefef) per user spec. Cards lift to
+     pure white so they read cleanly above the page. Borders flip to
+     black-at-low-opacity so they show on the bright base. */
+  --bg-app: #efefef;          /* page bg base — user spec */
+  --bg-app-soft: #f5f5f5;     /* alt page surface */
+  --bg-panel: #ffffff;        /* card / panel surface */
+  --bg-card: #ffffff;         /* primary card surface */
+  --bg-card-2: #f8f8f8;       /* hover / elevated card */
+  --bg-elevated: #f3f3f3;     /* depressed input/chip surface */
 
   --bg-0: var(--bg-app);
   --bg-1: var(--bg-app-soft);
   --bg-2: var(--bg-panel);
   --bg-3: var(--bg-card);
 
-  /* ── Borders (faint white on lighter base — reads cleanly without slate) */
-  --border:   rgba(255, 255, 255, 0.08);
-  --border-2: rgba(255, 255, 255, 0.14);
-  --border-3: rgba(255, 255, 255, 0.22);
+  /* ── Borders (faint black on light base) ────────────────────────────── */
+  --border:   rgba(0, 0, 0, 0.08);
+  --border-2: rgba(0, 0, 0, 0.14);
+  --border-3: rgba(0, 0, 0, 0.22);
 
-  /* ── Text Hierarchy (Steam cool-light-grey scheme) ─────────────────── */
-  --text-primary:   #e6edf3;  /* primary copy on cards */
-  --text-body:      #c7d5e0;  /* Steam signature body text */
-  --text-secondary: #9aa9bd;  /* secondary muted */
-  --text-muted:     #7a8a9e;  /* tertiary labels */
-  --text-faint:     #56697d;  /* hint */
+  /* ── Text Hierarchy (dark on light) ─────────────────────────────────── */
+  --text-primary:   #1a1a1a;  /* primary copy on cards */
+  --text-body:      #2d2d2d;  /* body text */
+  --text-secondary: #5a6470;  /* secondary muted */
+  --text-muted:     #8a939d;  /* tertiary labels */
+  --text-faint:     #b0b6bd;  /* hint */
   --text: var(--text-primary);
 
   /* ── Neon Accent Palette (brand violet/cyan kept; Steam blue added as link tone) */
@@ -86,10 +86,10 @@
   --rarity-r:   linear-gradient(135deg, #22d3ee 0%, #34d399 100%);
   --rarity-n:   linear-gradient(135deg, #64748b 0%, #475569 100%);
 
-  /* ── Shadows (subtle — no heavy glass blur) ────────────────────────── */
-  --shadow-card:    0 8px 28px rgba(0, 0, 0, 0.4);
-  --shadow-popover: 0 16px 48px rgba(0, 0, 0, 0.55);
-  --shadow-deep:    0 12px 36px rgba(0, 0, 0, 0.5);
+  /* ── Shadows (subtle — softer on light bg) ─────────────────────────── */
+  --shadow-card:    0 4px 14px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-deep:    0 8px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
   --ux-shadow-card: var(--shadow-card);
   --ux-shadow-popover: var(--shadow-popover);
 
@@ -125,16 +125,12 @@
   --font-thai:    'Sarabun', 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 
-/* ── App Canvas (Steam-style: deep blue-grey gradient, soft accents) ───
-   Gradient runs from #0f1620 at top to #1b2838 at bottom — same shift as
-   Steam's launcher. Accent radials are kept but dimmed since the base is
-   lighter than before (more contrast → glows can be softer). */
+/* ── App Canvas (light mode: #efefef flat base with ultra-soft accents) */
 body {
   background:
-    radial-gradient(900px 520px at 14% -12%, rgba(157, 92, 255, 0.08), transparent 62%),
-    radial-gradient(780px 480px at 94% 2%, rgba(102, 192, 244, 0.07), transparent 62%),
-    radial-gradient(640px 380px at 54% 110%, rgba(251, 191, 36, 0.04), transparent 64%),
-    linear-gradient(180deg, #0f1620 0%, #1b2838 100%) !important;
+    radial-gradient(900px 520px at 14% -12%, rgba(157, 92, 255, 0.05), transparent 62%),
+    radial-gradient(780px 480px at 94% 2%, rgba(34, 211, 238, 0.04), transparent 62%),
+    #efefef !important;
   color: var(--text-primary);
 }
 
@@ -146,18 +142,18 @@ body::before {
   z-index: 0;
   display: block !important;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    linear-gradient(rgba(0, 0, 0, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.02) 1px, transparent 1px);
   background-size: 48px 48px;
-  -webkit-mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5), transparent 85%);
-          mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5), transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.4), transparent 85%);
+          mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.4), transparent 85%);
 }
 
-/* ── Sidebar (Steam-style elevation: blue-tinted panel, faint right border) */
+/* ── Sidebar (light: white panel, faint shadow right border) ────────── */
 .sidebar {
-  background: #1f2a36 !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
-  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.02), 6px 0 24px rgba(0, 0, 0, 0.32) !important;
+  background: #ffffff !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 1px 0 0 rgba(0, 0, 0, 0.02), 4px 0 16px rgba(0, 0, 0, 0.04) !important;
 }
 
 /* Tighten the expanded width — was 240px in styles.css, keep parity but
@@ -167,14 +163,14 @@ body::before {
 }
 
 .brand {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
 }
 
 .brand-mark {
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.10),
-    0 0 22px rgba(34, 211, 238, 0.26),
-    0 14px 28px rgba(0, 0, 0, 0.28) !important;
+    0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 0 18px rgba(34, 211, 238, 0.18),
+    0 10px 20px rgba(0, 0, 0, 0.06) !important;
 }
 
 .nav-item {
@@ -185,15 +181,15 @@ body::before {
 }
 
 .nav-item:hover:not(.active) {
-  /* Subtle Steam-style hover — light-on-dark wash, no full-bg highlight */
-  background: rgba(255, 255, 255, 0.04) !important;
+  /* Light-mode hover: subtle dark wash on white */
+  background: rgba(0, 0, 0, 0.04) !important;
   color: var(--text-primary) !important;
 }
 
 .nav-item .ico {
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-secondary);
   border-radius: var(--radius);
   font: 600 10px var(--font-mono);
   width: 30px;
@@ -201,11 +197,11 @@ body::before {
 }
 
 .nav-item.active {
-  /* Strong 3px violet left-border, no full-bg fill — keeps the row light */
-  background: rgba(157, 92, 255, 0.08) !important;
+  /* Light-mode active: violet wash + 3px left rail */
+  background: rgba(157, 92, 255, 0.10) !important;
   border-color: transparent !important;
   border-left: 3px solid var(--accent-violet) !important;
-  color: #ffffff !important;
+  color: #1a1a1a !important;
 }
 
 .nav-item.active .ico {
@@ -227,11 +223,11 @@ body::before {
 .nav-item[data-route="guild"]           { --nav-color: var(--accent-magenta); }
 .nav-item[data-route="projects"]        { --nav-color: var(--accent-pink); }
 
-/* ── Topbar (sticky #161938, 2px bottom border) ───────────────────────── */
+/* ── Topbar (sticky white, 1px bottom border) ────────────────────────── */
 .ux-topbar {
-  background: var(--bg-app-soft) !important;
+  background: #ffffff !important;
   backdrop-filter: none !important;
-  border-bottom: 2px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .ux-kicker {
