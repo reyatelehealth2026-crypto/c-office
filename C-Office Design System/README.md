@@ -7,7 +7,7 @@
 ## Sources
 
 - **Local codebase:** `c-office-main/` (Node + React UMD + Babel Standalone, no build step)
-- **GitHub repo:** `reyatelehealth2026-crypto/c-office`
+- **GitHub repo:** `vrzycodex/c-office`
 - **UX/UI Master Spec:** `docs/UX_UI_MASTER_SPEC.md`
 
 ---

@@ -7,7 +7,7 @@ person who has to debug a Claude Code agent at 2 AM."
 ## Development setup
 
 ```bash
-git clone https://github.com/reyatelehealth2026-crypto/c-office.git
+git clone https://github.com/vrzycodex/c-office.git
 cd c-office
 npm install
 npm run dev          # node --watch — auto-restart on server file changes

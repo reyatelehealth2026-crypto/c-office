@@ -1,5 +1,5 @@
 ﻿# C-Office one-line installer for Windows.
-# Usage: irm https://raw.githubusercontent.com/reyatelehealth2026-crypto/c-office/main/scripts/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/vrzycodex/c-office/main/scripts/install.ps1 | iex
 #
 # Idempotent. Skips anything already installed. Does NOT require admin —
 # winget runs user-scoped, npm -g lands under $env:APPDATA\npm.
@@ -18,7 +18,7 @@ Write-Host "+--------------------------------------------+" -ForegroundColor Mag
 Write-Host ""
 
 # ---------- Config ----------
-$RepoUrl  = if ($env:COFFICE_REPO_URL) { $env:COFFICE_REPO_URL } else { 'https://github.com/reyatelehealth2026-crypto/c-office.git' }
+$RepoUrl  = if ($env:COFFICE_REPO_URL) { $env:COFFICE_REPO_URL } else { 'https://github.com/vrzycodex/c-office.git' }
 $InstallDir = Join-Path $env:USERPROFILE 'c-office'
 
 function Write-Step {

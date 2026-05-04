@@ -12,7 +12,7 @@
 ## 0. TL;DR
 
 ```bash
-git clone https://github.com/reyatelehealth2026-crypto/c-office.git
+git clone https://github.com/vrzycodex/c-office.git
 cd c-office
 npm install
 npm run dev
@@ -49,7 +49,7 @@ paste คำสั่งบรรทัดเดียวด้านล่า�
 Claude CLI ที่ login เรียบร้อย:
 
 ```powershell
-irm https://raw.githubusercontent.com/reyatelehealth2026-crypto/c-office/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/vrzycodex/c-office/main/scripts/install.ps1 | iex
 ```
 
 สคริปต์จะทำให้อัตโนมัติ:
@@ -296,7 +296,7 @@ Use it before redesigning dashboard, notes, mission control, tasks, images, proj
 ### 5.1 Install
 
 ```bash
-git clone https://github.com/reyatelehealth2026-crypto/c-office.git
+git clone https://github.com/vrzycodex/c-office.git
 cd c-office
 npm install
 ```
