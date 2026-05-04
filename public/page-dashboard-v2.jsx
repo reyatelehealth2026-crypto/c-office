@@ -344,17 +344,6 @@ const DashboardV2 = ({ onOpenAgent, setLayout }) => {
       </section>
 
       <div className="ux-dashboard-main">
-        <section className="ux-section-panel">
-          <div className="ux-section-head">
-            <div>
-              <h3 className="ux-section-title">Live activity</h3>
-              <div className="ux-section-subtitle">Readable feed from hooks, tools, sessions, and dispatches.</div>
-            </div>
-            <UXStatusChip label={`${(window.ACTIVITY || []).length} events`} state={(window.ACTIVITY || []).length ? 'active' : 'muted'} />
-          </div>
-          <UXLiveFeed onOpenAgent={onOpenAgent}/>
-        </section>
-
         <aside className="ux-side-stack">
           <section className="ux-section-panel">
             <div className="ux-section-head">

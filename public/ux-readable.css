@@ -29,12 +29,12 @@
   --border-2: rgba(0, 0, 0, 0.14);
   --border-3: rgba(0, 0, 0, 0.22);
 
-  /* ── Text Hierarchy (dark on light) ─────────────────────────────────── */
-  --text-primary:   #1a1a1a;  /* primary copy on cards */
-  --text-body:      #2d2d2d;  /* body text */
-  --text-secondary: #5a6470;  /* secondary muted */
-  --text-muted:     #8a939d;  /* tertiary labels */
-  --text-faint:     #b0b6bd;  /* hint */
+  /* ── Text Hierarchy (dark on light — high-contrast) ─────────────────── */
+  --text-primary:   #0a0a0a;  /* near-black for headings + body */
+  --text-body:      #1d1d1d;  /* body text */
+  --text-secondary: #475560;  /* secondary muted (still readable) */
+  --text-muted:     #6b7480;  /* tertiary labels */
+  --text-faint:     #9aa3ad;  /* hint */
   --text: var(--text-primary);
 
   /* ── Neon Accent Palette (brand violet/cyan kept; Steam blue added as link tone) */
@@ -149,65 +149,99 @@ body::before {
           mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.4), transparent 85%);
 }
 
-/* ── Sidebar (light: white panel, faint shadow right border) ────────── */
+/* ── Sidebar (light: solid white panel, real depth) ─────────────────── */
 .sidebar {
   background: #ffffff !important;
   border-right: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 1px 0 0 rgba(0, 0, 0, 0.02), 4px 0 16px rgba(0, 0, 0, 0.04) !important;
+  box-shadow:
+    inset 1px 0 0 #ffffff,
+    1px 0 0 rgba(0, 0, 0, 0.04),
+    4px 0 24px rgba(0, 0, 0, 0.05) !important;
 }
 
-/* Tighten the expanded width — was 240px in styles.css, keep parity but
-   ensure ux-readable wins if anything else stretches it. */
+/* Always expanded at 232px — the hover-toggle was removed in
+   ux-nav-projects.jsx for stability on the marketing-user layout. */
 .sidebar.expanded {
-  width: 240px !important;
+  width: 232px !important;
 }
 
 .brand {
   border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  min-height: 72px !important;
 }
 
 .brand-mark {
+  background: linear-gradient(135deg, var(--accent-violet) 0%, var(--accent-cyan) 100%) !important;
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.08),
-    0 0 18px rgba(34, 211, 238, 0.18),
-    0 10px 20px rgba(0, 0, 0, 0.06) !important;
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 6px 18px rgba(157, 92, 255, 0.30),
+    0 2px 6px rgba(0, 0, 0, 0.06) !important;
+}
+
+.brand-name {
+  font-weight: 800 !important;
+  color: #0a0a0a !important;
+  letter-spacing: 0.02em;
+}
+
+.brand-sub {
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
 }
 
 .nav-item {
   border-radius: var(--radius-lg);
-  min-height: 42px;
+  min-height: 44px;
+  padding: 10px 14px !important;
   border: 1px solid transparent;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
   transition: all 140ms ease;
 }
 
 .nav-item:hover:not(.active) {
-  /* Light-mode hover: subtle dark wash on white */
-  background: rgba(0, 0, 0, 0.04) !important;
+  /* Light-mode hover: deeper dark wash on white */
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: var(--text-primary) !important;
+}
+
+.nav-item:hover:not(.active) .ico {
+  background: rgba(0, 0, 0, 0.08) !important;
   color: var(--text-primary) !important;
 }
 
 .nav-item .ico {
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  background: rgba(0, 0, 0, 0.03);
-  color: var(--text-secondary);
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: var(--text-muted) !important;
   border-radius: var(--radius);
-  font: 600 10px var(--font-mono);
-  width: 30px;
-  height: 30px;
+  font: 700 11px var(--font-mono) !important;
+  width: 32px !important;
+  height: 32px !important;
 }
 
 .nav-item.active {
-  /* Light-mode active: violet wash + 3px left rail */
-  background: rgba(157, 92, 255, 0.10) !important;
+  /* Light-mode active: stronger violet wash + 4px left rail */
+  background: rgba(157, 92, 255, 0.12) !important;
   border-color: transparent !important;
-  border-left: 3px solid var(--accent-violet) !important;
-  color: #1a1a1a !important;
+  border-left: 4px solid var(--accent-violet) !important;
+  color: #0a0a0a !important;
+  font-weight: 700 !important;
 }
 
 .nav-item.active .ico {
-  color: var(--nav-color, var(--accent-cyan));
-  background: color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 13%, transparent);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 28%, transparent);
+  /* Filled route-colored tile reads as a "lit" badge */
+  background: var(--nav-color, var(--accent-violet)) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--nav-color, var(--accent-violet)) 40%, transparent) !important;
+}
+
+.nav-item .badge.cyan {
+  background: color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 18%, transparent) !important;
+  color: var(--nav-color, var(--accent-cyan)) !important;
+  font-weight: 700 !important;
+  border: 1px solid color-mix(in srgb, var(--nav-color, var(--accent-cyan)) 30%, transparent) !important;
 }
 
 /* Per-route nav accent colors per DS spec */
@@ -1808,4 +1842,44 @@ a:focus-visible,
   color: var(--text-body) !important;
   font: 500 12px/1.5 var(--font-mono) !important;
   padding: 12px !important;
+}
+
+/* ── Readability bump: section titles, card heads, body copy ────────────
+   Goal — match the crispness of the dark "Executing" run-trace modal on
+   light-theme cards. Heavier weight, near-black color, tight tracking. */
+.ux-section-title,
+.ux-section-head h3,
+.panel-head h3 {
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+  letter-spacing: -0.01em;
+}
+
+.ux-section-subtitle {
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+}
+
+.ux-card h3,
+.ux-card .name,
+.ux-card .ux-card-title,
+.persona-card .name {
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+}
+
+.ux-card p,
+.ux-card .tagline,
+.tagline {
+  font-weight: 500 !important;
+  color: var(--text-body) !important;
+}
+
+.ux-mini-panel h3 {
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+}
+
+.ux-mini-panel p {
+  color: var(--text-body) !important;
 }

@@ -14,7 +14,7 @@ const UX_NAV_PROJECTS = [
 ];
 
 const SidebarProjectsV2 = ({ page, setPage }) => {
-  const [expanded, setExpanded] = React.useState(false);
+  const expanded = true;
   const notesCount = (window.NOTES || []).length;
   const runCount = (window.RUNS || []).length;
   const runningTasks = (window.TASKS || []).filter(t => t.status === 'running').length;
@@ -30,7 +30,7 @@ const SidebarProjectsV2 = ({ page, setPage }) => {
   };
 
   return (
-    <aside className={'sidebar ' + (expanded ? 'expanded' : 'collapsed')} onMouseEnter={() => setExpanded(true)} onMouseLeave={() => setExpanded(false)} aria-label="Primary navigation">
+    <aside className="sidebar expanded" aria-label="Primary navigation">
       <div className="brand"><div className="brand-mark"/><div className="brand-copy"><div className="brand-name">C-OFFICE</div><div className="brand-sub">AI Agent Hub</div></div></div>
       {UX_NAV_PROJECTS.map(n => {
         const badge = badgeFor(n.id);
