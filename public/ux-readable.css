@@ -238,6 +238,18 @@ body::before {
   min-height: 56px !important;
   padding: 6px 0 !important;
   background: transparent !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;     /* override styles.css .nav-item min-width: 216px */
+  box-sizing: border-box !important;
+  align-self: stretch !important;
+}
+
+/* Force the sidebar's flex layout to actually stretch children. The
+   browser computes align-items: normal which doesn't always stretch
+   flex items reliably; explicitly request stretch. */
+.sidebar {
+  align-items: stretch !important;
 }
 
 /* Force the sidebar itself wide enough to host 44×44 tiles + padding even
